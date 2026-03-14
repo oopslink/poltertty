@@ -994,8 +994,8 @@ class AppDelegate: NSObject,
 
         var config = Ghostty.SurfaceConfiguration()
         config.workingDirectory = workspace.rootDirExpanded
-        let controller = TerminalController.newWindow(ghostty, withBaseConfig: config)
-        controller.workspaceId = workspace.id
+        let controller = TerminalController(ghostty, withBaseConfig: config, workspaceId: workspace.id)
+        controller.showWindow(nil)
         if let window = controller.window {
             WorkspaceManager.shared.registerWindow(window, for: workspace.id)
         }

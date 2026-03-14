@@ -65,6 +65,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
          parent: NSWindow? = nil,
          workspaceId: UUID? = nil
     ) {
+        // Set workspace FIRST before anything that might trigger window loading
+        self.workspaceId = workspaceId
+
         // The window we manage is not restorable if we've specified a command
         // to execute. We do this because the restored window is meaningless at the
         // time of writing this: it'd just restore to a shell in the same directory
@@ -76,9 +79,6 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         self.derivedConfig = DerivedConfig(ghostty.config)
 
         super.init(ghostty, baseConfig: base, surfaceTree: tree)
-
-        // Set workspace before window loads so PolterttyRootView captures it
-        self.workspaceId = workspaceId
 
         // Setup our notifications for behaviors
         let center = NotificationCenter.default

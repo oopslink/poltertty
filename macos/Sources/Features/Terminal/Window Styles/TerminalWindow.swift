@@ -70,9 +70,18 @@ class TerminalWindow: NSWindow {
             if let tabsWindow = self as? TitlebarTabsVenturaTerminalWindow {
                 if let color = tabColor.displayColor {
                     tabsWindow.titlebarColor = color
+                    tabsWindow.backgroundColor = color
                 } else {
-                    tabsWindow.titlebarColor = tabsWindow.backgroundColor
+                    let defaultColor = tabsWindow.derivedConfig.backgroundColor
+                    tabsWindow.titlebarColor = defaultColor
+                    tabsWindow.backgroundColor = defaultColor
                 }
+                tabsWindow.update()
+            } else if let color = tabColor.displayColor {
+                // For other window styles, set background color
+                backgroundColor = color
+            } else {
+                backgroundColor = derivedConfig.backgroundColor
             }
         }
     }

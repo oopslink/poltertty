@@ -58,6 +58,7 @@ struct WorkspaceSidebar: View {
                         CollapsedWorkspaceIcon(
                             workspace: workspace,
                             isActive: workspace.id == currentWorkspaceId,
+                            isOpen: manager.windowForWorkspace(workspace.id) != nil,
                             onTap: { onSwitch(workspace.id) },
                             onClose: { onClose(workspace.id) },
                             onDelete: { manager.delete(id: workspace.id) }
@@ -160,6 +161,7 @@ struct WorkspaceSidebar: View {
 struct CollapsedWorkspaceIcon: View {
     let workspace: WorkspaceModel
     let isActive: Bool
+    let isOpen: Bool
     let onTap: () -> Void
     let onClose: () -> Void
     let onDelete: () -> Void
@@ -175,15 +177,42 @@ struct CollapsedWorkspaceIcon: View {
         return parts.joined(separator: "\n")
     }
 
+    /// Always show workspace color: full when active, dimmed when open but not active, grey when closed
+    private var iconFill: Color {
+        if isActive {
+            return workspace.color
+        } else if isOpen {
+            return workspace.color.opacity(0.4)
+        } else if isHovering {
+            return workspace.color.opacity(0.15)
+        } else {
+            return workspace.color.opacity(0.1)
+        }
+    }
+
+    private var iconTextColor: Color {
+        if isActive {
+            return .white
+        } else if isOpen {
+            return workspace.color
+        } else {
+            return workspace.color.opacity(0.5)
+        }
+    }
+
     var body: some View {
         Button(action: onTap) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isActive ? workspace.color : (isHovering ? Color.primary.opacity(0.08) : Color.primary.opacity(0.03)))
+                    .fill(iconFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(isActive ? workspace.color : .clear, lineWidth: 1.5)
+                    )
 
                 Text(workspace.icon)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundColor(isActive ? .white : .secondary)
+                    .foregroundColor(iconTextColor)
             }
             .frame(width: 32, height: 32)
         }
