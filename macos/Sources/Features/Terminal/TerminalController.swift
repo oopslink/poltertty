@@ -56,6 +56,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// The notification cancellable for focused surface property changes.
     private var surfaceAppearanceCancellables: Set<AnyCancellable> = []
 
+    /// The workspace this window is bound to (nil = legacy non-workspace window)
+    var workspaceId: UUID?
+
     init(_ ghostty: Ghostty.App,
          withBaseConfig base: Ghostty.SurfaceConfiguration? = nil,
          withSurfaceTree tree: SplitTree<Ghostty.SurfaceView>? = nil,
@@ -492,6 +495,33 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     // MARK: - Methods
+
+    func switchToWorkspace(_ targetId: UUID) {
+        // Save current workspace snapshot
+        if let currentId = workspaceId, let window = self.window {
+            WorkspaceManager.shared.saveSnapshot(
+                for: currentId,
+                window: window,
+                sidebarWidth: CGFloat(PolterttyConfig.shared.sidebarWidth),
+                sidebarVisible: PolterttyConfig.shared.sidebarVisible
+            )
+        }
+
+        // Activate target workspace's window
+        if let targetWindow = WorkspaceManager.shared.windowForWorkspace(targetId) {
+            targetWindow.makeKeyAndOrderFront(nil)
+        } else {
+            // Create new window for this workspace
+            guard let workspace = WorkspaceManager.shared.workspace(for: targetId) else { return }
+            let config = Ghostty.SurfaceConfiguration()
+            config.workingDirectory = workspace.rootDirExpanded
+            let controller = TerminalController.newWindow(ghostty, withBaseConfig: config)
+            controller.workspaceId = targetId
+            if let window = controller.window {
+                WorkspaceManager.shared.registerWindow(window, for: targetId)
+            }
+        }
+    }
 
     @objc private func ghosttyConfigDidChange(_ notification: Notification) {
         // Get our managed configuration object out
@@ -1036,7 +1066,13 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
         // Initialize our content view to the SwiftUI root
         let container = TerminalViewContainer {
-            TerminalView(ghostty: ghostty, viewModel: self, delegate: self)
+            PolterttyRootView(
+                workspaceId: self.workspaceId,
+                terminalView: TerminalView(ghostty: ghostty, viewModel: self, delegate: self),
+                onSwitchWorkspace: { [weak self] id in
+                    self?.switchToWorkspace(id)
+                }
+            )
         }
 
         // Set the initial content size on the container so that
@@ -1046,6 +1082,14 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         container.initialContentSize = focusedSurface?.initialSize
 
         window.contentView = container
+
+        // Add sidebar titlebar overlay for tab right-alignment
+        if PolterttyConfig.shared.sidebarVisible {
+            let overlay = SidebarTitlebarOverlay(
+                sidebarWidth: CGFloat(PolterttyConfig.shared.sidebarWidth)
+            )
+            window.addTitlebarAccessoryViewController(overlay)
+        }
 
         // If we have a default size, we want to apply it.
         if let defaultSize {
