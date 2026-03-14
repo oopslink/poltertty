@@ -397,6 +397,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
         // Create a new window and add it to the parent
         let controller = TerminalController.init(ghostty, withBaseConfig: baseConfig)
+        // Inherit workspace from parent
+        controller.workspaceId = parentController.workspaceId
         guard let window = controller.window else { return controller }
 
         // If the parent is miniaturized, then macOS exhibits really strange behaviors
@@ -1103,14 +1105,6 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // Register window for workspace tracking
         if let wsId = workspaceId {
             WorkspaceManager.shared.registerWindow(window, for: wsId)
-        }
-
-        // Add sidebar titlebar overlay for tab right-alignment
-        if PolterttyConfig.shared.sidebarVisible {
-            let overlay = SidebarTitlebarOverlay(
-                sidebarWidth: CGFloat(PolterttyConfig.shared.sidebarWidth)
-            )
-            window.addTitlebarAccessoryViewController(overlay)
         }
 
         // If we have a default size, we want to apply it.
