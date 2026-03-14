@@ -523,6 +523,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
     }
 
+    func closeWorkspace(_ targetId: UUID) {
+        guard let targetWindow = WorkspaceManager.shared.windowForWorkspace(targetId) else { return }
+        WorkspaceManager.shared.unregisterWindow(for: targetId)
+        targetWindow.close()
+    }
+
     @objc private func ghosttyConfigDidChange(_ notification: Notification) {
         // Get our managed configuration object out
         guard let config = notification.userInfo?[
@@ -1071,6 +1077,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 terminalView: TerminalView(ghostty: ghostty, viewModel: self, delegate: self),
                 onSwitchWorkspace: { [weak self] id in
                     self?.switchToWorkspace(id)
+                },
+                onCloseWorkspace: { [weak self] id in
+                    self?.closeWorkspace(id)
                 }
             )
         }

@@ -4,6 +4,7 @@ import SwiftUI
 extension Notification.Name {
     static let toggleWorkspaceSidebar = Notification.Name("poltertty.toggleWorkspaceSidebar")
     static let toggleWorkspaceQuickSwitcher = Notification.Name("poltertty.toggleWorkspaceQuickSwitcher")
+    static let closeWorkspace = Notification.Name("poltertty.closeWorkspace")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -11,6 +12,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     let workspaceId: UUID?
     let terminalView: TerminalContent
     let onSwitchWorkspace: (UUID) -> Void
+    let onCloseWorkspace: (UUID) -> Void
 
     @State private var sidebarVisible: Bool = PolterttyConfig.shared.sidebarVisible
     @State private var sidebarCollapsed: Bool = false
@@ -29,6 +31,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
                     WorkspaceSidebar(
                         currentWorkspaceId: workspaceId,
                         onSwitch: { id in onSwitchWorkspace(id) },
+                        onClose: { id in onCloseWorkspace(id) },
                         onCreate: {},
                         isCollapsed: $sidebarCollapsed
                     )

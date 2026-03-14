@@ -5,6 +5,7 @@ struct WorkspaceSidebar: View {
     @ObservedObject var manager = WorkspaceManager.shared
     let currentWorkspaceId: UUID?
     let onSwitch: (UUID) -> Void
+    let onClose: (UUID) -> Void
     let onCreate: () -> Void
 
     @Binding var isCollapsed: Bool
@@ -36,8 +37,8 @@ struct WorkspaceSidebar: View {
 
     private var collapsedContent: some View {
         VStack(spacing: 0) {
-            // Toggle button
-            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isCollapsed = false } }) {
+            // Toggle button (expand)
+            Button(action: { isCollapsed = false }) {
                 Image(systemName: "sidebar.right")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
@@ -55,6 +56,7 @@ struct WorkspaceSidebar: View {
                             workspace: workspace,
                             isActive: workspace.id == currentWorkspaceId,
                             onTap: { onSwitch(workspace.id) },
+                            onClose: { onClose(workspace.id) },
                             onDelete: { manager.delete(id: workspace.id) }
                         )
                     }
@@ -91,7 +93,7 @@ struct WorkspaceSidebar: View {
                     .foregroundColor(.secondary)
                     .tracking(1)
                 Spacer()
-                Button(action: { withAnimation(.easeInOut(duration: 0.2)) { isCollapsed = true } }) {
+                Button(action: { isCollapsed = true }) {
                     Image(systemName: "sidebar.left")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
@@ -116,7 +118,9 @@ struct WorkspaceSidebar: View {
                         ExpandedWorkspaceItem(
                             workspace: workspace,
                             isActive: workspace.id == currentWorkspaceId,
+                            isOpen: manager.windowForWorkspace(workspace.id) != nil,
                             onTap: { onSwitch(workspace.id) },
+                            onClose: { onClose(workspace.id) },
                             onDelete: { manager.delete(id: workspace.id) }
                         )
                     }
@@ -151,9 +155,19 @@ struct CollapsedWorkspaceIcon: View {
     let workspace: WorkspaceModel
     let isActive: Bool
     let onTap: () -> Void
+    let onClose: () -> Void
     let onDelete: () -> Void
 
     @State private var isHovering = false
+
+    private var tooltipText: String {
+        var parts = [workspace.name]
+        if !workspace.description.isEmpty {
+            parts.append(workspace.description)
+        }
+        parts.append(workspace.rootDir)
+        return parts.joined(separator: "\n")
+    }
 
     var body: some View {
         Button(action: onTap) {
@@ -173,8 +187,11 @@ struct CollapsedWorkspaceIcon: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .help(workspace.name)
+        .help(tooltipText)
         .contextMenu {
+            if isActive {
+                Button("Close Workspace") { onClose() }
+            }
             Button("Delete Workspace", role: .destructive) { onDelete() }
         }
     }
@@ -185,7 +202,9 @@ struct CollapsedWorkspaceIcon: View {
 struct ExpandedWorkspaceItem: View {
     let workspace: WorkspaceModel
     let isActive: Bool
+    let isOpen: Bool
     let onTap: () -> Void
+    let onClose: () -> Void
     let onDelete: () -> Void
 
     @State private var isHovering = false
@@ -201,10 +220,18 @@ struct ExpandedWorkspaceItem: View {
 
                 // Info
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(workspace.name)
-                        .font(.system(size: 12, weight: isActive ? .semibold : .medium))
-                        .foregroundColor(isActive ? .primary : .secondary)
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text(workspace.name)
+                            .font(.system(size: 12, weight: isActive ? .semibold : .medium))
+                            .foregroundColor(isActive ? .primary : .secondary)
+                            .lineLimit(1)
+
+                        if isOpen {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 5, height: 5)
+                        }
+                    }
 
                     if !workspace.description.isEmpty {
                         Text(workspace.description)
@@ -234,6 +261,10 @@ struct ExpandedWorkspaceItem: View {
         .onHover { isHovering = $0 }
         .padding(.horizontal, 6)
         .contextMenu {
+            if isOpen {
+                Button("Close Workspace") { onClose() }
+                Divider()
+            }
             Button("Delete Workspace", role: .destructive) { onDelete() }
         }
     }
