@@ -524,6 +524,14 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     func closeWorkspace(_ targetId: UUID) {
+        // If closing the current workspace, close this window
+        if targetId == workspaceId {
+            WorkspaceManager.shared.unregisterWindow(for: targetId)
+            window?.close()
+            return
+        }
+
+        // Otherwise find and close the target workspace's window
         guard let targetWindow = WorkspaceManager.shared.windowForWorkspace(targetId) else { return }
         WorkspaceManager.shared.unregisterWindow(for: targetId)
         targetWindow.close()
@@ -1091,6 +1099,11 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         container.initialContentSize = focusedSurface?.initialSize
 
         window.contentView = container
+
+        // Register window for workspace tracking
+        if let wsId = workspaceId {
+            WorkspaceManager.shared.registerWindow(window, for: wsId)
+        }
 
         // Add sidebar titlebar overlay for tab right-alignment
         if PolterttyConfig.shared.sidebarVisible {
