@@ -77,6 +77,7 @@ struct WorkspaceQuickSwitcher: View {
         .onKeyPress(.upArrow) { moveSelection(-1); return .handled }
         .onKeyPress(.downArrow) { moveSelection(1); return .handled }
         .onKeyPress(.escape) { onDismiss(); return .handled }
+        .onChange(of: query) { _ in selectedIndex = 0 }
     }
 
     private func moveSelection(_ delta: Int) {
