@@ -88,13 +88,3 @@ extension Color {
     }
 }
 
-extension NSColor {
-    convenience init?(hex: String) {
-        let hex = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        guard hex.count == 6, let int = UInt64(hex, radix: 16) else { return nil }
-        let r = CGFloat((int >> 16) & 0xFF) / 255.0
-        let g = CGFloat((int >> 8) & 0xFF) / 255.0
-        let b = CGFloat(int & 0xFF) / 255.0
-        self.init(red: r, green: g, blue: b, alpha: 1.0)
-    }
-}

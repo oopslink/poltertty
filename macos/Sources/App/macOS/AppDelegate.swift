@@ -343,7 +343,7 @@ class AppDelegate: NSObject,
             let manager = WorkspaceManager.shared
             for workspace in manager.workspaces {
                 if let snapshot = manager.loadSnapshot(for: workspace.id) {
-                    let config = Ghostty.SurfaceConfiguration()
+                    var config = Ghostty.SurfaceConfiguration()
                     config.workingDirectory = workspace.rootDirExpanded
                     let controller = TerminalController.newWindow(ghostty, withBaseConfig: config)
                     controller.workspaceId = workspace.id
@@ -992,7 +992,7 @@ class AppDelegate: NSObject,
         let rootDir = FileManager.default.currentDirectoryPath
         let workspace = WorkspaceManager.shared.create(name: name, rootDir: rootDir)
 
-        let config = Ghostty.SurfaceConfiguration()
+        var config = Ghostty.SurfaceConfiguration()
         config.workingDirectory = workspace.rootDirExpanded
         let controller = TerminalController.newWindow(ghostty, withBaseConfig: config)
         controller.workspaceId = workspace.id

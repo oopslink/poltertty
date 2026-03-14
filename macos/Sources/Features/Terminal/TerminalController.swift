@@ -513,7 +513,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         } else {
             // Create new window for this workspace
             guard let workspace = WorkspaceManager.shared.workspace(for: targetId) else { return }
-            let config = Ghostty.SurfaceConfiguration()
+            var config = Ghostty.SurfaceConfiguration()
             config.workingDirectory = workspace.rootDirExpanded
             let controller = TerminalController.newWindow(ghostty, withBaseConfig: config)
             controller.workspaceId = targetId
