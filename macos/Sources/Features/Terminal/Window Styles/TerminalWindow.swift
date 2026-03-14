@@ -67,22 +67,21 @@ class TerminalWindow: NSWindow {
             invalidateRestorableState()
 
             // Fill the titlebar with the selected tab color
-            if let tabsWindow = self as? TitlebarTabsVenturaTerminalWindow {
-                if let color = tabColor.displayColor {
-                    tabsWindow.titlebarColor = color
-                    tabsWindow.backgroundColor = color
-                } else {
-                    let defaultColor = tabsWindow.derivedConfig.backgroundColor
-                    tabsWindow.titlebarColor = defaultColor
-                    tabsWindow.backgroundColor = defaultColor
-                }
-                tabsWindow.update()
-            } else if let color = tabColor.displayColor {
-                // For other window styles, set background color
-                backgroundColor = color
-            } else {
-                backgroundColor = derivedConfig.backgroundColor
-            }
+            applyTabColorToTitlebar()
+        }
+    }
+
+    /// Apply the current tab color to the titlebar background.
+    /// Called from tabColor didSet and can be called after window setup.
+    func applyTabColorToTitlebar() {
+        guard let tabsWindow = self as? TitlebarTabsVenturaTerminalWindow else { return }
+        guard let titlebarContainer = tabsWindow.titlebarContainer else { return }
+        titlebarContainer.wantsLayer = true
+        if let color = tabColor.displayColor {
+            titlebarContainer.layer?.backgroundColor = color.cgColor
+        } else {
+            titlebarContainer.layer?.backgroundColor = tabsWindow.derivedConfig.backgroundColor
+                .withAlphaComponent(tabsWindow.derivedConfig.backgroundOpacity).cgColor
         }
     }
 
@@ -757,16 +756,16 @@ extension TerminalWindow {
     private func isTabContextMenu(_ menu: NSMenu) -> Bool {
         guard NSApp.keyWindow === self else { return false }
 
-        // These selectors must all exist for it to be a tab context menu.
-        let requiredSelectors: Set<String> = [
-            "performClose:",
-            "performCloseOtherTabs:",
-            "moveTabToNewWindow:",
-            "toggleTabOverview:"
-        ]
-
         let selectorNames = Set(menu.items.compactMap { $0.action }.map { NSStringFromSelector($0) })
-        return requiredSelectors.isSubset(of: selectorNames)
+
+        // A tab context menu must have performClose:. Other items may be
+        // absent when there is only a single tab.
+        return selectorNames.contains("performClose:") && (
+            selectorNames.contains("moveTabToNewWindow:") ||
+            selectorNames.contains("toggleTabOverview:") ||
+            selectorNames.contains("performCloseOtherTabs:") ||
+            menu.items.count <= 3  // Single tab: macOS may only provide close
+        )
     }
 
     private func appendTabModifierSection(to menu: NSMenu, target: TerminalController?) {

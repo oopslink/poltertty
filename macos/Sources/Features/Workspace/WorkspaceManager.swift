@@ -61,9 +61,11 @@ class WorkspaceManager: ObservableObject {
     // MARK: - Window Tracking
 
     func registerWindow(_ window: NSWindow, for workspaceId: UUID) {
+        let isNew = activeWindows[workspaceId]?.window == nil
         activeWindows[workspaceId] = WeakWindow(window)
-        touchLastActive(workspaceId)
-        objectWillChange.send()
+        if isNew {
+            objectWillChange.send()
+        }
     }
 
     func unregisterWindow(for workspaceId: UUID) {
