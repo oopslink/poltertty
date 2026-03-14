@@ -13,8 +13,13 @@ struct PolterttyRootView<TerminalContent: View>: View {
     let onSwitchWorkspace: (UUID) -> Void
 
     @State private var sidebarVisible: Bool = PolterttyConfig.shared.sidebarVisible
+    @State private var sidebarCollapsed: Bool = false
     @State private var sidebarWidth: CGFloat = CGFloat(PolterttyConfig.shared.sidebarWidth)
     @State private var quickSwitcherVisible = false
+
+    private var effectiveSidebarWidth: CGFloat {
+        sidebarCollapsed ? 48 : sidebarWidth
+    }
 
     var body: some View {
         ZStack {
@@ -24,9 +29,10 @@ struct PolterttyRootView<TerminalContent: View>: View {
                     WorkspaceSidebar(
                         currentWorkspaceId: workspaceId,
                         onSwitch: { id in onSwitchWorkspace(id) },
-                        onCreate: {}
+                        onCreate: {},
+                        isCollapsed: $sidebarCollapsed
                     )
-                    .frame(width: sidebarWidth)
+                    .frame(width: effectiveSidebarWidth)
 
                     Divider()
                 }
@@ -60,6 +66,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
     }
 
     // Called by TerminalController to get current sidebar state for snapshots
-    var currentSidebarWidth: CGFloat { sidebarWidth }
+    var currentSidebarWidth: CGFloat { effectiveSidebarWidth }
     var currentSidebarVisible: Bool { sidebarVisible }
 }

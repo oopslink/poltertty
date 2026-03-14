@@ -16,73 +16,97 @@ struct WorkspaceCreateForm: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Divider()
-
+        VStack(spacing: 0) {
+            // Title
             Text("New Workspace")
-                .font(.system(size: 11, weight: .semibold))
-                .padding(.horizontal, 12)
+                .font(.system(size: 14, weight: .semibold))
+                .padding(.top, 20)
+                .padding(.bottom, 16)
 
-            // Name
-            TextField("Name", text: $name)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 11))
-                .padding(.horizontal, 12)
+            // Form fields
+            VStack(alignment: .leading, spacing: 12) {
+                // Name
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Name")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                    TextField("My Project", text: $name)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 13))
+                }
 
-            // Description
-            TextField("Description (optional)", text: $description)
-                .textFieldStyle(.roundedBorder)
-                .font(.system(size: 11))
-                .padding(.horizontal, 12)
+                // Description
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Description")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                    TextField("Optional description", text: $description)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.system(size: 13))
+                }
 
-            // Root directory
-            HStack {
-                TextField("Root Directory", text: $rootDir)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 11))
-                Button("...") {
-                    let panel = NSOpenPanel()
-                    panel.canChooseFiles = false
-                    panel.canChooseDirectories = true
-                    panel.allowsMultipleSelection = false
-                    if panel.runModal() == .OK, let url = panel.url {
-                        rootDir = url.path
+                // Root directory
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Root Directory")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                    HStack(spacing: 6) {
+                        TextField("~/projects/my-project", text: $rootDir)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 13))
+                        Button("Browse...") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseFiles = false
+                            panel.canChooseDirectories = true
+                            panel.allowsMultipleSelection = false
+                            if panel.runModal() == .OK, let url = panel.url {
+                                rootDir = url.path
+                            }
+                        }
+                        .font(.system(size: 12))
                     }
                 }
-                .font(.system(size: 10))
-            }
-            .padding(.horizontal, 12)
 
-            // Color picker
-            HStack(spacing: 6) {
-                ForEach(presetColors, id: \.self) { color in
-                    Circle()
-                        .fill(Color(hex: color) ?? .gray)
-                        .frame(width: 14, height: 14)
-                        .overlay(
-                            Circle().stroke(.white, lineWidth: selectedColor == color ? 2 : 0)
-                        )
-                        .onTapGesture { selectedColor = color }
+                // Color
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Color")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                    HStack(spacing: 8) {
+                        ForEach(presetColors, id: \.self) { color in
+                            Circle()
+                                .fill(Color(hex: color) ?? .gray)
+                                .frame(width: 20, height: 20)
+                                .overlay(
+                                    Circle().stroke(.white, lineWidth: selectedColor == color ? 2.5 : 0)
+                                )
+                                .shadow(color: selectedColor == color ? (Color(hex: color) ?? .gray).opacity(0.5) : .clear, radius: 3)
+                                .onTapGesture { selectedColor = color }
+                        }
+                    }
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 24)
+
+            Spacer().frame(height: 20)
+
+            Divider()
 
             // Buttons
             HStack {
-                Spacer()
                 Button("Cancel") { onCancel() }
-                    .font(.system(size: 11))
+                    .keyboardShortcut(.escape, modifiers: [])
+                Spacer()
                 Button("Create") {
                     guard !name.isEmpty else { return }
                     onSubmit(name, rootDir, selectedColor, description)
                 }
-                .font(.system(size: 11))
                 .keyboardShortcut(.return)
                 .disabled(name.isEmpty)
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(width: 400)
     }
 }
