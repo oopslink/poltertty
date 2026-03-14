@@ -173,15 +173,11 @@ struct CollapsedWorkspaceIcon: View {
         Button(action: onTap) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isActive ? workspace.color.opacity(0.2) : (isHovering ? Color.primary.opacity(0.06) : Color.primary.opacity(0.03)))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isActive ? workspace.color : .clear, lineWidth: 1.5)
-                    )
+                    .fill(isActive ? workspace.color : (isHovering ? Color.primary.opacity(0.08) : Color.primary.opacity(0.03)))
 
                 Text(workspace.icon)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundColor(isActive ? workspace.color : .secondary)
+                    .foregroundColor(isActive ? .white : .secondary)
             }
             .frame(width: 32, height: 32)
         }

@@ -15,7 +15,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     let onCloseWorkspace: (UUID) -> Void
 
     @State private var sidebarVisible: Bool = PolterttyConfig.shared.sidebarVisible
-    @State private var sidebarCollapsed: Bool = false
+    @AppStorage("poltertty.sidebarCollapsed") private var sidebarCollapsed: Bool = false
     @State private var sidebarWidth: CGFloat = CGFloat(PolterttyConfig.shared.sidebarWidth)
     @State private var quickSwitcherVisible = false
 
