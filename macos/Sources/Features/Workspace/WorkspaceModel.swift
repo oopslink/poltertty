@@ -1,4 +1,5 @@
 // macos/Sources/Features/Workspace/WorkspaceModel.swift
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -43,9 +44,7 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
         FileManager.default.fileExists(atPath: rootDirExpanded)
     }
 
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.id == rhs.id
-    }
+    // Use synthesized Equatable (all properties) so SwiftUI detects property changes
 }
 
 // MARK: - Snapshot

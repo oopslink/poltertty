@@ -1,4 +1,5 @@
 // macos/Sources/Features/Workspace/WorkspaceManager.swift
+import AppKit
 import Foundation
 import Combine
 
@@ -6,8 +7,13 @@ class WorkspaceManager: ObservableObject {
     static let shared = WorkspaceManager()
 
     @Published var workspaces: [WorkspaceModel] = []
-    /// Maps workspace ID to its owning NSWindow (weak reference)
-    @Published var activeWindows: [UUID: NSWindow] = [:]
+    /// Maps workspace ID to its owning NSWindow
+    var activeWindows: [UUID: WeakWindow] = [:]
+
+    class WeakWindow {
+        weak var window: NSWindow?
+        init(_ window: NSWindow) { self.window = window }
+    }
 
     private let storageDir: String
     private let encoder = JSONEncoder()
@@ -54,7 +60,7 @@ class WorkspaceManager: ObservableObject {
     // MARK: - Window Tracking
 
     func registerWindow(_ window: NSWindow, for workspaceId: UUID) {
-        activeWindows[workspaceId] = window
+        activeWindows[workspaceId] = WeakWindow(window)
         touchLastActive(workspaceId)
     }
 
@@ -63,11 +69,11 @@ class WorkspaceManager: ObservableObject {
     }
 
     func windowForWorkspace(_ id: UUID) -> NSWindow? {
-        activeWindows[id]
+        activeWindows[id]?.window
     }
 
     func workspaceId(for window: NSWindow) -> UUID? {
-        activeWindows.first { $0.value === window }?.key
+        activeWindows.first { $0.value.window === window }?.key
     }
 
     func touchLastActive(_ id: UUID) {
