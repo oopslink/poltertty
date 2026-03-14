@@ -1,0 +1,131 @@
+<h2>Tab 对齐方式对比</h2>
+<p class="subtitle">Tab Bar 靠左 vs 靠右，哪个更合理？点击选择。</p>
+
+<div class="cards">
+
+  <!-- Option A: Left-aligned (current) -->
+  <div class="card" data-choice="left" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a2e;color:#e0e0e0;font-family:monospace;font-size:11px;border-radius:8px;overflow:hidden;line-height:1.4;">
+        <!-- Title bar -->
+        <div style="background:linear-gradient(180deg,#3a3a55,#2d2d44);padding:8px 14px 0;">
+          <div style="display:flex;align-items:center;margin-bottom:8px;">
+            <div style="display:flex;gap:6px;">
+              <span style="width:10px;height:10px;border-radius:50%;background:#ff5f57;display:inline-block;"></span>
+              <span style="width:10px;height:10px;border-radius:50%;background:#febc2e;display:inline-block;"></span>
+              <span style="width:10px;height:10px;border-radius:50%;background:#28c840;display:inline-block;"></span>
+            </div>
+            <div style="flex:1;text-align:center;color:#999;font-size:10px;">poltertty — pulse-dashboard</div>
+          </div>
+          <!-- Tab bar left-aligned -->
+          <div style="display:flex;gap:1px;">
+            <div style="background:#1a1a2e;padding:5px 14px;border-radius:6px 6px 0 0;color:#fff;font-size:10px;position:relative;">
+              dev-server
+              <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#FF6B6B;"></div>
+            </div>
+            <div style="background:#252545;padding:5px 14px;border-radius:6px 6px 0 0;color:#888;font-size:10px;">tests</div>
+            <div style="background:#252545;padding:5px 14px;border-radius:6px 6px 0 0;color:#888;font-size:10px;">deploy</div>
+            <div style="padding:5px 10px;color:#555;font-size:10px;">+</div>
+            <div style="flex:1;"></div>
+          </div>
+        </div>
+        <!-- Body -->
+        <div style="display:flex;min-height:140px;">
+          <div style="width:50px;background:#131328;border-right:1px solid #2a2a45;padding:8px 4px;">
+            <div style="font-size:7px;color:#666;text-align:center;margin-bottom:4px;">WORKSPACES</div>
+            <div style="background:rgba(255,107,107,0.08);border-left:2px solid #FF6B6B;padding:3px;margin-bottom:3px;">
+              <div style="font-size:7px;color:#FF6B6B;">● pulse</div>
+            </div>
+            <div style="padding:3px;"><div style="font-size:7px;color:#666;">○ beacon</div></div>
+          </div>
+          <div style="width:70px;background:#171730;border-right:1px solid #2a2a45;padding:6px;">
+            <div style="font-size:7px;color:#888;">FILES</div>
+            <div style="font-size:8px;color:#aaa;margin-top:4px;">▼ src/</div>
+            <div style="font-size:8px;color:#888;padding-left:8px;">▶ comp/</div>
+            <div style="font-size:8px;color:#888;padding-left:8px;">▶ hooks/</div>
+          </div>
+          <div style="flex:1;padding:8px;">
+            <div style="color:#6BCB77;font-size:9px;">~/pulse $ npm run dev</div>
+            <div style="color:#6BCB77;font-size:9px;margin-top:4px;">✓ Ready</div>
+            <div style="color:#6BCB77;font-size:12px;margin-top:4px;">▊</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Tab 靠左（当前方案）</h3>
+      <p>Tab 从 Sidebar 右边缘开始排列。macOS 原生默认行为。Tab 在 Sidebar 和 File Browser 上方。</p>
+    </div>
+  </div>
+
+  <!-- Option B: Right-aligned -->
+  <div class="card" data-choice="right" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a2e;color:#e0e0e0;font-family:monospace;font-size:11px;border-radius:8px;overflow:hidden;line-height:1.4;">
+        <!-- Title bar -->
+        <div style="background:linear-gradient(180deg,#3a3a55,#2d2d44);padding:8px 14px 0;">
+          <div style="display:flex;align-items:center;margin-bottom:8px;">
+            <div style="display:flex;gap:6px;">
+              <span style="width:10px;height:10px;border-radius:50%;background:#ff5f57;display:inline-block;"></span>
+              <span style="width:10px;height:10px;border-radius:50%;background:#febc2e;display:inline-block;"></span>
+              <span style="width:10px;height:10px;border-radius:50%;background:#28c840;display:inline-block;"></span>
+            </div>
+            <div style="flex:1;text-align:center;color:#999;font-size:10px;">poltertty — pulse-dashboard</div>
+          </div>
+          <!-- Tab bar right-aligned (offset to match terminal area) -->
+          <div style="display:flex;gap:1px;">
+            <div style="width:122px;flex-shrink:0;"></div>
+            <div style="flex:1;display:flex;gap:1px;">
+              <div style="background:#1a1a2e;padding:5px 14px;border-radius:6px 6px 0 0;color:#fff;font-size:10px;position:relative;">
+                dev-server
+                <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#FF6B6B;"></div>
+              </div>
+              <div style="background:#252545;padding:5px 14px;border-radius:6px 6px 0 0;color:#888;font-size:10px;">tests</div>
+              <div style="background:#252545;padding:5px 14px;border-radius:6px 6px 0 0;color:#888;font-size:10px;">deploy</div>
+              <div style="padding:5px 10px;color:#555;font-size:10px;">+</div>
+              <div style="flex:1;"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Body -->
+        <div style="display:flex;min-height:140px;">
+          <div style="width:50px;background:#131328;border-right:1px solid #2a2a45;padding:8px 4px;">
+            <div style="font-size:7px;color:#666;text-align:center;margin-bottom:4px;">WORKSPACES</div>
+            <div style="background:rgba(255,107,107,0.08);border-left:2px solid #FF6B6B;padding:3px;margin-bottom:3px;">
+              <div style="font-size:7px;color:#FF6B6B;">● pulse</div>
+            </div>
+            <div style="padding:3px;"><div style="font-size:7px;color:#666;">○ beacon</div></div>
+          </div>
+          <div style="width:70px;background:#171730;border-right:1px solid #2a2a45;padding:6px;">
+            <div style="font-size:7px;color:#888;">FILES</div>
+            <div style="font-size:8px;color:#aaa;margin-top:4px;">▼ src/</div>
+            <div style="font-size:8px;color:#888;padding-left:8px;">▶ comp/</div>
+            <div style="font-size:8px;color:#888;padding-left:8px;">▶ hooks/</div>
+          </div>
+          <div style="flex:1;padding:8px;">
+            <div style="color:#6BCB77;font-size:9px;">~/pulse $ npm run dev</div>
+            <div style="color:#6BCB77;font-size:9px;margin-top:4px;">✓ Ready</div>
+            <div style="color:#6BCB77;font-size:12px;margin-top:4px;">▊</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Tab 右对齐（你的建议）</h3>
+      <p>Tab 只出现在 Terminal Area 上方，与 Sidebar / File Browser 对齐。Tab 管理的是终端分屏，不管理左侧面板。<strong>视觉上更清晰：Tab 对应它下方的内容。</strong></p>
+    </div>
+  </div>
+
+</div>
+
+<!-- Explanation -->
+<div style="margin-top:24px;padding:16px;background:rgba(255,255,255,0.04);border-radius:8px;border-left:3px solid #7AA2F7;">
+  <h3 style="margin-top:0;font-size:14px;">要注意的点</h3>
+  <p style="font-size:13px;color:#aaa;line-height:1.8;margin-bottom:0;">
+    macOS 原生 Tab Bar 默认渲染在整个窗口标题栏，<strong>不支持偏移到某个区域</strong>。<br>
+    如果选择右对齐，有两种实现路径：<br>
+    <strong>1)</strong> 仍用原生 Tab，但在左侧 Tab 区域覆盖一个不透明 Sidebar 区块（视觉上遮住）<br>
+    <strong>2)</strong> 放弃原生 Tab，自己实现一个只覆盖 Terminal Area 宽度的 Tab Bar<br>
+    路径 1 更简单，路径 2 更干净但工作量大。
+  </p>
+</div>

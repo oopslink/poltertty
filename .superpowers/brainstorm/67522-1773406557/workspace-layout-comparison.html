@@ -1,0 +1,181 @@
+<h2>Séance Workspace 布局方案对比</h2>
+<p class="subtitle">选择你更倾向的布局架构。点击选择。</p>
+
+<div class="cards">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a2e;color:#e0e0e0;font-family:monospace;font-size:11px;padding:0;border-radius:8px;overflow:hidden;line-height:1.4;">
+        <!-- Title bar -->
+        <div style="background:#2d2d44;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;gap:6px;">
+            <span style="width:10px;height:10px;border-radius:50%;background:#ff5f57;display:inline-block;"></span>
+            <span style="width:10px;height:10px;border-radius:50%;background:#febc2e;display:inline-block;"></span>
+            <span style="width:10px;height:10px;border-radius:50%;background:#28c840;display:inline-block;"></span>
+          </div>
+          <div style="color:#aaa;font-size:10px;">Séance — pulse-dashboard</div>
+          <div style="display:flex;gap:2px;">
+            <span style="background:#3a3a55;padding:2px 8px;border-radius:4px;color:#fff;font-size:9px;border-bottom:2px solid #FF6B6B;">dev-server</span>
+            <span style="background:#2d2d44;padding:2px 8px;border-radius:4px;color:#888;font-size:9px;">tests</span>
+            <span style="background:#2d2d44;padding:2px 8px;border-radius:4px;color:#888;font-size:9px;">deploy</span>
+          </div>
+        </div>
+        <!-- Body -->
+        <div style="display:flex;min-height:220px;">
+          <!-- Workspace Sidebar -->
+          <div style="width:54px;background:#16162a;border-right:1px solid #333;padding:8px 4px;flex-shrink:0;">
+            <div style="font-size:8px;color:#666;text-align:center;margin-bottom:6px;">WORKSPACES</div>
+            <div style="background:#2a2a45;border-radius:4px;padding:4px;margin-bottom:4px;border-left:2px solid #FF6B6B;">
+              <div style="font-size:8px;color:#FF6B6B;">● pulse</div>
+            </div>
+            <div style="padding:4px;margin-bottom:4px;">
+              <div style="font-size:8px;color:#666;">○ beacon</div>
+            </div>
+            <div style="padding:4px;">
+              <div style="font-size:8px;color:#666;">○ api</div>
+            </div>
+            <div style="position:relative;top:80px;font-size:8px;color:#555;text-align:center;">+ New</div>
+          </div>
+          <!-- File Browser -->
+          <div style="width:90px;background:#1e1e36;border-right:1px solid #333;padding:6px;flex-shrink:0;">
+            <div style="font-size:8px;color:#888;margin-bottom:4px;">FILES</div>
+            <div style="font-size:9px;color:#ccc;">▼ src/</div>
+            <div style="font-size:9px;color:#aaa;padding-left:8px;">▶ components/</div>
+            <div style="font-size:9px;color:#aaa;padding-left:8px;">▶ hooks/</div>
+            <div style="font-size:9px;color:#aaa;padding-left:8px;">▶ utils/</div>
+            <div style="font-size:9px;color:#ccc;">▶ public/</div>
+            <div style="font-size:9px;color:#ccc;">□ package.json <span style="color:#e8a838;">M</span></div>
+            <div style="font-size:9px;color:#ccc;">□ tsconfig.json</div>
+          </div>
+          <!-- Terminal Area -->
+          <div style="flex:1;display:flex;flex-direction:column;">
+            <!-- Split terminals -->
+            <div style="flex:1;display:flex;">
+              <div style="flex:1;padding:8px;border-right:1px solid #333;">
+                <div style="color:#6BCB77;font-size:9px;">~/pulse $</div>
+                <div style="color:#aaa;font-size:9px;">npm run dev</div>
+                <div style="color:#6BCB77;font-size:9px;margin-top:4px;">✓ Server @ :3000</div>
+                <div style="color:#6BCB77;font-size:14px;margin-top:2px;">▊</div>
+              </div>
+              <div style="flex:1;padding:8px;">
+                <div style="color:#6BCB77;font-size:9px;">~/pulse $</div>
+                <div style="color:#aaa;font-size:9px;">jest --watch</div>
+                <div style="color:#6BCB77;font-size:9px;margin-top:4px;">PASS src/App.test</div>
+                <div style="color:#6BCB77;font-size:9px;">PASS src/api.test</div>
+              </div>
+            </div>
+            <!-- Status bar -->
+            <div style="background:#16162a;padding:3px 8px;font-size:8px;color:#888;border-top:1px solid #333;display:flex;gap:12px;">
+              <span>📁 ~/projects/pulse</span>
+              <span style="color:#6BCB77;">🌿 feat/workspace</span>
+              <span style="color:#e8a838;">3M 2?</span>
+              <span>Node 18.x</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案 A：Workspace = Window</h3>
+      <p>每个 Workspace 是独立窗口，Sidebar 跨窗口导航。<strong>完全保留原生 macOS Tab</strong>，对 Ghostty 上游零侵入。切换 Workspace = 切换窗口。</p>
+      <div class="pros-cons" style="margin-top:8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>原生 Tab 零改动</li><li>Split 机制零改动</li><li>上游追踪极简单</li><li>macOS 原生多窗口习惯</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>切换有窗口动画</li><li>Sidebar 需跨窗口同步</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a2e;color:#e0e0e0;font-family:monospace;font-size:11px;padding:0;border-radius:8px;overflow:hidden;line-height:1.4;">
+        <!-- Title bar (no native tabs) -->
+        <div style="background:#2d2d44;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;gap:6px;">
+            <span style="width:10px;height:10px;border-radius:50%;background:#ff5f57;display:inline-block;"></span>
+            <span style="width:10px;height:10px;border-radius:50%;background:#febc2e;display:inline-block;"></span>
+            <span style="width:10px;height:10px;border-radius:50%;background:#28c840;display:inline-block;"></span>
+          </div>
+          <div style="color:#aaa;font-size:10px;">Séance</div>
+          <div></div>
+        </div>
+        <!-- Custom Tab Bar (below title) -->
+        <div style="background:#222240;padding:0 0 0 54px;display:flex;align-items:end;border-bottom:2px solid #FF6B6B;">
+          <span style="background:#2d2d50;padding:4px 10px;border-radius:6px 6px 0 0;color:#fff;font-size:9px;border-bottom:2px solid #FF6B6B;margin-bottom:-2px;">● dev-server</span>
+          <span style="padding:4px 10px;color:#888;font-size:9px;">tests</span>
+          <span style="padding:4px 10px;color:#888;font-size:9px;">deploy</span>
+          <span style="padding:4px 10px;color:#555;font-size:9px;">+</span>
+        </div>
+        <!-- Body -->
+        <div style="display:flex;min-height:200px;">
+          <!-- Workspace Sidebar -->
+          <div style="width:54px;background:#16162a;border-right:1px solid #333;padding:8px 4px;flex-shrink:0;">
+            <div style="font-size:8px;color:#666;text-align:center;margin-bottom:6px;">WORKSPACES</div>
+            <div style="background:#2a2a45;border-radius:4px;padding:4px;margin-bottom:4px;border-left:2px solid #FF6B6B;">
+              <div style="font-size:8px;color:#FF6B6B;">● pulse</div>
+            </div>
+            <div style="padding:4px;margin-bottom:4px;">
+              <div style="font-size:8px;color:#666;">○ beacon</div>
+            </div>
+            <div style="padding:4px;">
+              <div style="font-size:8px;color:#666;">○ api</div>
+            </div>
+            <div style="position:relative;top:60px;font-size:8px;color:#555;text-align:center;">+ New</div>
+          </div>
+          <!-- File Browser -->
+          <div style="width:90px;background:#1e1e36;border-right:1px solid #333;padding:6px;flex-shrink:0;">
+            <div style="font-size:8px;color:#888;margin-bottom:4px;">FILES</div>
+            <div style="font-size:9px;color:#ccc;">▼ src/</div>
+            <div style="font-size:9px;color:#aaa;padding-left:8px;">▶ components/</div>
+            <div style="font-size:9px;color:#aaa;padding-left:8px;">▶ hooks/</div>
+            <div style="font-size:9px;color:#aaa;padding-left:8px;">▶ utils/</div>
+            <div style="font-size:9px;color:#ccc;">▶ public/</div>
+            <div style="font-size:9px;color:#ccc;">□ package.json <span style="color:#e8a838;">M</span></div>
+          </div>
+          <!-- Terminal Area -->
+          <div style="flex:1;display:flex;flex-direction:column;">
+            <div style="flex:1;display:flex;">
+              <div style="flex:1;padding:8px;border-right:1px solid #333;">
+                <div style="color:#6BCB77;font-size:9px;">~/pulse $</div>
+                <div style="color:#aaa;font-size:9px;">npm run dev</div>
+                <div style="color:#6BCB77;font-size:9px;margin-top:4px;">✓ Server @ :3000</div>
+                <div style="color:#6BCB77;font-size:14px;margin-top:2px;">▊</div>
+              </div>
+              <div style="flex:1;padding:8px;">
+                <div style="color:#6BCB77;font-size:9px;">~/pulse $</div>
+                <div style="color:#aaa;font-size:9px;">jest --watch</div>
+                <div style="color:#6BCB77;font-size:9px;margin-top:4px;">PASS src/App.test</div>
+                <div style="color:#6BCB77;font-size:9px;">PASS src/api.test</div>
+              </div>
+            </div>
+            <div style="background:#16162a;padding:3px 8px;font-size:8px;color:#888;border-top:1px solid #333;display:flex;gap:12px;">
+              <span>📁 ~/projects/pulse</span>
+              <span style="color:#6BCB77;">🌿 feat/workspace</span>
+              <span style="color:#e8a838;">3M 2?</span>
+              <span>Node 18.x</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>方案 B：Workspace 内嵌于 Window</h3>
+      <p>所有 Workspace 在同一窗口内切换。<strong>需要自定义 Tab Bar</strong>（放弃原生 macOS Tab），切换无窗口动画，更像 IDE。</p>
+      <div class="pros-cons" style="margin-top:8px;">
+        <div class="pros"><h4>Pros</h4><ul><li>切换更流畅 (&lt;300ms)</li><li>单窗口 IDE 体验</li></ul></div>
+        <div class="cons"><h4>Cons</h4><ul><li>必须自己实现 Tab Bar</li><li>后台 PTY 管理复杂</li><li>对上游代码改动大</li><li>BaseTerminalController 需重构</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px;padding:16px;background:rgba(255,255,255,0.05);border-radius:8px;border-left:3px solid #FF6B6B;">
+  <h3 style="margin-top:0;">关键区别</h3>
+  <p style="font-size:14px;color:#aaa;line-height:1.6;">
+    <strong>方案 A</strong> 的 Tab Bar 是 macOS 原生的（在标题栏里），切换 Workspace 切换窗口。<br>
+    <strong>方案 B</strong> 的 Tab Bar 是自定义的（标题栏下方），切换 Workspace 在同一窗口内完成。<br><br>
+    两者的 <strong>Sidebar、File Browser、Terminal 分屏、Status Bar</strong> 布局完全相同。
+  </p>
+</div>
