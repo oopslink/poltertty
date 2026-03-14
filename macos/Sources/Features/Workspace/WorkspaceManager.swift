@@ -31,8 +31,9 @@ class WorkspaceManager: ObservableObject {
     // MARK: - CRUD
 
     @discardableResult
-    func create(name: String, rootDir: String, colorHex: String = "#FF6B6B") -> WorkspaceModel {
-        let workspace = WorkspaceModel(name: name, rootDir: rootDir, colorHex: colorHex)
+    func create(name: String, rootDir: String, colorHex: String = "#FF6B6B", description: String = "") -> WorkspaceModel {
+        var workspace = WorkspaceModel(name: name, rootDir: rootDir, colorHex: colorHex)
+        workspace.description = description
         workspaces.append(workspace)
         save(workspace)
         return workspace

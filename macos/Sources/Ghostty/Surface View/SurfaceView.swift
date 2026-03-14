@@ -1158,9 +1158,17 @@ extension Ghostty {
         // handle this upstream but we also don't want this function to be
         // a source of infinite loops.
 
-        // Our max delay before we give up
-        let maxDelay: TimeInterval = 0.5
-        guard (delay ?? 0) < maxDelay else { return }
+        // Our max delay before we give up. Increased from 0.5s to account for
+        // PolterttyRootView's SwiftUI layout needing more time to attach views.
+        let maxDelay: TimeInterval = 2.0
+        guard (delay ?? 0) < maxDelay else {
+            // If we give up, restore focus to the previous surface so the
+            // terminal doesn't appear frozen.
+            if let from = from, let window = from.window {
+                window.makeFirstResponder(from)
+            }
+            return
+        }
 
         // We start at a 50 millisecond delay and do a doubling backoff
         let nextDelay: TimeInterval = if let delay {

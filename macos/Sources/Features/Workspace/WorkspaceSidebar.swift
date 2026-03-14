@@ -66,8 +66,8 @@ struct WorkspaceSidebar: View {
 
             if isCreating {
                 WorkspaceCreateForm(
-                    onSubmit: { name, rootDir, color in
-                        manager.create(name: name, rootDir: rootDir, colorHex: color)
+                    onSubmit: { name, rootDir, color, description in
+                        manager.create(name: name, rootDir: rootDir, colorHex: color, description: description)
                         isCreating = false
                         onCreate()
                     },

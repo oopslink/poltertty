@@ -2,11 +2,12 @@
 import SwiftUI
 
 struct WorkspaceCreateForm: View {
-    let onSubmit: (_ name: String, _ rootDir: String, _ colorHex: String) -> Void
+    let onSubmit: (_ name: String, _ rootDir: String, _ colorHex: String, _ description: String) -> Void
     let onCancel: () -> Void
 
     @State private var name = ""
     @State private var rootDir = "~"
+    @State private var description = ""
     @State private var selectedColor = "#FF6B6B"
 
     private let presetColors = [
@@ -24,6 +25,12 @@ struct WorkspaceCreateForm: View {
 
             // Name
             TextField("Name", text: $name)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 11))
+                .padding(.horizontal, 12)
+
+            // Description
+            TextField("Description (optional)", text: $description)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 11))
                 .padding(.horizontal, 12)
@@ -67,7 +74,7 @@ struct WorkspaceCreateForm: View {
                     .font(.system(size: 11))
                 Button("Create") {
                     guard !name.isEmpty else { return }
-                    onSubmit(name, rootDir, selectedColor)
+                    onSubmit(name, rootDir, selectedColor, description)
                 }
                 .font(.system(size: 11))
                 .keyboardShortcut(.return)
