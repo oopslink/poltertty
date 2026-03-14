@@ -38,7 +38,10 @@ struct WorkspaceSidebar: View {
     private var collapsedContent: some View {
         VStack(spacing: 0) {
             // Toggle button (expand)
-            Button(action: { isCollapsed = false }) {
+            Button(action: {
+                isCollapsed = false
+                UserDefaults.standard.set(false, forKey: "poltertty.sidebarCollapsed")
+            }) {
                 Image(systemName: "sidebar.right")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
@@ -93,7 +96,10 @@ struct WorkspaceSidebar: View {
                     .foregroundColor(.secondary)
                     .tracking(1)
                 Spacer()
-                Button(action: { isCollapsed = true }) {
+                Button(action: {
+                    isCollapsed = true
+                    UserDefaults.standard.set(true, forKey: "poltertty.sidebarCollapsed")
+                }) {
                     Image(systemName: "sidebar.left")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)

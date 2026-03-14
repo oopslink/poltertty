@@ -62,7 +62,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     init(_ ghostty: Ghostty.App,
          withBaseConfig base: Ghostty.SurfaceConfiguration? = nil,
          withSurfaceTree tree: SplitTree<Ghostty.SurfaceView>? = nil,
-         parent: NSWindow? = nil
+         parent: NSWindow? = nil,
+         workspaceId: UUID? = nil
     ) {
         // The window we manage is not restorable if we've specified a command
         // to execute. We do this because the restored window is meaningless at the
@@ -75,6 +76,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         self.derivedConfig = DerivedConfig(ghostty.config)
 
         super.init(ghostty, baseConfig: base, surfaceTree: tree)
+
+        // Set workspace before window loads so PolterttyRootView captures it
+        self.workspaceId = workspaceId
 
         // Setup our notifications for behaviors
         let center = NotificationCenter.default
@@ -517,8 +521,10 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             guard let workspace = WorkspaceManager.shared.workspace(for: targetId) else { return }
             var config = Ghostty.SurfaceConfiguration()
             config.workingDirectory = workspace.rootDirExpanded
-            let controller = TerminalController.newWindow(ghostty, withBaseConfig: config)
-            controller.workspaceId = targetId
+            let controller = TerminalController(ghostty, withBaseConfig: config, workspaceId: targetId)
+            DispatchQueue.main.async {
+                controller.showWindow(nil)
+            }
             if let window = controller.window {
                 WorkspaceManager.shared.registerWindow(window, for: targetId)
             }
