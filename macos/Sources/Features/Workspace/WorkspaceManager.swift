@@ -63,10 +63,12 @@ class WorkspaceManager: ObservableObject {
     func registerWindow(_ window: NSWindow, for workspaceId: UUID) {
         activeWindows[workspaceId] = WeakWindow(window)
         touchLastActive(workspaceId)
+        objectWillChange.send()
     }
 
     func unregisterWindow(for workspaceId: UUID) {
         activeWindows.removeValue(forKey: workspaceId)
+        objectWillChange.send()
     }
 
     func windowForWorkspace(_ id: UUID) -> NSWindow? {

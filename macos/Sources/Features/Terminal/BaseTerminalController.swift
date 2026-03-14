@@ -843,14 +843,22 @@ class BaseTerminalController: NSWindowController,
     private func applyTitleToWindow() {
         guard let window else { return }
 
+        let baseTitle: String
         if let titleOverride {
-            window.title = computeTitle(
+            baseTitle = computeTitle(
                 title: titleOverride,
                 bell: focusedSurface?.bell ?? false)
-            return
+        } else {
+            baseTitle = lastComputedTitle
         }
 
-        window.title = lastComputedTitle
+        // Prefix with workspace name if available
+        if let wsId = (self as? TerminalController)?.workspaceId,
+           let workspace = WorkspaceManager.shared.workspace(for: wsId) {
+            window.title = "[\(workspace.name)] \(baseTitle)"
+        } else {
+            window.title = baseTitle
+        }
     }
 
     func pwdDidChange(to: URL?) {
