@@ -337,6 +337,28 @@ class AppDelegate: NSObject,
                 NSApp.arrangeInFront(nil)
             }
         }
+
+        // Restore workspaces from saved snapshots
+        if PolterttyConfig.shared.restoreOnLaunch {
+            let manager = WorkspaceManager.shared
+            for workspace in manager.workspaces {
+                if let snapshot = manager.loadSnapshot(for: workspace.id) {
+                    let config = Ghostty.SurfaceConfiguration()
+                    config.workingDirectory = workspace.rootDirExpanded
+                    let controller = TerminalController.newWindow(ghostty, withBaseConfig: config)
+                    controller.workspaceId = workspace.id
+                    if let frame = snapshot.windowFrame {
+                        controller.window?.setFrame(frame.nsRect, display: true)
+                    }
+                    if let window = controller.window {
+                        manager.registerWindow(window, for: workspace.id)
+                    }
+                }
+            }
+        }
+
+        // Setup workspace menu
+        setupWorkspaceMenu()
     }
 
     func applicationDidHide(_ notification: Notification) {
@@ -427,6 +449,14 @@ class AppDelegate: NSObject,
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Save all active workspace snapshots
+        let manager = WorkspaceManager.shared
+        for (id, weakWindow) in manager.activeWindows {
+            if let window = weakWindow.window {
+                manager.saveSnapshot(for: id, window: window, sidebarWidth: CGFloat(PolterttyConfig.shared.sidebarWidth), sidebarVisible: PolterttyConfig.shared.sidebarVisible)
+            }
+        }
+
         // We have no notifications we want to persist after death,
         // so remove them all now. In the future we may want to be
         // more selective and only remove surface-targeted notifications.
@@ -955,6 +985,48 @@ class AppDelegate: NSObject,
 
     @IBAction func newWindow(_ sender: Any?) {
         _ = TerminalController.newWindow(ghostty)
+    }
+
+    @IBAction func newWorkspace(_ sender: Any?) {
+        let name = "workspace-\(WorkspaceManager.shared.workspaces.count + 1)"
+        let rootDir = FileManager.default.currentDirectoryPath
+        let workspace = WorkspaceManager.shared.create(name: name, rootDir: rootDir)
+
+        let config = Ghostty.SurfaceConfiguration()
+        config.workingDirectory = workspace.rootDirExpanded
+        let controller = TerminalController.newWindow(ghostty, withBaseConfig: config)
+        controller.workspaceId = workspace.id
+        if let window = controller.window {
+            WorkspaceManager.shared.registerWindow(window, for: workspace.id)
+        }
+    }
+
+    private func setupWorkspaceMenu() {
+        let workspaceMenu = NSMenu(title: "Workspace")
+
+        let newItem = NSMenuItem(title: "New Workspace", action: #selector(newWorkspace(_:)), keyEquivalent: "N")
+        newItem.keyEquivalentModifierMask = [.command, .shift]
+        workspaceMenu.addItem(newItem)
+
+        workspaceMenu.addItem(.separator())
+
+        let toggleSidebar = NSMenuItem(title: "Toggle Sidebar", action: #selector(toggleWorkspaceSidebar(_:)), keyEquivalent: "b")
+        toggleSidebar.keyEquivalentModifierMask = .command
+        workspaceMenu.addItem(toggleSidebar)
+
+        let menuItem = NSMenuItem(title: "Workspace", action: nil, keyEquivalent: "")
+        menuItem.submenu = workspaceMenu
+
+        // Insert before "Window" menu
+        if let mainMenu = NSApp.mainMenu,
+           let windowMenuIndex = mainMenu.items.firstIndex(where: { $0.title == "Window" }) {
+            mainMenu.insertItem(menuItem, at: windowMenuIndex)
+        }
+    }
+
+    @objc func toggleWorkspaceSidebar(_ sender: Any?) {
+        // This is handled by SwiftUI onKeyPress in PolterttyRootView
+        // Menu item exists for discoverability
     }
 
     @IBAction func newTab(_ sender: Any?) {
