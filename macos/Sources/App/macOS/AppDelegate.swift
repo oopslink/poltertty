@@ -1025,8 +1025,7 @@ class AppDelegate: NSObject,
     }
 
     @objc func toggleWorkspaceSidebar(_ sender: Any?) {
-        // This is handled by SwiftUI onKeyPress in PolterttyRootView
-        // Menu item exists for discoverability
+        NotificationCenter.default.post(name: .toggleWorkspaceSidebar, object: nil)
     }
 
     @IBAction func newTab(_ sender: Any?) {

@@ -74,9 +74,9 @@ struct WorkspaceQuickSwitcher: View {
         .background(.ultraThinMaterial)
         .cornerRadius(10)
         .shadow(color: .black.opacity(0.3), radius: 20)
-        .onKeyPress(.upArrow) { moveSelection(-1); return .handled }
-        .onKeyPress(.downArrow) { moveSelection(1); return .handled }
-        .onKeyPress(.escape) { onDismiss(); return .handled }
+        .backport.onKeyPress(.upArrow) { _ in moveSelection(-1); return .handled }
+        .backport.onKeyPress(.downArrow) { _ in moveSelection(1); return .handled }
+        .backport.onKeyPress(.escape) { _ in onDismiss(); return .handled }
         .onChange(of: query) { _ in selectedIndex = 0 }
     }
 

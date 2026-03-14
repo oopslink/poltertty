@@ -1,6 +1,11 @@
 // macos/Sources/Features/Workspace/PolterttyRootView.swift
 import SwiftUI
 
+extension Notification.Name {
+    static let toggleWorkspaceSidebar = Notification.Name("poltertty.toggleWorkspaceSidebar")
+    static let toggleWorkspaceQuickSwitcher = Notification.Name("poltertty.toggleWorkspaceQuickSwitcher")
+}
+
 struct PolterttyRootView<TerminalContent: View>: View {
     @ObservedObject var manager = WorkspaceManager.shared
     let workspaceId: UUID?
@@ -46,13 +51,11 @@ struct PolterttyRootView<TerminalContent: View>: View {
                 )
             }
         }
-        .onKeyPress(KeyEquivalent("w"), modifiers: [.command, .control]) {
-            quickSwitcherVisible.toggle()
-            return .handled
-        }
-        .onKeyPress(KeyEquivalent("b"), modifiers: .command) {
+        .onReceive(NotificationCenter.default.publisher(for: .toggleWorkspaceSidebar)) { _ in
             sidebarVisible.toggle()
-            return .handled
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleWorkspaceQuickSwitcher)) { _ in
+            quickSwitcherVisible.toggle()
         }
     }
 
