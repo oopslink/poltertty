@@ -58,15 +58,18 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
     /// The workspace this window is bound to (nil = legacy non-workspace window)
     var workspaceId: UUID?
+    var startupMode: WorkspaceStartupMode = .terminal
 
     init(_ ghostty: Ghostty.App,
          withBaseConfig base: Ghostty.SurfaceConfiguration? = nil,
          withSurfaceTree tree: SplitTree<Ghostty.SurfaceView>? = nil,
          parent: NSWindow? = nil,
-         workspaceId: UUID? = nil
+         workspaceId: UUID? = nil,
+         startupMode: WorkspaceStartupMode = .terminal
     ) {
-        // Set workspace FIRST before anything that might trigger window loading
+        // Set workspace and startup mode FIRST before anything that might trigger window loading
         self.workspaceId = workspaceId
+        self.startupMode = startupMode
 
         // The window we manage is not restorable if we've specified a command
         // to execute. We do this because the restored window is meaningless at the
@@ -230,9 +233,11 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     static func newWindow(
         _ ghostty: Ghostty.App,
         withBaseConfig baseConfig: Ghostty.SurfaceConfiguration? = nil,
-        withParent explicitParent: NSWindow? = nil
+        withParent explicitParent: NSWindow? = nil,
+        workspaceId: UUID? = nil,
+        startupMode: WorkspaceStartupMode = .terminal
     ) -> TerminalController {
-        let c = TerminalController.init(ghostty, withBaseConfig: baseConfig)
+        let c = TerminalController.init(ghostty, withBaseConfig: baseConfig, workspaceId: workspaceId, startupMode: startupMode)
 
         // Get our parent. Our parent is the one explicitly given to us,
         // otherwise the focused terminal, otherwise an arbitrary one.
@@ -543,6 +548,55 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         guard let targetWindow = WorkspaceManager.shared.windowForWorkspace(targetId) else { return }
         WorkspaceManager.shared.unregisterWindow(for: targetId)
         targetWindow.close()
+    }
+
+    private func createFormalWorkspace(name: String, rootDir: String = "~", colorHex: String = "#FF6B6B", description: String = "") {
+        let manager = WorkspaceManager.shared
+        let workspace = manager.create(name: name, rootDir: rootDir, colorHex: colorHex, description: description)
+
+        // If this window is hosting an onboarding/restore view (a temporary workspace),
+        // destroy it and open the new workspace in a fresh window
+        if let currentId = workspaceId,
+           let current = manager.workspace(for: currentId),
+           current.isTemporary {
+            manager.delete(id: currentId)
+            self.window?.close()
+
+            var config = Ghostty.SurfaceConfiguration()
+            config.workingDirectory = workspace.rootDirExpanded
+            let controller = TerminalController.newWindow(ghostty, withBaseConfig: config, workspaceId: workspace.id)
+            if let window = controller.window {
+                manager.registerWindow(window, for: workspace.id)
+                window.makeKeyAndOrderFront(nil)
+            }
+        } else {
+            switchToWorkspace(workspace.id)
+        }
+    }
+
+    private func createTemporaryWorkspace() {
+        let manager = WorkspaceManager.shared
+        let workspace = manager.createTemporary()
+
+        // If this window is hosting an onboarding/restore view (a temporary workspace),
+        // destroy it and open the new temporary workspace in a fresh window
+        if let currentId = workspaceId,
+           let current = manager.workspace(for: currentId),
+           current.isTemporary,
+           startupMode != .terminal {
+            manager.delete(id: currentId)
+            self.window?.close()
+
+            var config = Ghostty.SurfaceConfiguration()
+            config.workingDirectory = workspace.rootDirExpanded
+            let controller = TerminalController.newWindow(ghostty, withBaseConfig: config, workspaceId: workspace.id)
+            if let window = controller.window {
+                manager.registerWindow(window, for: workspace.id)
+                window.makeKeyAndOrderFront(nil)
+            }
+        } else {
+            switchToWorkspace(workspace.id)
+        }
     }
 
     @objc private func ghosttyConfigDidChange(_ notification: Notification) {
@@ -1096,6 +1150,22 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 },
                 onCloseWorkspace: { [weak self] id in
                     self?.closeWorkspace(id)
+                },
+                initialStartupMode: self.startupMode,
+                onCreateFormalWorkspace: { [weak self] name, rootDir, colorHex, description in
+                    self?.createFormalWorkspace(name: name, rootDir: rootDir, colorHex: colorHex, description: description)
+                },
+                onCreateTemporaryWorkspace: { [weak self] in
+                    self?.createTemporaryWorkspace()
+                },
+                onRestoreWorkspaces: { [weak self] ids in
+                    guard let self = self else { return }
+                    if let appDelegate = NSApp.delegate as? AppDelegate {
+                        appDelegate.restoreWorkspaces(ids, replacingWindow: self.window)
+                    }
+                },
+                onCreateTemporary: { [weak self] in
+                    self?.createTemporaryWorkspace()
                 }
             )
         }
@@ -1107,6 +1177,11 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         container.initialContentSize = focusedSurface?.initialSize
 
         window.contentView = container
+
+        // Set window title for onboarding/restore modes
+        if startupMode != .terminal {
+            window.title = "✦ Poltertty"
+        }
 
         // Register window for workspace tracking
         if let wsId = workspaceId {

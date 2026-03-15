@@ -5,6 +5,8 @@ extension Notification.Name {
     static let toggleWorkspaceSidebar = Notification.Name("poltertty.toggleWorkspaceSidebar")
     static let toggleWorkspaceQuickSwitcher = Notification.Name("poltertty.toggleWorkspaceQuickSwitcher")
     static let closeWorkspace = Notification.Name("poltertty.closeWorkspace")
+    static let workspaceSidebarNavigateUp = Notification.Name("poltertty.workspaceSidebarNavigateUp")
+    static let workspaceSidebarNavigateDown = Notification.Name("poltertty.workspaceSidebarNavigateDown")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -14,10 +16,22 @@ struct PolterttyRootView<TerminalContent: View>: View {
     let onSwitchWorkspace: (UUID) -> Void
     let onCloseWorkspace: (UUID) -> Void
 
+    let initialStartupMode: WorkspaceStartupMode
+    let onCreateFormalWorkspace: ((_ name: String, _ rootDir: String, _ colorHex: String, _ description: String) -> Void)?
+    let onCreateTemporaryWorkspace: (() -> Void)?
+    let onRestoreWorkspaces: (([UUID]) -> Void)?
+    let onCreateTemporary: (() -> Void)?
+
     @State private var sidebarVisible: Bool = PolterttyConfig.shared.sidebarVisible
     @State private var sidebarCollapsed: Bool = UserDefaults.standard.bool(forKey: "poltertty.sidebarCollapsed")
     @State private var sidebarWidth: CGFloat = CGFloat(PolterttyConfig.shared.sidebarWidth)
     @State private var quickSwitcherVisible = false
+
+    @State private var startupMode: WorkspaceStartupMode = .terminal
+
+    @State private var showConvertAlert = false
+    @State private var convertTargetId: UUID?
+    @State private var convertName = ""
 
     private var effectiveSidebarWidth: CGFloat {
         sidebarCollapsed ? 48 : sidebarWidth
@@ -25,26 +39,59 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
     var body: some View {
         ZStack {
-            HStack(spacing: 0) {
-                // Sidebar
-                if sidebarVisible {
-                    WorkspaceSidebar(
-                        currentWorkspaceId: workspaceId,
-                        onSwitch: { id in onSwitchWorkspace(id) },
-                        onClose: { id in onCloseWorkspace(id) },
-                        onCreate: {},
-                        isCollapsed: $sidebarCollapsed
-                    )
-                    .frame(width: effectiveSidebarWidth)
+            switch startupMode {
+            case .onboarding:
+                OnboardingView(
+                    onCreateFormal: { name, rootDir, colorHex, description in
+                        onCreateFormalWorkspace?(name, rootDir, colorHex, description)
+                        startupMode = .terminal
+                    },
+                    onCreateTemporary: {
+                        onCreateTemporaryWorkspace?()
+                        startupMode = .terminal
+                    }
+                )
 
-                    Divider()
+            case .restore:
+                RestoreView(
+                    workspaces: manager.formalWorkspaces.sorted { $0.lastActiveAt > $1.lastActiveAt },
+                    onRestore: { ids in
+                        onRestoreWorkspaces?(ids)
+                        startupMode = .terminal
+                    },
+                    onCreateNew: {
+                        startupMode = .onboarding
+                    }
+                )
+
+            case .terminal:
+                HStack(spacing: 0) {
+                    // Sidebar
+                    if sidebarVisible {
+                        WorkspaceSidebar(
+                            currentWorkspaceId: workspaceId,
+                            onSwitch: { id in onSwitchWorkspace(id) },
+                            onClose: { id in onCloseWorkspace(id) },
+                            onCreate: {},
+                            onCreateTemporary: { onCreateTemporary?() },
+                            onConvert: { workspace in
+                                convertTargetId = workspace.id
+                                convertName = workspace.name
+                                showConvertAlert = true
+                            },
+                            isCollapsed: $sidebarCollapsed
+                        )
+                        .frame(width: effectiveSidebarWidth)
+
+                        Divider()
+                    }
+
+                    // Terminal view
+                    terminalView
                 }
-
-                // Terminal view (passed through unchanged)
-                terminalView
             }
 
-            // Quick switcher overlay
+            // Quick switcher overlay (always available in terminal mode)
             if quickSwitcherVisible {
                 Color.black.opacity(0.3)
                     .ignoresSafeArea()
@@ -60,12 +107,69 @@ struct PolterttyRootView<TerminalContent: View>: View {
                 )
             }
         }
+        .onAppear { startupMode = initialStartupMode }
         .onReceive(NotificationCenter.default.publisher(for: .toggleWorkspaceSidebar)) { _ in
             sidebarVisible.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleWorkspaceQuickSwitcher)) { _ in
             quickSwitcherVisible.toggle()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .workspaceSidebarNavigateUp)) { _ in
+            navigateWorkspace(direction: -1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .workspaceSidebarNavigateDown)) { _ in
+            navigateWorkspace(direction: 1)
+        }
+        .sheet(isPresented: $showConvertAlert) {
+            convertToFormalSheet
+        }
+        .onChange(of: manager.formalWorkspaces.count) { count in
+            // When all formal workspaces are deleted, return to onboarding
+            if count == 0 && startupMode == .terminal {
+                startupMode = .onboarding
+            }
+        }
+    }
+
+    private func navigateWorkspace(direction: Int) {
+        let allWorkspaces = manager.workspaces
+        guard !allWorkspaces.isEmpty else { return }
+        guard let currentId = workspaceId,
+              let currentIndex = allWorkspaces.firstIndex(where: { $0.id == currentId }) else {
+            if let first = allWorkspaces.first {
+                onSwitchWorkspace(first.id)
+            }
+            return
+        }
+        let newIndex = (currentIndex + direction + allWorkspaces.count) % allWorkspaces.count
+        onSwitchWorkspace(allWorkspaces[newIndex].id)
+    }
+
+    @ViewBuilder
+    private var convertToFormalSheet: some View {
+        VStack(spacing: 16) {
+            Text("转为正式 Workspace")
+                .font(.system(size: 14, weight: .semibold))
+
+            TextField("名称", text: Binding(
+                get: { convertName },
+                set: { convertName = WorkspaceNameValidator.filterInput($0) }
+            ))
+            .textFieldStyle(.roundedBorder)
+            .frame(width: 240)
+
+            HStack {
+                Button("取消") { showConvertAlert = false }
+                Button("确认") {
+                    if let id = convertTargetId {
+                        manager.convertToFormal(id: id, newName: convertName)
+                    }
+                    showConvertAlert = false
+                }
+                .disabled(convertName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(24)
     }
 
     // Called by TerminalController to get current sidebar state for snapshots

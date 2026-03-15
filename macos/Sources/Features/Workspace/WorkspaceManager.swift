@@ -10,6 +10,21 @@ class WorkspaceManager: ObservableObject {
     /// Maps workspace ID to its owning NSWindow
     var activeWindows: [UUID: WeakWindow] = [:]
 
+    /// Only formal (non-temporary) workspaces
+    var formalWorkspaces: [WorkspaceModel] {
+        workspaces.filter { !$0.isTemporary }
+    }
+
+    /// Only temporary workspaces
+    var temporaryWorkspaces: [WorkspaceModel] {
+        workspaces.filter { $0.isTemporary }
+    }
+
+    /// Whether any temporary workspaces exist (controls sidebar section visibility)
+    var hasTemporaryWorkspaces: Bool {
+        workspaces.contains { $0.isTemporary }
+    }
+
     class WeakWindow {
         weak var window: NSWindow?
         init(_ window: NSWindow) { self.window = window }
@@ -37,6 +52,51 @@ class WorkspaceManager: ObservableObject {
         workspaces.append(workspace)
         save(workspace)
         return workspace
+    }
+
+    private static let temporaryColors = [
+        "#FF6B6B", "#4ECDC4", "#FFD93D", "#6BCB77",
+        "#7AA2F7", "#BB9AF7", "#FF9A8B", "#F59E0B"
+    ]
+
+    /// Create a temporary workspace with auto-generated name and random color
+    @discardableResult
+    func createTemporary(rootDir: String = "~") -> WorkspaceModel {
+        let name = nextScratchName()
+        let color = Self.temporaryColors.randomElement() ?? "#F59E0B"
+        var workspace = WorkspaceModel(name: name, rootDir: rootDir, colorHex: color, isTemporary: true)
+        workspace.icon = "⏱"
+        workspaces.append(workspace)
+        // Temporary workspaces are NOT persisted to disk
+        return workspace
+    }
+
+    private func nextScratchName() -> String {
+        let existing = temporaryWorkspaces.map { $0.name }
+        if !existing.contains("scratch") { return "scratch" }
+        var counter = 2
+        while existing.contains("scratch-\(counter)") {
+            counter += 1
+        }
+        return "scratch-\(counter)"
+    }
+
+    /// Convert a temporary workspace to formal (persistent)
+    func convertToFormal(id: UUID, newName: String) {
+        guard let idx = workspaces.firstIndex(where: { $0.id == id && $0.isTemporary }) else { return }
+        workspaces[idx].isTemporary = false
+        workspaces[idx].name = newName
+        workspaces[idx].updatedAt = Date()
+        save(workspaces[idx])
+    }
+
+    /// Destroy all temporary workspaces (called on app quit)
+    func destroyAllTemporary() {
+        let tempIds = temporaryWorkspaces.map { $0.id }
+        for id in tempIds {
+            activeWindows.removeValue(forKey: id)
+        }
+        workspaces.removeAll { $0.isTemporary }
     }
 
     func update(_ workspace: WorkspaceModel) {
@@ -92,6 +152,14 @@ class WorkspaceManager: ObservableObject {
         guard var workspace = workspace(for: workspaceId) else { return }
         workspace.updatedAt = Date()
 
+        // Update in-memory model
+        if let idx = workspaces.firstIndex(where: { $0.id == workspaceId }) {
+            workspaces[idx] = workspace
+        }
+
+        // Temporary workspaces are not persisted to disk
+        guard !workspace.isTemporary else { return }
+
         let snapshot = WorkspaceSnapshot(
             workspace: workspace,
             windowFrame: WorkspaceSnapshot.WindowFrame(from: window.frame),
@@ -102,11 +170,6 @@ class WorkspaceManager: ObservableObject {
         let path = snapshotPath(for: workspaceId)
         if let data = try? encoder.encode(snapshot) {
             try? data.write(to: URL(fileURLWithPath: path))
-        }
-
-        // Update in-memory model
-        if let idx = workspaces.firstIndex(where: { $0.id == workspaceId }) {
-            workspaces[idx] = workspace
         }
     }
 
@@ -143,6 +206,8 @@ class WorkspaceManager: ObservableObject {
     }
 
     private func save(_ workspace: WorkspaceModel) {
+        // Temporary workspaces are not persisted
+        guard !workspace.isTemporary else { return }
         let snapshot = WorkspaceSnapshot(
             workspace: workspace,
             sidebarWidth: CGFloat(PolterttyConfig.shared.sidebarWidth),

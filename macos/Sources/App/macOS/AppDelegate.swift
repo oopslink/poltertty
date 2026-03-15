@@ -338,22 +338,35 @@ class AppDelegate: NSObject,
             }
         }
 
-        // Restore workspaces from saved snapshots
-        if PolterttyConfig.shared.restoreOnLaunch {
-            let manager = WorkspaceManager.shared
-            for workspace in manager.workspaces {
-                if let snapshot = manager.loadSnapshot(for: workspace.id) {
-                    var config = Ghostty.SurfaceConfiguration()
-                    config.workingDirectory = workspace.rootDirExpanded
-                    let controller = TerminalController.newWindow(ghostty, withBaseConfig: config)
-                    controller.workspaceId = workspace.id
-                    if let frame = snapshot.windowFrame {
-                        controller.window?.setFrame(frame.nsRect, display: true)
-                    }
-                    if let window = controller.window {
-                        manager.registerWindow(window, for: workspace.id)
-                    }
-                }
+        // Determine startup mode
+        let manager = WorkspaceManager.shared
+        let hasWorkspaces = !manager.formalWorkspaces.isEmpty
+
+        if hasWorkspaces && PolterttyConfig.shared.restoreOnLaunch {
+            // Cold start with existing workspaces → show restore UI
+            let tempWorkspace = manager.createTemporary()
+            var config = Ghostty.SurfaceConfiguration()
+            config.workingDirectory = tempWorkspace.rootDirExpanded
+            let controller = TerminalController.newWindow(
+                ghostty, withBaseConfig: config,
+                workspaceId: tempWorkspace.id, startupMode: .restore
+            )
+            if let window = controller.window {
+                window.title = "✦ Poltertty"
+                manager.registerWindow(window, for: tempWorkspace.id)
+            }
+        } else if !hasWorkspaces {
+            // First launch → show onboarding
+            let tempWorkspace = manager.createTemporary()
+            var config = Ghostty.SurfaceConfiguration()
+            config.workingDirectory = tempWorkspace.rootDirExpanded
+            let controller = TerminalController.newWindow(
+                ghostty, withBaseConfig: config,
+                workspaceId: tempWorkspace.id, startupMode: .onboarding
+            )
+            if let window = controller.window {
+                window.title = "✦ Poltertty"
+                manager.registerWindow(window, for: tempWorkspace.id)
             }
         }
 
@@ -451,6 +464,8 @@ class AppDelegate: NSObject,
     func applicationWillTerminate(_ notification: Notification) {
         // Save all active workspace snapshots
         let manager = WorkspaceManager.shared
+        // Destroy all temporary workspaces BEFORE saving snapshots
+        manager.destroyAllTemporary()
         for (id, weakWindow) in manager.activeWindows {
             if let window = weakWindow.window {
                 manager.saveSnapshot(for: id, window: window, sidebarWidth: CGFloat(PolterttyConfig.shared.sidebarWidth), sidebarVisible: PolterttyConfig.shared.sidebarVisible)
@@ -987,6 +1002,40 @@ class AppDelegate: NSObject,
         _ = TerminalController.newWindow(ghostty)
     }
 
+    func restoreWorkspaces(_ ids: [UUID], replacingWindow: NSWindow?) {
+        let manager = WorkspaceManager.shared
+
+        // Destroy the temporary workspace hosting the restore/onboarding view
+        if let window = replacingWindow,
+           let tempId = manager.workspaceId(for: window) {
+            manager.delete(id: tempId)
+            window.close()
+        }
+
+        // Restore selected workspaces
+        var isFirst = true
+        for id in ids {
+            guard let workspace = manager.workspace(for: id) else { continue }
+            var config = Ghostty.SurfaceConfiguration()
+            config.workingDirectory = workspace.rootDirExpanded
+
+            let controller = TerminalController.newWindow(ghostty, withBaseConfig: config, workspaceId: id)
+
+            if let snapshot = manager.loadSnapshot(for: id),
+               let frame = snapshot.windowFrame {
+                controller.window?.setFrame(frame.nsRect, display: true)
+            }
+
+            if let window = controller.window {
+                manager.registerWindow(window, for: id)
+                if isFirst {
+                    window.makeKeyAndOrderFront(nil)
+                    isFirst = false
+                }
+            }
+        }
+    }
+
     @IBAction func newWorkspace(_ sender: Any?) {
         let name = "workspace-\(WorkspaceManager.shared.workspaces.count + 1)"
         let rootDir = FileManager.default.currentDirectoryPath
@@ -1001,12 +1050,28 @@ class AppDelegate: NSObject,
         }
     }
 
+    @IBAction func newTemporaryWorkspace(_ sender: Any?) {
+        let manager = WorkspaceManager.shared
+        let workspace = manager.createTemporary()
+
+        var config = Ghostty.SurfaceConfiguration()
+        config.workingDirectory = workspace.rootDirExpanded
+        let controller = TerminalController.newWindow(ghostty, withBaseConfig: config, workspaceId: workspace.id)
+        if let window = controller.window {
+            manager.registerWindow(window, for: workspace.id)
+        }
+    }
+
     private func setupWorkspaceMenu() {
         let workspaceMenu = NSMenu(title: "Workspace")
 
         let newItem = NSMenuItem(title: "New Workspace", action: #selector(newWorkspace(_:)), keyEquivalent: "N")
         newItem.keyEquivalentModifierMask = [.command, .shift]
         workspaceMenu.addItem(newItem)
+
+        let newTemp = NSMenuItem(title: "New Temporary Workspace", action: #selector(newTemporaryWorkspace(_:)), keyEquivalent: "T")
+        newTemp.keyEquivalentModifierMask = [.command, .shift]
+        workspaceMenu.addItem(newTemp)
 
         workspaceMenu.addItem(.separator())
 

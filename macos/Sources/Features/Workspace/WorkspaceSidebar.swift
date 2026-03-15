@@ -7,9 +7,13 @@ struct WorkspaceSidebar: View {
     let onSwitch: (UUID) -> Void
     let onClose: (UUID) -> Void
     let onCreate: () -> Void
+    let onCreateTemporary: () -> Void
+    let onConvert: (WorkspaceModel) -> Void
 
     @Binding var isCollapsed: Bool
     @State private var isCreating = false
+    @State private var editingWorkspace: WorkspaceModel?
+    @Namespace private var sidebarAnimation
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +33,22 @@ struct WorkspaceSidebar: View {
                     onCreate()
                 },
                 onCancel: { isCreating = false }
+            )
+        }
+        .sheet(item: $editingWorkspace) { workspace in
+            WorkspaceCreateForm(
+                onSubmit: { name, rootDir, color, description in
+                    var updated = workspace
+                    updated.name = name
+                    updated.rootDir = rootDir
+                    updated.colorHex = color
+                    updated.description = description
+                    updated.icon = String(name.prefix(2).uppercased())
+                    manager.update(updated)
+                    editingWorkspace = nil
+                },
+                onCancel: { editingWorkspace = nil },
+                editing: workspace
             )
         }
     }
@@ -54,15 +74,32 @@ struct WorkspaceSidebar: View {
             // Workspace icons
             ScrollView {
                 LazyVStack(spacing: 4) {
-                    ForEach(manager.workspaces) { workspace in
+                    ForEach(manager.formalWorkspaces) { workspace in
                         CollapsedWorkspaceIcon(
                             workspace: workspace,
                             isActive: workspace.id == currentWorkspaceId,
                             isOpen: manager.windowForWorkspace(workspace.id) != nil,
                             onTap: { onSwitch(workspace.id) },
                             onClose: { onClose(workspace.id) },
-                            onDelete: { manager.delete(id: workspace.id) }
+                            onDelete: { manager.delete(id: workspace.id) },
+                            onEdit: { editingWorkspace = workspace }
                         )
+                    }
+
+                    if manager.hasTemporaryWorkspaces {
+                        Divider().padding(.horizontal, 8).padding(.vertical, 4)
+
+                        ForEach(manager.temporaryWorkspaces) { workspace in
+                            CollapsedWorkspaceIcon(
+                                workspace: workspace,
+                                isActive: workspace.id == currentWorkspaceId,
+                                isOpen: manager.windowForWorkspace(workspace.id) != nil,
+                                onTap: { onSwitch(workspace.id) },
+                                onClose: { onClose(workspace.id) },
+                                onDelete: { manager.delete(id: workspace.id) },
+                                onEdit: { editingWorkspace = workspace }
+                            )
+                        }
                     }
                 }
                 .padding(.vertical, 6)
@@ -72,17 +109,17 @@ struct WorkspaceSidebar: View {
 
             Divider()
 
-            // Add button
-            Button(action: { isCreating = true }) {
-                Image(systemName: "plus")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                    .frame(width: 28, height: 28)
-                    .background(Color.primary.opacity(0.06))
-                    .cornerRadius(6)
-            }
-            .buttonStyle(.plain)
-            .padding(.vertical, 8)
+            // Add button: single click = new workspace, double click = new temporary
+            Image(systemName: "plus")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .frame(width: 28, height: 28)
+                .background(Color.primary.opacity(0.06))
+                .cornerRadius(6)
+                .onTapGesture(count: 2) { onCreateTemporary() }
+                .onTapGesture(count: 1) { isCreating = true }
+                .help("Click: New Workspace\nDouble-click: New Temporary")
+                .padding(.vertical, 8)
         }
     }
 
@@ -121,15 +158,46 @@ struct WorkspaceSidebar: View {
             // Workspace list
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(manager.workspaces) { workspace in
+                    // Formal workspaces
+                    ForEach(manager.formalWorkspaces) { workspace in
                         ExpandedWorkspaceItem(
                             workspace: workspace,
                             isActive: workspace.id == currentWorkspaceId,
                             isOpen: manager.windowForWorkspace(workspace.id) != nil,
+                            animationNamespace: sidebarAnimation,
                             onTap: { onSwitch(workspace.id) },
                             onClose: { onClose(workspace.id) },
-                            onDelete: { manager.delete(id: workspace.id) }
+                            onDelete: { manager.delete(id: workspace.id) },
+                            onConvert: { onConvert(workspace) },
+                            onEdit: { editingWorkspace = workspace }
                         )
+                    }
+
+                    // Temporary section
+                    if manager.hasTemporaryWorkspaces {
+                        HStack {
+                            Text("Temporary")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.secondary.opacity(0.6))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.top, 8)
+                        .padding(.bottom, 2)
+
+                        ForEach(manager.temporaryWorkspaces) { workspace in
+                            ExpandedWorkspaceItem(
+                                workspace: workspace,
+                                isActive: workspace.id == currentWorkspaceId,
+                                isOpen: manager.windowForWorkspace(workspace.id) != nil,
+                                animationNamespace: sidebarAnimation,
+                                onTap: { onSwitch(workspace.id) },
+                                onClose: { onClose(workspace.id) },
+                                onDelete: { manager.delete(id: workspace.id) },
+                                onConvert: { onConvert(workspace) },
+                                onEdit: { editingWorkspace = workspace }
+                            )
+                        }
                     }
                 }
                 .padding(.vertical, 4)
@@ -139,19 +207,36 @@ struct WorkspaceSidebar: View {
 
             Divider()
 
-            // Footer
-            Button(action: { isCreating = true }) {
-                HStack {
-                    Image(systemName: "plus")
-                        .font(.system(size: 10))
-                    Text("New Workspace")
-                        .font(.system(size: 11))
+            // Footer — side-by-side [+ New | + Temporary]
+            HStack(spacing: 0) {
+                Button(action: { isCreating = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 9))
+                        Text("New")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
                 }
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .buttonStyle(.plain)
+
+                Divider().frame(height: 16)
+
+                Button(action: onCreateTemporary) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 9))
+                        Text("Temporary")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundColor(.secondary.opacity(0.7))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 }
@@ -165,6 +250,7 @@ struct CollapsedWorkspaceIcon: View {
     let onTap: () -> Void
     let onClose: () -> Void
     let onDelete: () -> Void
+    let onEdit: () -> Void
 
     @State private var isHovering = false
 
@@ -179,14 +265,15 @@ struct CollapsedWorkspaceIcon: View {
 
     /// Always show workspace color: full when active, dimmed when open but not active, grey when closed
     private var iconFill: Color {
+        let baseColor = workspace.isTemporary ? (Color(hex: "#F59E0B") ?? .yellow) : workspace.color
         if isActive {
-            return workspace.color
+            return baseColor
         } else if isOpen {
-            return workspace.color.opacity(0.4)
+            return baseColor.opacity(0.4)
         } else if isHovering {
-            return workspace.color.opacity(0.15)
+            return baseColor.opacity(0.15)
         } else {
-            return workspace.color.opacity(0.1)
+            return baseColor.opacity(0.1)
         }
     }
 
@@ -207,8 +294,9 @@ struct CollapsedWorkspaceIcon: View {
                     .fill(iconFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(isActive ? workspace.color : .clear, lineWidth: 1.5)
+                            .stroke(isActive ? .white.opacity(0.9) : .clear, lineWidth: 2)
                     )
+                    .shadow(color: isActive ? workspace.color.opacity(0.5) : .clear, radius: 4)
 
                 Text(workspace.icon)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
@@ -220,8 +308,11 @@ struct CollapsedWorkspaceIcon: View {
         .onHover { isHovering = $0 }
         .help(tooltipText)
         .contextMenu {
+            Button("Edit Workspace...") { onEdit() }
+            Divider()
             if isActive {
                 Button("Close Workspace") { onClose() }
+                Divider()
             }
             Button("Delete Workspace", role: .destructive) { onDelete() }
         }
@@ -234,24 +325,36 @@ struct ExpandedWorkspaceItem: View {
     let workspace: WorkspaceModel
     let isActive: Bool
     let isOpen: Bool
+    let animationNamespace: Namespace.ID
     let onTap: () -> Void
     let onClose: () -> Void
     let onDelete: () -> Void
+    let onConvert: () -> Void
+    let onEdit: () -> Void
 
     @State private var isHovering = false
+    @State private var isPressed = false
+
+    private var indicatorColor: Color {
+        workspace.isTemporary ? (Color(hex: "#F59E0B") ?? .yellow) : workspace.color
+    }
+
+    private var activeBackground: Color {
+        workspace.isTemporary
+            ? (Color(hex: "#F59E0B") ?? .yellow).opacity(0.08)
+            : workspace.color.opacity(0.08)
+    }
 
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
-                // Color indicator
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(workspace.color)
-                    .frame(width: 4, height: 36)
-                    .opacity(isActive ? 1 : 0.3)
-
                 // Info
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 4) {
+                        if workspace.isTemporary {
+                            Text("\u{23F1}")
+                                .font(.system(size: 10))
+                        }
                         Text(workspace.name)
                             .font(.system(size: 12, weight: isActive ? .semibold : .medium))
                             .foregroundColor(isActive ? .primary : .secondary)
@@ -283,15 +386,30 @@ struct ExpandedWorkspaceItem: View {
             .padding(.vertical, 6)
             .background(
                 isActive
-                    ? workspace.color.opacity(0.08)
+                    ? activeBackground
                     : (isHovering ? Color.primary.opacity(0.04) : .clear)
             )
             .cornerRadius(6)
+            .overlay(alignment: .leading) {
+                if isActive {
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(indicatorColor)
+                        .frame(width: 3, height: 36)
+                        .matchedGeometryEffect(id: "activeIndicator", in: animationNamespace)
+                }
+            }
         }
         .buttonStyle(.plain)
+        .scaleEffect(isPressed ? 0.97 : 1.0)
         .onHover { isHovering = $0 }
         .padding(.horizontal, 6)
         .contextMenu {
+            Button("Edit Workspace...") { onEdit() }
+            Divider()
+            if workspace.isTemporary {
+                Button("转为正式 Workspace") { onConvert() }
+                Divider()
+            }
             if isOpen {
                 Button("Close Workspace") { onClose() }
                 Divider()

@@ -14,8 +14,9 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
     let createdAt: Date
     var updatedAt: Date
     var lastActiveAt: Date
+    var isTemporary: Bool
 
-    init(name: String, rootDir: String, colorHex: String = "#FF6B6B", icon: String? = nil) {
+    init(name: String, rootDir: String, colorHex: String = "#FF6B6B", icon: String? = nil, isTemporary: Bool = false) {
         self.id = UUID()
         self.name = name
         self.rootDir = rootDir
@@ -26,6 +27,22 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
         self.createdAt = Date()
         self.updatedAt = Date()
         self.lastActiveAt = Date()
+        self.isTemporary = isTemporary
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        colorHex = try container.decode(String.self, forKey: .colorHex)
+        icon = try container.decode(String.self, forKey: .icon)
+        rootDir = try container.decode(String.self, forKey: .rootDir)
+        description = try container.decode(String.self, forKey: .description)
+        tags = try container.decode([String].self, forKey: .tags)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        lastActiveAt = try container.decode(Date.self, forKey: .lastActiveAt)
+        isTemporary = try container.decodeIfPresent(Bool.self, forKey: .isTemporary) ?? false
     }
 
     var color: Color {
