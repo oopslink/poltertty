@@ -195,7 +195,10 @@ let container = TerminalViewContainer {
                 appDelegate.restoreWorkspaces(ids, replacingWindow: self.window)
             }
         },
-        onSelectWorktree: { [weak self] path in          // NEW
+        onCreateTemporary: { [weak self] in              // existing 9th param; unchanged
+            self?.createTemporaryWorkspace()
+        },
+        onSelectWorktree: { [weak self] path in          // NEW (10th param)
             self?.openNewTab(cdTo: path)
         }
     )
