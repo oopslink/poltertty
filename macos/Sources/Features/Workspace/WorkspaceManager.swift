@@ -10,6 +10,26 @@ class WorkspaceManager: ObservableObject {
     /// Maps workspace ID to its owning NSWindow
     var activeWindows: [UUID: WeakWindow] = [:]
 
+    // MARK: - File Browser ViewModels (per-workspace)
+    private var fileBrowserViewModels: [UUID: FileBrowserViewModel] = [:]
+
+    func fileBrowserViewModel(for workspaceId: UUID) -> FileBrowserViewModel {
+        if let existing = fileBrowserViewModels[workspaceId] { return existing }
+        let ws = workspace(for: workspaceId)
+        let vm = FileBrowserViewModel(
+            rootDir: ws?.rootDirExpanded ?? "",
+            isVisible: ws?.fileBrowserVisible ?? false,
+            panelWidth: ws?.fileBrowserWidth ?? 260
+        )
+        fileBrowserViewModels[workspaceId] = vm
+        return vm
+    }
+
+    func removeFileBrowserViewModel(for workspaceId: UUID) {
+        fileBrowserViewModels[workspaceId]?.stop()
+        fileBrowserViewModels.removeValue(forKey: workspaceId)
+    }
+
     /// Only formal (non-temporary) workspaces
     var formalWorkspaces: [WorkspaceModel] {
         workspaces.filter { !$0.isTemporary }
@@ -110,6 +130,7 @@ class WorkspaceManager: ObservableObject {
     func delete(id: UUID) {
         workspaces.removeAll { $0.id == id }
         activeWindows.removeValue(forKey: id)
+        removeFileBrowserViewModel(for: id)
         let path = snapshotPath(for: id)
         try? FileManager.default.removeItem(atPath: path)
     }

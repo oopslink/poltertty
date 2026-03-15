@@ -15,6 +15,8 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
     var updatedAt: Date
     var lastActiveAt: Date
     var isTemporary: Bool
+    var fileBrowserVisible: Bool = false
+    var fileBrowserWidth: CGFloat = 260
 
     init(name: String, rootDir: String, colorHex: String = "#FF6B6B", icon: String? = nil, isTemporary: Bool = false) {
         self.id = UUID()
@@ -43,6 +45,8 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         lastActiveAt = try container.decode(Date.self, forKey: .lastActiveAt)
         isTemporary = try container.decodeIfPresent(Bool.self, forKey: .isTemporary) ?? false
+        fileBrowserVisible = try container.decodeIfPresent(Bool.self, forKey: .fileBrowserVisible) ?? false
+        fileBrowserWidth   = try container.decodeIfPresent(CGFloat.self, forKey: .fileBrowserWidth) ?? 260
     }
 
     var color: Color {
