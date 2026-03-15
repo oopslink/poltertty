@@ -27,3 +27,5 @@ glad.zip
 vgcore.*
 
 macos/macos/
+
+*.profraw

@@ -183,6 +183,9 @@ class AppDelegate: NSObject,
             UserDefaults.ghostty.removePersistentDomain(forName: suite)
         }
         #endif
+        // Reduce tooltip delay to 600ms (system default is ~1000ms)
+        UserDefaults.standard.set(600, forKey: "NSInitialToolTipDelay")
+
         UserDefaults.ghostty.register(defaults: [
             // Disable the automatic full screen menu item because we handle
             // it manually.
