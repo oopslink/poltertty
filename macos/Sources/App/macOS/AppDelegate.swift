@@ -1082,6 +1082,10 @@ class AppDelegate: NSObject,
         toggleSidebar.keyEquivalentModifierMask = .command
         workspaceMenu.addItem(toggleSidebar)
 
+        let toggleFileBrowser = NSMenuItem(title: "Toggle File Browser", action: #selector(toggleFileBrowser(_:)), keyEquivalent: "\\")
+        toggleFileBrowser.keyEquivalentModifierMask = .command
+        workspaceMenu.addItem(toggleFileBrowser)
+
         let menuItem = NSMenuItem(title: "Workspace", action: nil, keyEquivalent: "")
         menuItem.submenu = workspaceMenu
 
@@ -1094,6 +1098,16 @@ class AppDelegate: NSObject,
 
     @objc func toggleWorkspaceSidebar(_ sender: Any?) {
         NotificationCenter.default.post(name: .toggleWorkspaceSidebar, object: nil)
+    }
+
+    @objc func toggleFileBrowser(_ sender: Any?) {
+        guard let window = NSApp.keyWindow,
+              let wsId = WorkspaceManager.shared.workspaceId(for: window) else { return }
+        NotificationCenter.default.post(
+            name: .toggleFileBrowser,
+            object: nil,
+            userInfo: ["workspaceId": wsId]
+        )
     }
 
     @IBAction func newTab(_ sender: Any?) {

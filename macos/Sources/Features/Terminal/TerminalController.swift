@@ -138,6 +138,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             name: .ghosttyCloseWindow,
             object: nil
         )
+        center.addObserver(
+            self,
+            selector: #selector(onFileBrowserOpenInTerminal(_:)),
+            name: .fileBrowserOpenInTerminal,
+            object: nil
+        )
     }
 
     required init?(coder: NSCoder) {
@@ -510,6 +516,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     func switchToWorkspace(_ targetId: UUID) {
         // Save current workspace snapshot
         if let currentId = workspaceId, let window = self.window {
+            persistFileBrowserState(for: currentId)
             WorkspaceManager.shared.saveSnapshot(
                 for: currentId,
                 window: window,
@@ -534,6 +541,28 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 WorkspaceManager.shared.registerWindow(window, for: targetId)
             }
         }
+    }
+
+    /// Injects text into the currently focused surface (e.g. "cd /path\n")
+    func injectToActiveSurface(_ text: String) {
+        guard let surface = focusedSurface?.surfaceModel else { return }
+        surface.sendText(text)
+    }
+
+    @objc private func onFileBrowserOpenInTerminal(_ notification: Notification) {
+        guard let wsId = notification.userInfo?["workspaceId"] as? UUID,
+              wsId == workspaceId,
+              let path = notification.userInfo?["path"] as? String else { return }
+        let escapedPath = Ghostty.Shell.escape(path)
+        injectToActiveSurface("cd \(escapedPath)\n")
+    }
+
+    private func persistFileBrowserState(for workspaceId: UUID) {
+        guard var ws = WorkspaceManager.shared.workspace(for: workspaceId) else { return }
+        let vm = WorkspaceManager.shared.fileBrowserViewModel(for: workspaceId)
+        ws.fileBrowserVisible = vm.isVisible
+        ws.fileBrowserWidth = vm.panelWidth
+        WorkspaceManager.shared.update(ws)
     }
 
     func closeWorkspace(_ targetId: UUID) {
@@ -1320,11 +1349,17 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         self.relabelTabs()
         self.fixTabBar()
         terminalViewContainer?.updateGlassTintOverlay(isKeyWindow: true)
+        if let wsId = workspaceId {
+            WorkspaceManager.shared.fileBrowserViewModel(for: wsId).resume()
+        }
     }
 
     override func windowDidResignKey(_ notification: Notification) {
         super.windowDidResignKey(notification)
         terminalViewContainer?.updateGlassTintOverlay(isKeyWindow: false)
+        if let wsId = workspaceId {
+            WorkspaceManager.shared.fileBrowserViewModel(for: wsId).pause()
+        }
     }
 
     override func windowDidMove(_ notification: Notification) {

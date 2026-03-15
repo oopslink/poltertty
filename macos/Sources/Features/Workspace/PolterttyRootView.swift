@@ -7,6 +7,8 @@ extension Notification.Name {
     static let closeWorkspace = Notification.Name("poltertty.closeWorkspace")
     static let workspaceSidebarNavigateUp = Notification.Name("poltertty.workspaceSidebarNavigateUp")
     static let workspaceSidebarNavigateDown = Notification.Name("poltertty.workspaceSidebarNavigateDown")
+    static let toggleFileBrowser = Notification.Name("poltertty.toggleFileBrowser")
+    static let fileBrowserOpenInTerminal = Notification.Name("poltertty.fileBrowserOpenInTerminal")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -32,6 +34,40 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var showConvertAlert = false
     @State private var convertTargetId: UUID?
     @State private var convertName = ""
+
+    @ObservedObject private var fileBrowserVM: FileBrowserViewModel
+
+    init(
+        workspaceId: UUID?,
+        terminalView: TerminalContent,
+        onSwitchWorkspace: @escaping (UUID) -> Void,
+        onCloseWorkspace: @escaping (UUID) -> Void,
+        initialStartupMode: WorkspaceStartupMode,
+        onCreateFormalWorkspace: ((_ name: String, _ rootDir: String, _ colorHex: String, _ description: String) -> Void)?,
+        onCreateTemporaryWorkspace: (() -> Void)?,
+        onRestoreWorkspaces: (([UUID]) -> Void)?,
+        onCreateTemporary: (() -> Void)?
+    ) {
+        self.workspaceId = workspaceId
+        self.terminalView = terminalView
+        self.onSwitchWorkspace = onSwitchWorkspace
+        self.onCloseWorkspace = onCloseWorkspace
+        self.initialStartupMode = initialStartupMode
+        self.onCreateFormalWorkspace = onCreateFormalWorkspace
+        self.onCreateTemporaryWorkspace = onCreateTemporaryWorkspace
+        self.onRestoreWorkspaces = onRestoreWorkspaces
+        self.onCreateTemporary = onCreateTemporary
+
+        if let wsId = workspaceId {
+            self._fileBrowserVM = ObservedObject(
+                wrappedValue: WorkspaceManager.shared.fileBrowserViewModel(for: wsId)
+            )
+        } else {
+            self._fileBrowserVM = ObservedObject(
+                wrappedValue: FileBrowserViewModel(rootDir: "")
+            )
+        }
+    }
 
     private var effectiveSidebarWidth: CGFloat {
         sidebarCollapsed ? 48 : sidebarWidth
@@ -86,6 +122,26 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         Divider()
                     }
 
+                    // File Browser Panel
+                    if fileBrowserVM.isVisible {
+                        FileBrowserPanel(
+                            viewModel: fileBrowserVM,
+                            onOpenInTerminal: { url in
+                                NotificationCenter.default.post(
+                                    name: .fileBrowserOpenInTerminal,
+                                    object: nil,
+                                    userInfo: [
+                                        "workspaceId": workspaceId as Any,
+                                        "path": url.path
+                                    ]
+                                )
+                            }
+                        )
+                        .frame(width: fileBrowserVM.panelWidth)
+
+                        fileBrowserDivider
+                    }
+
                     // Terminal view
                     terminalView
                 }
@@ -119,6 +175,11 @@ struct PolterttyRootView<TerminalContent: View>: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .workspaceSidebarNavigateDown)) { _ in
             navigateWorkspace(direction: 1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleFileBrowser)) { notification in
+            guard let wsId = notification.userInfo?["workspaceId"] as? UUID,
+                  wsId == workspaceId else { return }
+            fileBrowserVM.isVisible.toggle()
         }
         .sheet(isPresented: $showConvertAlert) {
             convertToFormalSheet
@@ -172,7 +233,31 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .padding(24)
     }
 
+    private var fileBrowserDivider: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: 1)
+            .overlay(
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 8)
+                    .onHover { hovering in
+                        if hovering { NSCursor.resizeLeftRight.push() }
+                        else { NSCursor.pop() }
+                    }
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                let newWidth = fileBrowserVM.panelWidth + value.translation.width
+                                fileBrowserVM.panelWidth = max(160, min(600, newWidth))
+                            }
+                    )
+            )
+    }
+
     // Called by TerminalController to get current sidebar state for snapshots
     var currentSidebarWidth: CGFloat { effectiveSidebarWidth }
     var currentSidebarVisible: Bool { sidebarVisible }
+    var currentFileBrowserVisible: Bool { fileBrowserVM.isVisible }
+    var currentFileBrowserWidth: CGFloat { fileBrowserVM.panelWidth }
 }
