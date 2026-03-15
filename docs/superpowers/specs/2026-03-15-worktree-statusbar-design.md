@@ -36,9 +36,7 @@ struct GitWorktree: Identifiable, Equatable {
 }
 ```
 
-`isCurrent` is set during `refresh()` by comparing each worktree's `path` against the monitor's own `rootDir` (stored as a property, expanded via `URL(fileURLWithPath:).standardized.path`). Both sides are normalized before comparison to handle trailing slashes and symlinks. The monitor's `rootDir` — the workspace's `rootDirExpanded` — is the definition of "current"; live shell cwd is not tracked.
-
-**Temporary workspace edge case:** If `workspaceId` refers to a temporary workspace (`isTemporary == true`), the status bar worktree area is hidden. The monitor is still created (avoids special-casing init), but `isGitRepo` will be `false` for `"~"` in typical setups.
+`isCurrent` is set during `refresh()` by comparing each worktree's `path` against the monitor's own stored `rootDir`, both normalized via `URL(fileURLWithPath:).standardized.path` to handle trailing slashes and symlinks.
 
 ---
 
@@ -54,14 +52,14 @@ class GitWorktreeMonitor: ObservableObject {
     init(rootDir: String)
     func updateRootDir(_ path: String)   // reserved for future rootDir-editing feature
     private func refresh()
-    private func setupWatching()         // sets up dual-watch strategy (see below)
-    private func stopWatching()          // cancels all active DispatchSources
+    private func setupWatching()
+    private func stopWatching()
 }
 ```
 
-**Lifecycle:** Created in `TerminalController.windowDidLoad` **before** the `TerminalViewContainer` closure (see Integration Points). `stopWatching()` called in `deinit`.
+**Lifecycle:** `GitWorktreeMonitor` is always created (non-optional). Created in `TerminalController.windowDidLoad` before the `TerminalViewContainer` closure. `stopWatching()` called in `deinit`.
 
-**`updateRootDir` contract:** Calls `stopWatching()`, clears state, re-runs git detection, calls `setupWatching()`. Not called in the current implementation (workspace switching creates a new `TerminalController` with fresh `init`). Reserved for a future workspace-rootDir-editing feature.
+**`updateRootDir` contract:** Calls `stopWatching()`, clears state, re-runs git detection, calls `setupWatching()`. Not called in the current implementation. Reserved for a future workspace-rootDir-editing feature.
 
 **Git root detection:** Run `/usr/bin/git rev-parse --show-toplevel` as a `Process` in `rootDir`. Exit non-zero → `isGitRepo = false`, no watching. Subprocess environment: `["HOME": NSHomeDirectory()]`.
 
@@ -69,23 +67,23 @@ class GitWorktreeMonitor: ObservableObject {
 
 ### Filesystem Watching Strategy
 
-`DispatchSource.makeFileSystemObjectSource` only fires for direct changes to the watched directory, not descendants. To correctly detect all worktree lifecycle events, a two-source strategy is used:
+`DispatchSource.makeFileSystemObjectSource` only fires for direct changes to the watched directory, not descendants. A two-source strategy detects all worktree lifecycle events:
 
 1. **`.git` source:** Always active (watching `<gitRoot>/.git` for `.write`). Fires when `.git/worktrees/` is first created or deleted.
 
 2. **`.git/worktrees` source:** Active only when the directory exists. Fires when individual worktree entries are added or removed inside `.git/worktrees/`.
 
-**File descriptor lifecycle:** Each `DispatchSource` requires an `open(2)` file descriptor. The fd is opened immediately before calling `makeFileSystemObjectSource` and closed inside the source's `setCancelHandler`. This ensures no fd leak when the source is cancelled. The `.git/worktrees` source is started and stopped dynamically; each activation opens a new fd, and cancellation closes it via the cancel handler.
+**File descriptor lifecycle:** Each `DispatchSource` requires an `open(2)` fd. Open the fd immediately before `makeFileSystemObjectSource`; close it inside the source's `setCancelHandler`. The `.git/worktrees` source is started/stopped dynamically — each activation opens a new fd, cancellation closes it via the cancel handler.
 
 `setupWatching()`:
 - Always starts the `.git` source (opens fd for `.git`)
-- If `<gitRoot>/.git/worktrees` exists at setup time, also starts the `.git/worktrees` source (opens fd for `.git/worktrees`)
-- When the `.git` source fires and `.git/worktrees` now exists **and `worktreesSource == nil`** → open new fd, start `.git/worktrees` source; the `nil` guard prevents duplicate sources and fd leaks on rapid successive events
-- When the `.git` source fires and `.git/worktrees` no longer exists **and `worktreesSource != nil`** → cancel `.git/worktrees` source (cancel handler closes its fd), set to `nil`
+- If `<gitRoot>/.git/worktrees` exists at setup time, also starts the `.git/worktrees` source
+- When `.git` source fires and `.git/worktrees` now exists **and `worktreesSource == nil`** → open fd, start `.git/worktrees` source (nil guard prevents duplicate sources on rapid events)
+- When `.git` source fires and `.git/worktrees` no longer exists **and `worktreesSource != nil`** → cancel `.git/worktrees` source (cancel handler closes fd), set to `nil`
 
-**Debounce:** Use a `DispatchWorkItem` stored as a property. On each source event, cancel the existing work item, create a new one that calls `refresh()`, and schedule it on `DispatchQueue.global()` after 300 ms. Storing the `DispatchWorkItem` reference and checking for nil/cancellation on the main queue before mutating state prevents races.
+**Debounce:** Stored `DispatchWorkItem` property. On each source event: cancel existing work item, create new one calling `refresh()`, schedule on `DispatchQueue.global()` after 300 ms.
 
-**`stopWatching` contract:** Cancels all active `DispatchSource`s (cancel handlers close their fds) and sets them to `nil`. Cancels any pending debounce `DispatchWorkItem`. Called in `deinit` and at the start of `updateRootDir`.
+**`stopWatching` contract:** Cancel all active `DispatchSource`s (cancel handlers close fds), set to `nil`. Cancel pending `DispatchWorkItem`. Called in `deinit` and at start of `updateRootDir`.
 
 ---
 
@@ -93,7 +91,22 @@ class GitWorktreeMonitor: ObservableObject {
 
 New file: `macos/Sources/Features/Workspace/WorktreeStatusBarView.swift`
 
-**Layout:** Fixed ~22 px bar at the window bottom. Embedded in `PolterttyRootView` via `VStack(spacing: 0)` with `WorktreeStatusBarView` as the final element.
+**Layout:** Fixed ~22 px bar at the window bottom. Embedded in `PolterttyRootView` via `.safeAreaInset(edge: .bottom)` on the existing `ZStack` body. This preserves the ZStack's full-height overlay semantics (e.g., the quick-switcher backdrop's `.ignoresSafeArea()`) while pushing the terminal content up by the bar height:
+
+```swift
+var body: some View {
+    ZStack {
+        // existing body content unchanged
+    }
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+        if showWorktreeBar {
+            WorktreeStatusBarView(monitor: worktreeMonitor, onSelectWorktree: onSelectWorktree)
+        }
+    }
+}
+```
+
+`showWorktreeBar` is a computed property on `PolterttyRootView`: `!isTemporaryWorkspace`. `isTemporaryWorkspace` is resolved by looking up `workspaceId` in `WorkspaceManager.shared` and checking `isTemporary`; defaults to `false` if no workspace found. The `isGitRepo` check is handled inside `WorktreeStatusBarView` — if `isGitRepo == false`, the view renders nothing (zero height).
 
 ```
 ┌──────────────────────────────────────────────┐
@@ -107,12 +120,13 @@ New file: `macos/Sources/Features/Workspace/WorktreeStatusBarView.swift`
 
 | Condition | Display |
 |-----------|---------|
-| `isGitRepo == false` or temporary workspace | Entire worktree UI element omitted (no layout space) |
+| `isTemporary` workspace | `WorktreeStatusBarView` not rendered (zero height, no layout space) |
+| `isGitRepo == false` | View renders nothing (zero height) |
 | One worktree (main only) | `⎇ branch-name`, non-interactive |
 | Multiple worktrees | `⎇ branch-name`, clickable → popover |
 
 **Popover list:**
-- Each row: full relative path from repo root (e.g., `../feature-branch`) + branch name
+- Each row: full relative path from repo root + branch name
 - Main worktree: displays `.` as path label
 - Current worktree: leading checkmark
 - Click non-current → `onSelectWorktree(path)`, dismiss popover
@@ -124,78 +138,84 @@ New file: `macos/Sources/Features/Workspace/WorktreeStatusBarView.swift`
 
 ### `PolterttyRootView.swift`
 
-Add two new constructor parameters:
-- `worktreeMonitor: GitWorktreeMonitor` (held as `@ObservedObject`)
+Add three new constructor parameters:
+- `worktreeMonitor: GitWorktreeMonitor` (non-optional, held as `@ObservedObject`)
+- `isTemporaryWorkspace: Bool`
 - `onSelectWorktree: (String) -> Void`
 
-`PolterttyRootView.body` is currently a `ZStack` (contains overlays like quick switcher). To add the status bar below the terminal area, wrap the entire existing `ZStack` in a `VStack(spacing: 0)` and append `WorktreeStatusBarView` after it:
+Replace the body's outermost view with `.safeAreaInset` as shown above.
 
+`isTemporaryWorkspace` is computed in `TerminalController` at call site:
 ```swift
-var body: some View {
-    VStack(spacing: 0) {
-        ZStack {
-            // existing body content unchanged
-        }
-        WorktreeStatusBarView(monitor: worktreeMonitor, onSelectWorktree: onSelectWorktree)
-    }
-}
+let isTemporary = workspaceId.flatMap { WorkspaceManager.shared.workspace(for: $0) }?.isTemporary ?? false
 ```
 
-The status bar is placed outside the `ZStack` so it is never overlaid by the terminal content.
+### `TerminalController.swift`
 
-**`worktreeMonitor` initialization ordering:** `worktreeMonitor` must be assigned **before** the `TerminalViewContainer { }` closure is constructed, because the closure captures `self` and the monitor is referenced inside it. Assigning after the closure would result in `nil` being captured.
+- Add `let worktreeMonitor: GitWorktreeMonitor` (non-optional `let` stored property)
 
-`initialRootDir` is resolved as follows:
-- If `workspaceId != nil`: look up the workspace via `WorkspaceManager.shared.workspace(for: workspaceId!)?.rootDirExpanded ?? NSHomeDirectory()`
-- If `workspaceId == nil`: use `NSHomeDirectory()` — monitor will report `isGitRepo = false` and the UI will be hidden
-
-Updated call site in `TerminalController.windowDidLoad` (~line 1145):
+**Initialization placement:** Swift requires `let` stored properties on subclasses to be assigned before `super.init`. `workspaceId` is already set before `super.init` at line 71, so initialize `worktreeMonitor` there:
 
 ```swift
-// Assign BEFORE TerminalViewContainer closure
-let initialRootDir: String
-if let wsId = self.workspaceId,
-   let ws = WorkspaceManager.shared.workspace(for: wsId) {
-    initialRootDir = ws.rootDirExpanded
-} else {
-    initialRootDir = NSHomeDirectory()
-}
-self.worktreeMonitor = GitWorktreeMonitor(rootDir: initialRootDir)
+// In TerminalController.init, after `self.workspaceId = workspaceId`, before `super.init`
+let rootDir = workspaceId
+    .flatMap { WorkspaceManager.shared.workspace(for: $0) }?.rootDirExpanded
+    ?? NSHomeDirectory()
+self.worktreeMonitor = GitWorktreeMonitor(rootDir: rootDir)
+```
+
+**`windowDidLoad` call site:** In `windowDidLoad`, compute `isTemporary` and pass the already-initialized `worktreeMonitor` to `PolterttyRootView`. Full updated call (all 12 parameters):
+
+```swift
+let isTemporary = workspaceId
+    .flatMap { WorkspaceManager.shared.workspace(for: $0) }?.isTemporary ?? false
 
 let container = TerminalViewContainer {
     PolterttyRootView(
         workspaceId: self.workspaceId,
         terminalView: TerminalView(ghostty: ghostty, viewModel: self, delegate: self),
-        worktreeMonitor: self.worktreeMonitor!,        // NEW; non-nil guaranteed by assignment above
-        onSwitchWorkspace: { [weak self] id in ... },
-        onCloseWorkspace: { [weak self] id in ... },
+        worktreeMonitor: self.worktreeMonitor,          // NEW (non-optional)
+        isTemporaryWorkspace: isTemporary,               // NEW
+        onSwitchWorkspace: { [weak self] id in
+            self?.switchToWorkspace(id)
+        },
+        onCloseWorkspace: { [weak self] id in
+            self?.closeWorkspace(id)
+        },
         initialStartupMode: self.startupMode,
-        onCreateFormalWorkspace: { ... },
-        onCreateTemporaryWorkspace: { ... },
-        onRestoreWorkspaces: { ... },
-        onSelectWorktree: { [weak self] path in        // NEW
+        onCreateFormalWorkspace: { [weak self] name, rootDir, colorHex, description in
+            self?.createFormalWorkspace(name: name, rootDir: rootDir, colorHex: colorHex, description: description)
+        },
+        onCreateTemporaryWorkspace: { [weak self] in
+            self?.createTemporaryWorkspace()
+        },
+        onRestoreWorkspaces: { [weak self] ids in
+            guard let self = self else { return }
+            if let appDelegate = NSApp.delegate as? AppDelegate {
+                appDelegate.restoreWorkspaces(ids, replacingWindow: self.window)
+            }
+        },
+        onSelectWorktree: { [weak self] path in          // NEW
             self?.openNewTab(cdTo: path)
         }
     )
 }
 ```
 
-### `TerminalController.swift`
-
-- Add `var worktreeMonitor: GitWorktreeMonitor?` stored property
-- Create monitor at `windowDidLoad` (see above)
-- Add `openNewTab(cdTo path: String)` instance method
+- Add `openNewTab(cdTo path: String)` instance method:
 
 ```swift
 func openNewTab(cdTo path: String) {
     guard let window = self.window else { return }
     var config = Ghostty.SurfaceConfiguration()
     config.workingDirectory = path
-    TerminalController.newTab(ghostty, from: window, withBaseConfig: config)
+    _ = TerminalController.newTab(ghostty, from: window, withBaseConfig: config)
 }
 ```
 
-`ghostty` is `internal` on `BaseTerminalController`; accessible from `TerminalController` within the same module.
+`TerminalController.newTab` at line 410 already sets `controller.workspaceId = parentController.workspaceId`, so the new tab inherits the current workspace automatically. No extra propagation needed.
+
+`ghostty` is `internal` on `BaseTerminalController`, accessible from `TerminalController` in the same module. Return value discarded (`_ =`).
 
 ### New Files
 
@@ -213,8 +233,8 @@ Both in `macos/Sources/Features/Workspace/` per workspace-rules.md:
 
 | Scenario | Behavior |
 |----------|----------|
-| `/usr/bin/git` fails / not a repo | `isGitRepo = false`, worktree UI hidden, no crash |
+| `/usr/bin/git` fails / not a repo | `isGitRepo = false`, worktree UI renders nothing, no crash |
 | `git worktree list` exits non-zero | `NSLog` error, keep last known `worktrees` state |
 | `.git` dir deleted while window open | DispatchSource fires → re-detect → `isGitRepo = false` → `stopWatching()` |
-| Temporary workspace | Monitor created; `isGitRepo` typically `false`; UI hidden |
-| `self.window` is nil in `openNewTab` | `guard` returns early, no tab opened |
+| Temporary workspace | `showWorktreeBar = false`; monitor created with `NSHomeDirectory()` but view not rendered |
+| `self.window` nil in `openNewTab` | `guard` returns early, no tab opened |
