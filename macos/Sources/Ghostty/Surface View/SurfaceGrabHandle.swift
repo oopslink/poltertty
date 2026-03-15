@@ -14,6 +14,10 @@ extension Ghostty {
         @State private var isHovering: Bool = false
         @State private var isDragging: Bool = false
 
+        private var isFullscreen: Bool {
+            surfaceView.window?.styleMask.contains(.fullScreen) ?? false
+        }
+
         private var handleVisible: Bool {
             // Handle should always be visible in non-fullscreen
             guard let window = surfaceView.window else { return true }
@@ -56,6 +60,10 @@ extension Ghostty {
                             .transition(.opacity)
                     }
                 }
+                // In fullscreen, offset the grab handle down to avoid the
+                // auto-hiding titlebar/menubar hot zone at the top of the screen,
+                // which intercepts mouse events and prevents drag initiation.
+                .padding(.top, isFullscreen ? 5 : 0)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
         }
