@@ -24,10 +24,8 @@ struct FilePreviewView: View {
             }
 
             // Preview content
-            ScrollView {
-                contentView
-                    .padding()
-            }
+            contentView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.controlBackgroundColor))
@@ -130,6 +128,7 @@ struct FilePreviewView: View {
                 .font(.system(.body, design: .monospaced))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
         }
     }
 
