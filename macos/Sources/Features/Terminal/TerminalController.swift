@@ -1381,6 +1381,21 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     override func windowWillClose(_ notification: Notification) {
+        // Save tab state before super clears contentView
+        if let wsId = workspaceId, let window = self.window {
+            persistFileBrowserState(for: wsId)
+            WorkspaceManager.shared.saveSnapshot(
+                for: wsId,
+                window: window,
+                sidebarWidth: CGFloat(PolterttyConfig.shared.sidebarWidth),
+                sidebarVisible: PolterttyConfig.shared.sidebarVisible,
+                tabs: tabBarViewModel.persistedTabs.map {
+                    WorkspaceSnapshot.PersistedTab(title: $0.title, titleLocked: $0.titleLocked)
+                },
+                activeTabIndex: tabBarViewModel.activeTabIndex
+            )
+        }
+
         super.windowWillClose(notification)
         self.relabelTabs()
 
