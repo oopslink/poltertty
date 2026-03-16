@@ -71,11 +71,20 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
 // MARK: - Snapshot
 
 struct WorkspaceSnapshot: Codable {
-    var version: Int = 1
+    var version: Int = 2
     var workspace: WorkspaceModel
     var windowFrame: WindowFrame?
     var sidebarWidth: CGFloat
     var sidebarVisible: Bool
+
+    // Tab state (added in version 2)
+    var tabs: [PersistedTab]?
+    var activeTabIndex: Int?
+
+    struct PersistedTab: Codable {
+        let title: String
+        let titleLocked: Bool
+    }
 
     struct WindowFrame: Codable {
         var x: CGFloat

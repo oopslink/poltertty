@@ -356,6 +356,11 @@ class AppDelegate: NSObject,
 
         // Setup workspace menu
         setupWorkspaceMenu()
+
+        // Add Cmd+Shift+[ / Cmd+Shift+] menu items to the Window menu for
+        // custom tab bar previous/next tab navigation. The @IBAction methods
+        // exist on TerminalController but have no menu item wired in the XIB.
+        setupTabNavigationMenuItems()
     }
 
     func applicationDidHide(_ notification: Notification) {
@@ -1061,6 +1066,28 @@ class AppDelegate: NSObject,
         }
     }
 
+    private func setupTabNavigationMenuItems() {
+        guard let windowMenu = NSApp.mainMenu?.item(withTitle: "Window")?.submenu else { return }
+
+        windowMenu.addItem(.separator())
+
+        let prevItem = NSMenuItem(
+            title: "Select Previous Tab",
+            action: #selector(TerminalController.selectPreviousTab),
+            keyEquivalent: "["
+        )
+        prevItem.keyEquivalentModifierMask = [.command, .shift]
+        windowMenu.addItem(prevItem)
+
+        let nextItem = NSMenuItem(
+            title: "Select Next Tab",
+            action: #selector(TerminalController.selectNextTab),
+            keyEquivalent: "]"
+        )
+        nextItem.keyEquivalentModifierMask = [.command, .shift]
+        windowMenu.addItem(nextItem)
+    }
+
     private func setupWorkspaceMenu() {
         let workspaceMenu = NSMenu(title: "Workspace")
 
@@ -1104,10 +1131,14 @@ class AppDelegate: NSObject,
     }
 
     @IBAction func newTab(_ sender: Any?) {
-        _ = TerminalController.newTab(
-            ghostty,
-            from: TerminalController.preferredParent?.window
-        )
+        if let tc = NSApp.keyWindow?.windowController as? TerminalController {
+            tc.addNewTab()
+        } else {
+            _ = TerminalController.newTab(
+                ghostty,
+                from: TerminalController.preferredParent?.window
+            )
+        }
     }
 
     @IBAction func closeAllWindows(_ sender: Any?) {

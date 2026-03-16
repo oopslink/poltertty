@@ -56,9 +56,15 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// The notification cancellable for focused surface property changes.
     private var surfaceAppearanceCancellables: Set<AnyCancellable> = []
 
+    /// Cancellables for tab bar active-tab observation.
+    private var tabBarCancellables: Set<AnyCancellable> = []
+
     /// The workspace this window is bound to (nil = legacy non-workspace window)
     var workspaceId: UUID?
     var startupMode: WorkspaceStartupMode = .terminal
+
+    /// Custom tab bar view model — owns all SurfaceView instances for this window
+    let tabBarViewModel = TabBarViewModel()
 
     init(_ ghostty: Ghostty.App,
          withBaseConfig base: Ghostty.SurfaceConfiguration? = nil,
@@ -521,7 +527,11 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 for: currentId,
                 window: window,
                 sidebarWidth: CGFloat(PolterttyConfig.shared.sidebarWidth),
-                sidebarVisible: PolterttyConfig.shared.sidebarVisible
+                sidebarVisible: PolterttyConfig.shared.sidebarVisible,
+                tabs: tabBarViewModel.persistedTabs.map {
+                    WorkspaceSnapshot.PersistedTab(title: $0.title, titleLocked: $0.titleLocked)
+                },
+                activeTabIndex: tabBarViewModel.activeTabIndex
             )
         }
 
@@ -775,6 +785,29 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
         // 1 window, closing the window
         closeWindow(nil)
+    }
+
+    /// Add a new tab in the custom poltertty tab bar
+    @MainActor
+    func addNewTab() {
+        guard let ghostty_app = ghostty.app else { return }
+        var config = Ghostty.SurfaceConfiguration()
+        if let wsId = workspaceId,
+           let workspace = WorkspaceManager.shared.workspace(for: wsId) {
+            config.workingDirectory = workspace.rootDirExpanded
+        }
+        let surface = Ghostty.SurfaceView(ghostty_app, baseConfig: config)
+        tabBarViewModel.addTab(surface: surface, title: "Terminal")
+    }
+
+    /// Close a tab in the custom poltertty tab bar
+    @MainActor
+    func closePolterttyTab(_ id: UUID) {
+        guard tabBarViewModel.tabs.count > 1 else {
+            window?.close()
+            return
+        }
+        tabBarViewModel.closeTab(id)
     }
 
     func closeTabImmediately(registerRedo: Bool = true) {
@@ -1169,6 +1202,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             focusedSurface = view
         }
 
+        // Register the existing surfaceTree surface with the custom tab bar
+        // (the surface was already created in BaseTerminalController.init)
+        if case .leaf(let existingSurface) = surfaceTree.root {
+            tabBarViewModel.addTab(surface: existingSurface, title: "Terminal")
+        }
+
         // Initialize our content view to the SwiftUI root
         let container = TerminalViewContainer {
             PolterttyRootView(
@@ -1195,7 +1234,17 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 },
                 onCreateTemporary: { [weak self] in
                     self?.createTemporaryWorkspace()
-                }
+                },
+                tabBarViewModel: tabBarViewModel,
+                workspaceAccentColor: {
+                    if let wsId = self.workspaceId,
+                       let workspace = WorkspaceManager.shared.workspace(for: wsId) {
+                        return Color(hex: workspace.colorHex) ?? .accentColor
+                    }
+                    return .accentColor
+                }(),
+                onNewTab: { [weak self] in self?.addNewTab() },
+                onCloseTab: { [weak self] id in self?.closePolterttyTab(id) }
             )
         }
 
@@ -1206,6 +1255,44 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         container.initialContentSize = focusedSurface?.initialSize
 
         window.contentView = container
+
+        // Observe active tab changes to keep focusedSurface in sync.
+        // dropFirst() skips the current value so we only respond to user-initiated
+        // tab switches, not the initial registration in the lines above.
+        tabBarViewModel.$activeTabId
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, let surface = self.tabBarViewModel.activeSurface else { return }
+                let old = self.focusedSurface
+                self.focusedSurfaceDidChange(to: surface)
+                Ghostty.moveFocus(to: surface, from: old)
+            }
+            .store(in: &tabBarCancellables)
+
+        // Restore tab state from snapshot (if available)
+        if let wsId = workspaceId,
+           let snapshot = WorkspaceManager.shared.loadSnapshot(for: wsId),
+           let savedTabs = snapshot.tabs,
+           !savedTabs.isEmpty {
+            // Restore first tab title (surfaceTree surface already registered)
+            if savedTabs[0].titleLocked, let firstId = tabBarViewModel.tabs.first?.id {
+                tabBarViewModel.renameTab(firstId, title: savedTabs[0].title)
+            }
+            // Create and restore additional tabs
+            for i in 1..<savedTabs.count {
+                addNewTab()
+                if savedTabs[i].titleLocked, let lastId = tabBarViewModel.tabs.last?.id {
+                    tabBarViewModel.renameTab(lastId, title: savedTabs[i].title)
+                }
+            }
+            // Restore active tab index
+            if let activeIdx = snapshot.activeTabIndex,
+               activeIdx >= 0,
+               activeIdx < tabBarViewModel.tabs.count {
+                tabBarViewModel.selectTab(tabBarViewModel.tabs[activeIdx].id)
+            }
+        }
 
         // Set window title for onboarding/restore modes
         if startupMode != .terminal {
@@ -1311,6 +1398,21 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     override func windowWillClose(_ notification: Notification) {
+        // Save tab state before super clears contentView
+        if let wsId = workspaceId, let window = self.window {
+            persistFileBrowserState(for: wsId)
+            WorkspaceManager.shared.saveSnapshot(
+                for: wsId,
+                window: window,
+                sidebarWidth: CGFloat(PolterttyConfig.shared.sidebarWidth),
+                sidebarVisible: PolterttyConfig.shared.sidebarVisible,
+                tabs: tabBarViewModel.persistedTabs.map {
+                    WorkspaceSnapshot.PersistedTab(title: $0.title, titleLocked: $0.titleLocked)
+                },
+                activeTabIndex: tabBarViewModel.activeTabIndex
+            )
+        }
+
         super.windowWillClose(notification)
         self.relabelTabs()
 
@@ -1421,8 +1523,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     @IBAction func newTab(_ sender: Any?) {
-        guard let surface = focusedSurface?.surface else { return }
-        ghostty.newTab(surface: surface)
+        addNewTab()
     }
 
     @IBAction func closeTab(_ sender: Any?) {
@@ -1504,6 +1605,22 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         ) {
             self.closeTabsOnTheRightImmediately()
         }
+    }
+
+    @IBAction func selectPreviousTab(_ sender: Any?) {
+        guard let activeId = tabBarViewModel.activeTabId,
+              let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId }),
+              idx > 0
+        else { return }
+        tabBarViewModel.selectTab(tabBarViewModel.tabs[idx - 1].id)
+    }
+
+    @IBAction func selectNextTab(_ sender: Any?) {
+        guard let activeId = tabBarViewModel.activeTabId,
+              let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId }),
+              idx < tabBarViewModel.tabs.count - 1
+        else { return }
+        tabBarViewModel.selectTab(tabBarViewModel.tabs[idx + 1].id)
     }
 
     @IBAction func returnToDefaultSize(_ sender: Any?) {
@@ -1775,6 +1892,18 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 extension TerminalController {
     override func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
+        case #selector(selectPreviousTab):
+            guard let activeId = tabBarViewModel.activeTabId,
+                  let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId })
+            else { return false }
+            return idx > 0
+
+        case #selector(selectNextTab):
+            guard let activeId = tabBarViewModel.activeTabId,
+                  let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId })
+            else { return false }
+            return idx < tabBarViewModel.tabs.count - 1
+
         case #selector(closeTabsOnTheRight):
             guard let window, let tabGroup = window.tabGroup else { return false }
             guard let currentIndex = tabGroup.windows.firstIndex(of: window) else { return false }

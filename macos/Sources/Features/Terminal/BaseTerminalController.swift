@@ -838,6 +838,13 @@ class BaseTerminalController: NSWindowController,
     private func titleDidChange(to: String) {
         lastComputedTitle = to
         applyTitleToWindow()
+
+        // Notify tabBarViewModel to update the tab title for this surface
+        if let tc = self as? TerminalController,
+           let surface = focusedSurface,
+           let surfaceId = tc.tabBarViewModel.surfaces.first(where: { $0.value === surface })?.key {
+            tc.tabBarViewModel.updateTitle(forSurfaceId: surfaceId, title: to)
+        }
     }
 
     private func applyTitleToWindow() {
@@ -852,11 +859,16 @@ class BaseTerminalController: NSWindowController,
             baseTitle = lastComputedTitle
         }
 
-        // Prefix with workspace name if available
+        // poltertty 模式：标题只显示 workspace 名称
         if let wsId = (self as? TerminalController)?.workspaceId,
            let workspace = WorkspaceManager.shared.workspace(for: wsId) {
-            window.title = "[\(workspace.name)] \(baseTitle)"
+            // 临时 workspace 或无名称时显示 "Poltertty"
+            window.title = workspace.isTemporary ? "Poltertty" : workspace.name
+        } else if (self as? TerminalController)?.workspaceId != nil {
+            // workspaceId 有值但 workspace 不存在（已被删除）
+            window.title = "Poltertty"
         } else {
+            // 无 workspace context（非 poltertty 模式）：保留原始终端标题
             window.title = baseTitle
         }
     }
