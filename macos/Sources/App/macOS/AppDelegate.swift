@@ -1104,10 +1104,14 @@ class AppDelegate: NSObject,
     }
 
     @IBAction func newTab(_ sender: Any?) {
-        _ = TerminalController.newTab(
-            ghostty,
-            from: TerminalController.preferredParent?.window
-        )
+        if let tc = NSApp.keyWindow?.windowController as? TerminalController {
+            tc.addNewTab()
+        } else {
+            _ = TerminalController.newTab(
+                ghostty,
+                from: TerminalController.preferredParent?.window
+            )
+        }
     }
 
     @IBAction func closeAllWindows(_ sender: Any?) {
