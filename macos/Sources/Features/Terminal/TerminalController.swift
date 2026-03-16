@@ -1257,12 +1257,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         if let wsId = workspaceId,
            let snapshot = WorkspaceManager.shared.loadSnapshot(for: wsId),
            let savedTabs = snapshot.tabs,
-           savedTabs.count > 1 {
-            // First tab is already registered from surfaceTree, apply its saved title
+           !savedTabs.isEmpty {
+            // Restore first tab title (surfaceTree surface already registered)
             if savedTabs[0].titleLocked, let firstId = tabBarViewModel.tabs.first?.id {
                 tabBarViewModel.renameTab(firstId, title: savedTabs[0].title)
             }
-            // Create additional tabs
+            // Create and restore additional tabs
             for i in 1..<savedTabs.count {
                 addNewTab()
                 if savedTabs[i].titleLocked, let lastId = tabBarViewModel.tabs.last?.id {
@@ -1271,6 +1271,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             }
             // Restore active tab index
             if let activeIdx = snapshot.activeTabIndex,
+               activeIdx >= 0,
                activeIdx < tabBarViewModel.tabs.count {
                 tabBarViewModel.selectTab(tabBarViewModel.tabs[activeIdx].id)
             }
