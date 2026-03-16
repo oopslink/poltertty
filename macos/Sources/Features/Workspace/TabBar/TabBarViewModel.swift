@@ -1,4 +1,5 @@
 import SwiftUI
+import GhosttyKit
 
 /// 代表单个 terminal tab 的数据
 struct TabItem: Identifiable {
