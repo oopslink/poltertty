@@ -13,6 +13,7 @@ struct TerminalTabItem: View {
     @State private var isRenaming = false
     @State private var renameText = ""
     @FocusState private var renameFocused: Bool
+    @State private var escapeMonitor: Any? = nil
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -24,9 +25,20 @@ struct TerminalTabItem: View {
                         .frame(minWidth: 40, maxWidth: 120)
                         .focused($renameFocused)
                         .onSubmit { commitRename() }
-                        .backport.onKeyPress(.escape) { _ in
-                            cancelRename()
-                            return .handled
+                        .onAppear {
+                            escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                                if event.keyCode == 53 { // Escape key
+                                    cancelRename()
+                                    return nil
+                                }
+                                return event
+                            }
+                        }
+                        .onDisappear {
+                            if let monitor = escapeMonitor {
+                                NSEvent.removeMonitor(monitor)
+                                escapeMonitor = nil
+                            }
                         }
                 } else {
                     Text(tab.title)
@@ -79,6 +91,7 @@ struct TerminalTabItem: View {
         .frame(minWidth: 60)
         .animation(.easeInOut(duration: 0.15), value: isHovered)
         .animation(.easeInOut(duration: 0.15), value: tab.isActive)
+        .animation(.easeInOut(duration: 0.1), value: isRenaming)
     }
 
     private func startRename() {
@@ -90,7 +103,7 @@ struct TerminalTabItem: View {
     private func commitRename() {
         isRenaming = false
         renameFocused = false
-        onRename(renameText)
+        onRename(renameText.trimmingCharacters(in: .whitespaces))
     }
 
     private func cancelRename() {
