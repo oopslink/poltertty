@@ -166,8 +166,20 @@ git push
 git checkout main
 git pull origin main
 
-# 2. 更新版本号（如需要）
-# 编辑 macos/Sources/App/Info.plist
+# 2. 更新版本号（两处必须同步！）
+# ⚠️ build.zig.zon 和 Xcode project.pbxproj 版本必须一致，且与 git tag 匹配
+
+# 2a. 更新 build.zig.zon（Zig 构建系统使用，必须与 git tag 完全一致）
+#     编辑 build.zig.zon，将 .version = "x.y.z" 改为新版本
+sed -i '' 's/\.version = ".*"/\.version = "0.1.1"/' build.zig.zon
+
+# 2b. 更新 Xcode 项目版本号（影响 About 页面显示）
+#     更新 macos/Ghostty.xcodeproj/project.pbxproj 中所有 poltertty 目标的 MARKETING_VERSION
+sed -i '' 's/MARKETING_VERSION = 0\.1\.0;/MARKETING_VERSION = 0.1.1;/g' macos/Ghostty.xcodeproj/project.pbxproj
+
+# 2c. 提交版本更改
+git add build.zig.zon macos/Ghostty.xcodeproj/project.pbxproj
+git commit -m "chore: bump version to 0.1.1"
 
 # 3. 彻底清理缓存（关键步骤！）
 rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
@@ -175,21 +187,28 @@ rm -rf ~/Library/Caches/org.swift.swiftpm
 make clean
 xattr -cr macos/
 
-# 4. 构建发布版本
-make release
+# ⚠️ 清理 DerivedData 后，Xcode 需要重新下载 Swift Package（Sparkle 等）
+# 如果网络不稳定，提前手动克隆以避免下载失败：
+DERIVED=$(ls ~/Library/Developer/Xcode/DerivedData/ | grep Ghostty | head -1)
+mkdir -p ~/Library/Developer/Xcode/DerivedData/$DERIVED/SourcePackages/repositories
+git clone --bare https://github.com/sparkle-project/Sparkle \
+  ~/Library/Developer/Xcode/DerivedData/$DERIVED/SourcePackages/repositories/Sparkle-09d89c53
 
-# 5. 测试发布版本
-make run-release
+# 4. 创建 Git tag（必须在构建前打 tag，Zig 构建系统会读取 tag 版本）
+git tag -a v0.1.1 -m "Release version 0.1.1"
 
-# 6. 打包分发
+# 5. 打包（同时完成构建）
 make package
 
-# 7. 创建 Git tag
-git tag -a v1.0.0 -m "Release version 1.0.0"
-git push origin v1.0.0
+# 6. 推送代码和 tag
+git push origin main
+git push origin v0.1.1
 
-# 8. 上传发布包
-# 将 macos/build/Poltertty-v1.0.0.zip 上传到 GitHub Releases
+# 7. 创建 GitHub Release
+gh release create v0.1.1 \
+  macos/build/Poltertty-v0.1.1.zip \
+  --title "Poltertty v0.1.1" \
+  --notes "Release notes here"
 ```
 
 ---
@@ -302,7 +321,72 @@ rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-* && make clean && xattr -c
 - ✅ 定期运行 `make clean`
 - ✅ 构建失败后第一反应：清理缓存
 
-### 2. **构建失败：zig-out 目录不存在**
+### 2. **构建失败：Sparkle 包下载网络中断** ⚠️
+
+**问题：** 清理 DerivedData 后，Xcode 需要重新从 GitHub 克隆 Sparkle，网络不稳定时报错：
+```
+error: RPC failed; curl 56 Recv failure: Connection reset by peer
+fatal: early EOF
+xcodebuild: error: Could not resolve package dependencies:
+  Failed to clone repository https://github.com/sparkle-project/Sparkle
+```
+
+**原因：** `make clean` 或 `make clean-xcode` 删除了 DerivedData，其中包含已缓存的 Swift Package（Sparkle）。
+
+**✅ 解决方案：手动预克隆 Sparkle**
+
+```bash
+# 找到 DerivedData 目录名（先运行一次构建，让 Xcode 创建目录）
+DERIVED=$(ls ~/Library/Developer/Xcode/DerivedData/ | grep Ghostty | head -1)
+
+# 手动克隆 Sparkle 到期望位置
+mkdir -p ~/Library/Developer/Xcode/DerivedData/$DERIVED/SourcePackages/repositories
+git clone --bare https://github.com/sparkle-project/Sparkle \
+  ~/Library/Developer/Xcode/DerivedData/$DERIVED/SourcePackages/repositories/Sparkle-09d89c53
+
+# 然后重新构建
+make package
+```
+
+**🛡️ 预防措施：**
+- 在网络稳定的环境下执行清理操作
+- 清理后第一次构建失败时，用上述方法手动克隆，无需重复下载
+
+---
+
+### 3. **构建失败：Zig tag 版本不匹配** ⚠️
+
+**问题：** 打了 git tag 后构建时 Zig panic：
+```
+thread panic: tagged releases must be in vX.Y.Z format matching build.zig
+src/build/Config.zig: @panic("tagged releases must be in vX.Y.Z format matching build.zig")
+```
+
+**原因：** `build.zig.zon` 中的 `.version` 字段必须与当前 git tag 完全一致。如果 tag 是 `v0.1.1` 但 `build.zig.zon` 中是 `1.3.0`（上游版本），构建就会 panic。
+
+**✅ 解决方案：发布前同步 build.zig.zon 版本**
+
+```bash
+# 确认当前 build.zig.zon 版本
+grep "version" build.zig.zon
+
+# 更新为与 git tag 匹配的版本（在打 tag 之前！）
+sed -i '' 's/\.version = ".*"/\.version = "0.1.1"/' build.zig.zon
+
+# 提交后再打 tag
+git add build.zig.zon
+git commit -m "chore: bump version to 0.1.1"
+git tag -a v0.1.1 -m "Release version 0.1.1"
+```
+
+**⚠️ 重要：**
+- 每次发布必须同时更新 `build.zig.zon` 和 `project.pbxproj` 中的版本号
+- **必须在打 tag 之前**更新 `build.zig.zon`，否则需要删除 tag 重建
+- 删除并重建 tag：`git tag -d v0.1.1 && git tag -a v0.1.1 -m "Release version 0.1.1"`
+
+---
+
+### 4. **构建失败：zig-out 目录不存在**
 
 **问题：** 缺少 Zig 构建产物
 
@@ -418,13 +502,38 @@ jobs:
 
 ### 更新版本号
 
-编辑 `macos/Sources/App/Info.plist`:
+⚠️ **发布时必须同步更新两处版本号，且顺序很重要：**
 
-```xml
-<key>CFBundleShortVersionString</key>
-<string>1.0.0</string>
-<key>CFBundleVersion</key>
-<string>1</string>
+#### 1. `build.zig.zon`（最重要，必须与 git tag 完全一致）
+
+```bash
+# Zig 构建系统在检测到 git tag 时，会校验此版本与 tag 是否匹配
+# 不一致会导致构建 panic
+sed -i '' 's/\.version = ".*"/\.version = "0.1.1"/' build.zig.zon
+```
+
+#### 2. `macos/Ghostty.xcodeproj/project.pbxproj`（影响 About 页面版本显示）
+
+```bash
+# 更新所有 poltertty 相关目标的 MARKETING_VERSION
+sed -i '' 's/MARKETING_VERSION = 旧版本;/MARKETING_VERSION = 新版本;/g' \
+  macos/Ghostty.xcodeproj/project.pbxproj
+```
+
+#### 正确的版本更新顺序
+
+```bash
+# 1. 先更新两处版本号并提交
+sed -i '' 's/\.version = ".*"/\.version = "0.1.1"/' build.zig.zon
+# (更新 project.pbxproj 中的 MARKETING_VERSION)
+git add build.zig.zon macos/Ghostty.xcodeproj/project.pbxproj
+git commit -m "chore: bump version to 0.1.1"
+
+# 2. 再打 tag（构建时 Zig 会读取 tag，与 build.zig.zon 对比）
+git tag -a v0.1.1 -m "Release version 0.1.1"
+
+# 3. 最后构建
+make package
 ```
 
 ---
@@ -477,7 +586,14 @@ jobs:
 
 ## 更新日志
 
-- **2026-03-16**:
+- **2026-03-16** (v0.1.1 发布后更新):
+  - 完善发布流程：明确 `build.zig.zon` 和 `project.pbxproj` 两处版本号必须同步
+  - 新增故障排查：Sparkle 包下载网络中断的解决方案（手动 `git clone --bare`）
+  - 新增故障排查：Zig tag 版本不匹配的原因和修复方法
+  - 更新发布流程：强调必须在打 tag 之前更新 `build.zig.zon`
+  - 新增 `gh release create` 命令到发布流程
+
+- **2026-03-16** (初始版本):
   - 初始版本，规范化 Dev/Release 构建流程
   - 添加强制清理 DerivedData 缓存的规则
   - 更新 Makefile，`make dev` 和 `make release` 自动清理缓存
