@@ -781,6 +781,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     /// Add a new tab in the custom poltertty tab bar
+    @MainActor
     func addNewTab() {
         guard let ghostty_app = ghostty.app else { return }
         var config = Ghostty.SurfaceConfiguration()
@@ -793,6 +794,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     /// Close a tab in the custom poltertty tab bar
+    @MainActor
     func closePolterttyTab(_ id: UUID) {
         guard tabBarViewModel.tabs.count > 1 else {
             window?.close()
@@ -1193,15 +1195,10 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             focusedSurface = view
         }
 
-        // Initialize first tab for custom tab bar
-        if let ghostty_app = ghostty.app {
-            var config = Ghostty.SurfaceConfiguration()
-            if let wsId = workspaceId,
-               let workspace = WorkspaceManager.shared.workspace(for: wsId) {
-                config.workingDirectory = workspace.rootDirExpanded
-            }
-            let firstSurface = Ghostty.SurfaceView(ghostty_app, baseConfig: config)
-            tabBarViewModel.addTab(surface: firstSurface, title: "Terminal")
+        // Register the existing surfaceTree surface with the custom tab bar
+        // (the surface was already created in BaseTerminalController.init)
+        if case .leaf(let existingSurface) = surfaceTree.root {
+            tabBarViewModel.addTab(surface: existingSurface, title: "Terminal")
         }
 
         // Initialize our content view to the SwiftUI root
