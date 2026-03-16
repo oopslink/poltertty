@@ -81,10 +81,31 @@ class WorkspaceManager: ObservableObject {
 
     /// Create a temporary workspace with auto-generated name and random color
     @discardableResult
-    func createTemporary(rootDir: String = "~") -> WorkspaceModel {
+    func createTemporary(rootDir: String? = nil) -> WorkspaceModel {
         let name = nextScratchName()
         let color = Self.temporaryColors.randomElement() ?? "#F59E0B"
-        var workspace = WorkspaceModel(name: name, rootDir: rootDir, colorHex: color, isTemporary: true)
+
+        // Use system temp directory if rootDir is not provided
+        let effectiveRootDir: String
+        if let rootDir = rootDir {
+            effectiveRootDir = rootDir
+        } else {
+            // Create unique temp directory with _poltertty_tmp_ prefix for safe cleanup
+            let tempBase = FileManager.default.temporaryDirectory
+            let uniqueName = "_poltertty_tmp_\(UUID().uuidString.prefix(8))"
+            let tempPath = tempBase.appendingPathComponent(uniqueName)
+
+            // Create the directory
+            try? FileManager.default.createDirectory(
+                at: tempPath,
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
+
+            effectiveRootDir = tempPath.path
+        }
+
+        var workspace = WorkspaceModel(name: name, rootDir: effectiveRootDir, colorHex: color, isTemporary: true)
         workspace.icon = "⏱"
         workspaces.append(workspace)
         // Temporary workspaces are NOT persisted to disk
@@ -112,9 +133,24 @@ class WorkspaceManager: ObservableObject {
 
     /// Destroy all temporary workspaces (called on app quit)
     func destroyAllTemporary() {
-        let tempIds = temporaryWorkspaces.map { $0.id }
+        let tempWorkspaces = temporaryWorkspaces
+
+        // Clean up temp directories created by poltertty (with _poltertty_tmp_ prefix)
+        for workspace in tempWorkspaces {
+            let rootDir = workspace.rootDirExpanded
+            let dirName = (rootDir as NSString).lastPathComponent
+            // Only delete if it's in temp directory AND has our prefix
+            if (rootDir.hasPrefix("/tmp/") || rootDir.hasPrefix("/var/folders/")) &&
+               dirName.hasPrefix("_poltertty_tmp_") {
+                try? FileManager.default.removeItem(atPath: rootDir)
+            }
+        }
+
+        // Clean up window tracking and workspace list
+        let tempIds = tempWorkspaces.map { $0.id }
         for id in tempIds {
             activeWindows.removeValue(forKey: id)
+            removeFileBrowserViewModel(for: id)
         }
         workspaces.removeAll { $0.isTemporary }
     }
@@ -128,6 +164,17 @@ class WorkspaceManager: ObservableObject {
     }
 
     func delete(id: UUID) {
+        // Clean up temp directory if this is a temporary workspace
+        if let workspace = workspace(for: id), workspace.isTemporary {
+            let rootDir = workspace.rootDirExpanded
+            let dirName = (rootDir as NSString).lastPathComponent
+            // Only delete if it's in temp directory AND has our prefix
+            if (rootDir.hasPrefix("/tmp/") || rootDir.hasPrefix("/var/folders/")) &&
+               dirName.hasPrefix("_poltertty_tmp_") {
+                try? FileManager.default.removeItem(atPath: rootDir)
+            }
+        }
+
         workspaces.removeAll { $0.id == id }
         activeWindows.removeValue(forKey: id)
         removeFileBrowserViewModel(for: id)

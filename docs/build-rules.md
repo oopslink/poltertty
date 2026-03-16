@@ -198,16 +198,39 @@ xcode-select -p
 
 ### 1. **构建失败：Code Sign Error**
 
-**问题：** 代码签名失败
+**问题：** 代码签名失败，错误信息：
+```
+resource fork, Finder information, or similar detritus not allowed
+Command CodeSign failed with a nonzero exit code
+```
 
-**解决：**
+**原因：** .app 包中包含 macOS 资源分叉（resource fork）或 Finder 扩展属性，导致 codesign 失败。
+
+**解决方案（按顺序尝试）：**
+
 ```bash
-# 清理扩展属性
-xattr -cr ~/Library/Developer/Xcode/DerivedData/Ghostty-*/Build/Products/Debug/Poltertty.app
+# 方案 1: 清理 DerivedData、资源分叉和扩展属性（推荐）
+rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
+find . -name "._*" -delete
+find . -type f -exec xattr -c {} \; 2>/dev/null
+make dev
 
-# 重新构建
+# 方案 2: 仅清理 DerivedData 和重新构建
+make clean
+rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
+make dev
+
+# 方案 3: 如果仍然失败，清理所有构建缓存
+rm -rf ~/Library/Developer/Xcode/DerivedData/*
+rm -rf ~/Library/Caches/org.swift.swiftpm
+make clean
 make dev
 ```
+
+**预防措施：**
+- 避免在 Finder 中复制粘贴 .app 文件（使用命令行 `cp -r` 代替）
+- 避免使用第三方工具修改 .app 包
+- 定期运行 `make clean` 清理构建缓存
 
 ### 2. **构建失败：zig-out 目录不存在**
 
