@@ -21,28 +21,33 @@ struct FileNodeRow: View {
     var renameText: Binding<String>? = nil
     var onCommitRename: ((String) -> Void)? = nil
 
+    @State private var isHovering = false
+
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(alignment: .center, spacing: 4) {
             // Indentation
-            Rectangle()
-                .fill(Color.clear)
-                .frame(width: CGFloat(depth) * 16, height: 1)
+            if depth > 0 {
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: CGFloat(depth) * 16, height: 1)
+            }
 
             // Chevron for directories
             if node.isDirectory {
                 Image(systemName: node.isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 9, weight: .medium))
-                    .frame(width: 12)
-                    .foregroundColor(.secondary)
+                    .frame(width: 10, height: 10)
+                    .foregroundColor(.secondary.opacity(0.7))
                     .contentShape(Rectangle())
                     .onTapGesture { onToggleExpand() }
             } else {
-                Spacer().frame(width: 12)
+                Spacer().frame(width: 10)
             }
 
             // File/folder icon via NSWorkspace
             FileIconView(url: node.url)
                 .frame(width: 16, height: 16)
+                .clipped()
 
             // Name or rename TextField
             if isRenaming, let binding = renameText {
@@ -57,24 +62,32 @@ struct FileNodeRow: View {
             } else {
                 Text(node.name)
                     .font(.system(size: 12))
-                    .foregroundColor(.primary)
+                    .foregroundColor(isSelected ? .primary : .primary.opacity(0.95))
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
 
-            Spacer()
+            Spacer(minLength: 4)
 
             // Git status badge
             if let status = gitStatus {
                 Text(status.symbol)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 9, weight: .medium))
                     .foregroundColor(Color(hex: status.colorHex) ?? .secondary)
+                    .padding(.trailing, 2)
             }
         }
-        .padding(.vertical, 2)
+        .frame(height: 20)
+        .padding(.vertical, 1)
         .padding(.horizontal, 6)
-        .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+        .background(rowBackground)
+        .cornerRadius(3)
+        .padding(.horizontal, 3)
+        .padding(.vertical, 0.5)
         .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovering = hovering
+        }
         .gesture(TapGesture(count: 2).onEnded { onDoubleClick() })
         .simultaneousGesture(TapGesture(count: 1).onEnded { onSingleClick() })
         .contextMenu {
@@ -88,6 +101,18 @@ struct FileNodeRow: View {
             Button("Delete", role: .destructive) { onDelete() }
         }
     }
+
+    private var rowBackground: some View {
+        Group {
+            if isSelected {
+                Color.accentColor.opacity(0.15)
+            } else if isHovering {
+                Color.primary.opacity(0.06)
+            } else {
+                Color.clear
+            }
+        }
+    }
 }
 
 // MARK: - File Icon using NSWorkspace
@@ -98,10 +123,18 @@ private struct FileIconView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSImageView {
         let view = NSImageView()
         view.imageScaling = .scaleProportionallyDown
+        view.imageAlignment = .alignCenter
+        view.wantsLayer = true
         return view
     }
 
     func updateNSView(_ nsView: NSImageView, context: Context) {
-        nsView.image = NSWorkspace.shared.icon(forFile: url.path)
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        nsView.image = icon
+
+        // Force the bounds to constrain the image
+        if let superview = nsView.superview {
+            nsView.frame = superview.bounds
+        }
     }
 }
