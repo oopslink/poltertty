@@ -124,26 +124,51 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
                     // File Browser Panel
                     if fileBrowserVM.isVisible {
-                        FileBrowserPanel(
-                            viewModel: fileBrowserVM,
-                            onOpenInTerminal: { url in
-                                NotificationCenter.default.post(
-                                    name: .fileBrowserOpenInTerminal,
-                                    object: nil,
-                                    userInfo: [
-                                        "workspaceId": workspaceId as Any,
-                                        "path": url.path
-                                    ]
-                                )
-                            }
-                        )
-                        .frame(width: fileBrowserVM.panelWidth)
+                        if fileBrowserVM.isPreviewFullscreen {
+                            // Fullscreen mode: file browser takes all space
+                            FileBrowserPanel(
+                                viewModel: fileBrowserVM,
+                                onOpenInTerminal: { url in
+                                    NotificationCenter.default.post(
+                                        name: .fileBrowserOpenInTerminal,
+                                        object: nil,
+                                        userInfo: [
+                                            "workspaceId": workspaceId as Any,
+                                            "path": url.path
+                                        ]
+                                    )
+                                }
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            // Normal mode
+                            FileBrowserPanel(
+                                viewModel: fileBrowserVM,
+                                onOpenInTerminal: { url in
+                                    NotificationCenter.default.post(
+                                        name: .fileBrowserOpenInTerminal,
+                                        object: nil,
+                                        userInfo: [
+                                            "workspaceId": workspaceId as Any,
+                                            "path": url.path
+                                        ]
+                                    )
+                                }
+                            )
+                            .frame(
+                                minWidth: fileBrowserVM.showPreviewPanel ? 600 : 160,
+                                idealWidth: fileBrowserVM.showPreviewPanel ? 800 : fileBrowserVM.panelWidth,
+                                maxWidth: fileBrowserVM.showPreviewPanel ? .infinity : fileBrowserVM.panelWidth
+                            )
 
-                        fileBrowserDivider
+                            fileBrowserDivider
+
+                            terminalView
+                        }
+                    } else {
+                        // File browser not visible, show terminal
+                        terminalView
                     }
-
-                    // Terminal view
-                    terminalView
                 }
             }
 

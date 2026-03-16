@@ -6,9 +6,9 @@ struct FileBrowserPanel: View {
     @ObservedObject var viewModel: FileBrowserViewModel
     var onOpenInTerminal: ((URL) -> Void)?
 
-    @State private var selectedNodeId: UUID? = nil
     @State private var renameText: String = ""
     @FocusState private var isFocused: Bool
+    @State private var previewPanelWidth: CGFloat = 400
 
     var body: some View {
         panelContent
@@ -23,6 +23,7 @@ struct FileBrowserPanel: View {
             .backport.onKeyPress("c") { handleCKey(modifiers: $0) }
             .backport.onKeyPress("f") { handleFKey(modifiers: $0) }
             .backport.onKeyPress("N") { handleUpperNKey(modifiers: $0) }
+            .backport.onKeyPress(" ") { handleSpaceKey(modifiers: $0) }
             .onChange(of: viewModel.filterText) { text in
                 if text.isEmpty {
                     viewModel.deactivateRecursiveFilter()
@@ -31,13 +32,31 @@ struct FileBrowserPanel: View {
     }
 
     private var panelContent: some View {
-        VStack(spacing: 0) {
-            filterBar
-            Divider()
-            if viewModel.rootDir.isEmpty || !FileManager.default.fileExists(atPath: viewModel.rootDir) {
-                emptyStateView
-            } else {
-                treeScrollView
+        HStack(spacing: 0) {
+            // Left: File tree (always visible)
+            VStack(spacing: 0) {
+                filterBar
+                Divider()
+                if viewModel.rootDir.isEmpty || !FileManager.default.fileExists(atPath: viewModel.rootDir) {
+                    emptyStateView
+                } else {
+                    treeScrollView
+                }
+            }
+            .frame(minWidth: 200, maxWidth: viewModel.showPreviewPanel ? 350 : .infinity)
+
+            // Right: Preview panel (if enabled)
+            if viewModel.showPreviewPanel, let nodeId = viewModel.selectedNodeId,
+               let url = viewModel.findNodeURL(id: nodeId) {
+                Divider()
+                FilePreviewView(
+                    url: url,
+                    isFullscreen: viewModel.isPreviewFullscreen,
+                    onToggleFullscreen: {
+                        viewModel.togglePreviewFullscreen()
+                    }
+                )
+                .frame(minWidth: 300)
             }
         }
     }
@@ -51,14 +70,14 @@ struct FileBrowserPanel: View {
     }
 
     private func handleTKey(modifiers: EventModifiers) -> BackportKeyPressResult {
-        guard isFocused, let nodeId = selectedNodeId,
+        guard isFocused, let nodeId = viewModel.selectedNodeId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
         onOpenInTerminal?(entry.node.url)
         return .handled
     }
 
     private func handleRKey(modifiers: EventModifiers) -> BackportKeyPressResult {
-        guard isFocused, let nodeId = selectedNodeId,
+        guard isFocused, let nodeId = viewModel.selectedNodeId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
         renameText = entry.node.name
         viewModel.renamingNodeId = nodeId
@@ -66,7 +85,7 @@ struct FileBrowserPanel: View {
     }
 
     private func handleNKey(modifiers: EventModifiers) -> BackportKeyPressResult {
-        guard isFocused, let nodeId = selectedNodeId,
+        guard isFocused, let nodeId = viewModel.selectedNodeId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
         let dir = entry.node.isDirectory ? entry.node.url : entry.node.url.deletingLastPathComponent()
         viewModel.createFile(inDirectory: dir, name: "untitled")
@@ -75,16 +94,16 @@ struct FileBrowserPanel: View {
 
     private func handleDeleteKey(modifiers: EventModifiers) -> BackportKeyPressResult {
         guard isFocused, modifiers.contains(.command) else { return .ignored }
-        guard let nodeId = selectedNodeId,
+        guard let nodeId = viewModel.selectedNodeId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
         viewModel.delete(url: entry.node.url)
-        selectedNodeId = nil
+        viewModel.selectedNodeId = nil
         return .handled
     }
 
     private func handleCKey(modifiers: EventModifiers) -> BackportKeyPressResult {
         guard isFocused, modifiers.contains(.command), modifiers.contains(.shift) else { return .ignored }
-        guard let nodeId = selectedNodeId,
+        guard let nodeId = viewModel.selectedNodeId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
         viewModel.copyPath(entry.node.url)
         return .handled
@@ -98,10 +117,17 @@ struct FileBrowserPanel: View {
 
     private func handleUpperNKey(modifiers: EventModifiers) -> BackportKeyPressResult {
         guard isFocused, modifiers.contains(.shift) else { return .ignored }
-        guard let nodeId = selectedNodeId,
+        guard let nodeId = viewModel.selectedNodeId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
         let dir = entry.node.isDirectory ? entry.node.url : entry.node.url.deletingLastPathComponent()
         viewModel.createDirectory(inDirectory: dir, name: "untitled")
+        return .handled
+    }
+
+    private func handleSpaceKey(modifiers: EventModifiers) -> BackportKeyPressResult {
+        guard isFocused, viewModel.selectedNodeId != nil else { return .ignored }
+        // Toggle preview panel with space key
+        viewModel.togglePreviewPanel()
         return .handled
     }
 
@@ -147,12 +173,12 @@ struct FileBrowserPanel: View {
                         node: entry.node,
                         depth: entry.depth,
                         gitStatus: viewModel.gitStatus(for: entry.node.url),
-                        isSelected: selectedNodeId == entry.node.id,
+                        isSelected: viewModel.selectedNodeId == entry.node.id,
                         onToggleExpand: {
                             viewModel.toggleExpand(nodeId: entry.node.id)
                         },
                         onSingleClick: {
-                            selectedNodeId = entry.node.id
+                            viewModel.selectNode(id: entry.node.id)
                             isFocused = true
                         },
                         onDoubleClick: {
@@ -182,7 +208,10 @@ struct FileBrowserPanel: View {
                         },
                         onDelete: {
                             viewModel.delete(url: entry.node.url)
-                            if selectedNodeId == entry.node.id { selectedNodeId = nil }
+                            if viewModel.selectedNodeId == entry.node.id {
+                                viewModel.selectedNodeId = nil
+                                viewModel.showPreviewPanel = false
+                            }
                         },
                         onStartRename: {
                             renameText = entry.node.name

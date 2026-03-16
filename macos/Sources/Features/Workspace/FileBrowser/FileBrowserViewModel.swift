@@ -13,6 +13,11 @@ final class FileBrowserViewModel: ObservableObject {
     @Published var panelWidth: CGFloat
     @Published var renamingNodeId: UUID? = nil
 
+    // Preview state
+    @Published var selectedNodeId: UUID? = nil
+    @Published var showPreviewPanel: Bool = false
+    @Published var isPreviewFullscreen: Bool = false
+
     // MARK: - Internal State
 
     let rootDir: String
@@ -67,8 +72,22 @@ final class FileBrowserViewModel: ObservableObject {
                 self.rootNodes = []
                 return
             }
+
+            // Preserve selected file URL across reload
+            let selectedURL = self.selectedNodeId.flatMap { self.findNodeURL(id: $0) }
+
             let expanded = self.currentExpandedUrls()
             self.rootNodes = self.loadChildren(at: URL(fileURLWithPath: self.rootDir), expandedUrls: expanded)
+
+            // Restore selection by URL
+            if let url = selectedURL, let newNode = self.findNodeByURL(url: url, in: self.rootNodes) {
+                self.selectedNodeId = newNode.id
+            } else if selectedURL != nil {
+                // Selected file was deleted
+                self.selectedNodeId = nil
+                self.showPreviewPanel = false
+            }
+
             Task { await self.refreshGitStatus() }
         }
     }
@@ -269,5 +288,53 @@ final class FileBrowserViewModel: ObservableObject {
 
     func openInDefaultApp(_ url: URL) {
         NSWorkspace.shared.open(url)
+    }
+
+    // MARK: - Preview
+
+    func selectNode(id: UUID?) {
+        selectedNodeId = id
+        if id != nil {
+            showPreviewPanel = true
+        }
+    }
+
+    func togglePreviewPanel() {
+        showPreviewPanel.toggle()
+        if !showPreviewPanel {
+            isPreviewFullscreen = false
+        }
+    }
+
+    func togglePreviewFullscreen() {
+        isPreviewFullscreen.toggle()
+    }
+
+    /// Find the URL for a given node ID
+    func findNodeURL(id: UUID) -> URL? {
+        findNodeInTree(id: id, nodes: rootNodes)?.url
+    }
+
+    private func findNodeInTree(id: UUID, nodes: [FileNode]) -> FileNode? {
+        for node in nodes {
+            if node.id == id { return node }
+            if let children = node.children,
+               let found = findNodeInTree(id: id, nodes: children) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    /// Find node by URL (used to restore selection after reload)
+    private func findNodeByURL(url: URL, in nodes: [FileNode]) -> FileNode? {
+        for node in nodes {
+            if node.url == url { return node }
+            if let children = node.children,
+               let found = findNodeByURL(url: url, in: children) {
+                return found
+            }
+        }
+        return nil
     }
 }
