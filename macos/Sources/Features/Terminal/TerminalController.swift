@@ -524,7 +524,11 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 for: currentId,
                 window: window,
                 sidebarWidth: CGFloat(PolterttyConfig.shared.sidebarWidth),
-                sidebarVisible: PolterttyConfig.shared.sidebarVisible
+                sidebarVisible: PolterttyConfig.shared.sidebarVisible,
+                tabs: tabBarViewModel.persistedTabs.map {
+                    WorkspaceSnapshot.PersistedTab(title: $0.title, titleLocked: $0.titleLocked)
+                },
+                activeTabIndex: tabBarViewModel.activeTabIndex
             )
         }
 
@@ -1248,6 +1252,29 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         container.initialContentSize = focusedSurface?.initialSize
 
         window.contentView = container
+
+        // Restore tab state from snapshot (if available)
+        if let wsId = workspaceId,
+           let snapshot = WorkspaceManager.shared.loadSnapshot(for: wsId),
+           let savedTabs = snapshot.tabs,
+           savedTabs.count > 1 {
+            // First tab is already registered from surfaceTree, apply its saved title
+            if savedTabs[0].titleLocked, let firstId = tabBarViewModel.tabs.first?.id {
+                tabBarViewModel.renameTab(firstId, title: savedTabs[0].title)
+            }
+            // Create additional tabs
+            for i in 1..<savedTabs.count {
+                addNewTab()
+                if savedTabs[i].titleLocked, let lastId = tabBarViewModel.tabs.last?.id {
+                    tabBarViewModel.renameTab(lastId, title: savedTabs[i].title)
+                }
+            }
+            // Restore active tab index
+            if let activeIdx = snapshot.activeTabIndex,
+               activeIdx < tabBarViewModel.tabs.count {
+                tabBarViewModel.selectTab(tabBarViewModel.tabs[activeIdx].id)
+            }
+        }
 
         // Set window title for onboarding/restore modes
         if startupMode != .terminal {

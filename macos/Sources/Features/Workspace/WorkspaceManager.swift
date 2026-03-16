@@ -216,7 +216,14 @@ class WorkspaceManager: ObservableObject {
 
     // MARK: - Snapshot Persistence
 
-    func saveSnapshot(for workspaceId: UUID, window: NSWindow, sidebarWidth: CGFloat, sidebarVisible: Bool) {
+    func saveSnapshot(
+        for workspaceId: UUID,
+        window: NSWindow,
+        sidebarWidth: CGFloat,
+        sidebarVisible: Bool,
+        tabs: [WorkspaceSnapshot.PersistedTab]? = nil,
+        activeTabIndex: Int? = nil
+    ) {
         guard var workspace = workspace(for: workspaceId) else { return }
         workspace.updatedAt = Date()
 
@@ -232,7 +239,9 @@ class WorkspaceManager: ObservableObject {
             workspace: workspace,
             windowFrame: WorkspaceSnapshot.WindowFrame(from: window.frame),
             sidebarWidth: sidebarWidth,
-            sidebarVisible: sidebarVisible
+            sidebarVisible: sidebarVisible,
+            tabs: tabs,
+            activeTabIndex: activeTabIndex
         )
 
         let path = snapshotPath(for: workspaceId)
