@@ -1195,7 +1195,11 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 },
                 onCreateTemporary: { [weak self] in
                     self?.createTemporaryWorkspace()
-                }
+                },
+                tabBarViewModel: TabBarViewModel(),
+                workspaceAccentColor: .accentColor,
+                onNewTab: {},
+                onCloseTab: { _ in }
             )
         }
 
