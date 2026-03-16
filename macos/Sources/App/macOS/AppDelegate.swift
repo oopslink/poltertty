@@ -168,7 +168,9 @@ class AppDelegate: NSObject,
 #if DEBUG
         ghostty = Ghostty.App(configPath: ProcessInfo.processInfo.environment["GHOSTTY_CONFIG_PATH"])
 #else
-        ghostty = Ghostty.App()
+        // Use poltertty config path by default
+        let polterttyConfig = NSString("~/.config/poltertty/config").expandingTildeInPath
+        ghostty = Ghostty.App(configPath: polterttyConfig)
 #endif
         super.init()
 
@@ -429,9 +431,9 @@ class AppDelegate: NSObject,
 
         // We have some visible window. Show an app-wide modal to confirm quitting.
         let alert = NSAlert()
-        alert.messageText = "Quit Ghostty?"
+        alert.messageText = "Quit Poltertty?"
         alert.informativeText = "All terminal sessions will be terminated."
-        alert.addButton(withTitle: "Close Ghostty")
+        alert.addButton(withTitle: "Close Poltertty")
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
         switch alert.runModal() {
@@ -527,7 +529,7 @@ class AppDelegate: NSObject,
             // may want to show this as a sheet on the focused window (especially if we're
             // opening a tab). I'm not sure.
             let alert = NSAlert()
-            alert.messageText = "Allow Ghostty to execute \"\(filename)\"?"
+            alert.messageText = "Allow Poltertty to execute \"\(filename)\"?"
             alert.addButton(withTitle: "Allow")
             alert.addButton(withTitle: "Cancel")
             alert.alertStyle = .warning
@@ -1118,6 +1120,7 @@ class AppDelegate: NSObject,
     }
 
     @IBAction func showHelp(_ sender: Any) {
+        // TODO: Update to poltertty docs site when available
         guard let url = URL(string: "https://ghostty.org/docs") else { return }
         NSWorkspace.shared.open(url)
     }

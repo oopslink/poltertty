@@ -3,7 +3,9 @@ import SwiftUI
 struct AboutView: View {
     @Environment(\.openURL) var openURL
 
+    // TODO: Update to poltertty GitHub repo when available
     private let githubURL = URL(string: "https://github.com/ghostty-org/ghostty")
+    // TODO: Update to poltertty docs site when available
     private let docsURL = URL(string: "https://ghostty.org/docs")
 
     /// Read the commit from the bundle.
@@ -47,7 +49,7 @@ struct AboutView: View {
 
             VStack(alignment: .center, spacing: 32) {
                 VStack(alignment: .center, spacing: 8) {
-                    Text("Ghostty")
+                    Text("Poltertty")
                         .bold()
                         .font(.title)
                     Text("Fast, native, feature-rich terminal \nemulator pushing modern features.")
