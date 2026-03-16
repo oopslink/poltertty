@@ -1314,6 +1314,21 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         super.windowWillClose(notification)
         self.relabelTabs()
 
+        // After this window is removed from NSApp.windows, check if we need
+        // to show the startup screen. Only trigger for formal workspace windows
+        // (not temp restore/onboarding windows) to avoid race with restoreWorkspaces.
+        let closingId = workspaceId
+        let isFormal = closingId.map { WorkspaceManager.shared.workspace(for: $0)?.isTemporary == false } ?? false
+        if isFormal {
+            DispatchQueue.main.async {
+                // If no TerminalController windows remain, show startup screen.
+                guard TerminalController.all.isEmpty else { return }
+                guard let appDelegate = NSApp.delegate as? AppDelegate else { return }
+                guard !appDelegate.isTerminating else { return }
+                appDelegate.openStartupWindow()
+            }
+        }
+
         // If we remove a window, we reset the cascade point to the key window so that
         // the next window cascade's from that one.
         if let focusedWindow = NSApplication.shared.keyWindow {

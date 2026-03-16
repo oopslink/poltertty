@@ -88,6 +88,9 @@ class AppDelegate: NSObject,
     /// This is only true before application has become active.
     private var applicationHasBecomeActive: Bool = false
 
+    /// Set to true when the app is terminating, to suppress spurious startup windows.
+    var isTerminating: Bool = false
+
     /// This is set in applicationDidFinishLaunching with the system uptime so we can determine the
     /// seconds since the process was launched.
     private var applicationLaunchTime: TimeInterval = 0
@@ -345,32 +348,8 @@ class AppDelegate: NSObject,
         let manager = WorkspaceManager.shared
         let hasWorkspaces = !manager.formalWorkspaces.isEmpty
 
-        if hasWorkspaces && PolterttyConfig.shared.restoreOnLaunch {
-            // Cold start with existing workspaces → show restore UI
-            let tempWorkspace = manager.createTemporary()
-            var config = Ghostty.SurfaceConfiguration()
-            config.workingDirectory = tempWorkspace.rootDirExpanded
-            let controller = TerminalController.newWindow(
-                ghostty, withBaseConfig: config,
-                workspaceId: tempWorkspace.id, startupMode: .restore
-            )
-            if let window = controller.window {
-                window.title = "✦ Poltertty"
-                manager.registerWindow(window, for: tempWorkspace.id)
-            }
-        } else if !hasWorkspaces {
-            // First launch → show onboarding
-            let tempWorkspace = manager.createTemporary()
-            var config = Ghostty.SurfaceConfiguration()
-            config.workingDirectory = tempWorkspace.rootDirExpanded
-            let controller = TerminalController.newWindow(
-                ghostty, withBaseConfig: config,
-                workspaceId: tempWorkspace.id, startupMode: .onboarding
-            )
-            if let window = controller.window {
-                window.title = "✦ Poltertty"
-                manager.registerWindow(window, for: tempWorkspace.id)
-            }
+        if (hasWorkspaces && PolterttyConfig.shared.restoreOnLaunch) || !hasWorkspaces {
+            openStartupWindow()
         }
 
         // Setup workspace menu
@@ -465,6 +444,7 @@ class AppDelegate: NSObject,
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        isTerminating = true
         // Save all active workspace snapshots
         let manager = WorkspaceManager.shared
         // Destroy all temporary workspaces BEFORE saving snapshots
@@ -488,19 +468,13 @@ class AppDelegate: NSObject,
         // of focusing one of them.
         guard !flag else { return true }
 
-        // If we have any windows in our terminal manager we don't do anything.
-        // This is possible with flag set to false if there a race where the
-        // window is still initializing and is not visible but the user clicked
-        // the dock icon.
-        guard TerminalController.all.isEmpty else { return true }
-
         // If the application isn't active yet then we don't want to process
         // this because we're not ready. This happens sometimes in Xcode runs
         // but I haven't seen it happen in releases. I'm unsure why.
         guard applicationHasBecomeActive else { return true }
 
-        // No visible windows, open a new one.
-        _ = TerminalController.newWindow(ghostty)
+        // No visible windows — open the appropriate startup screen.
+        openStartupWindow()
         return false
     }
 
@@ -684,6 +658,7 @@ class AppDelegate: NSObject,
     @objc private func windowDidBecomeKey(_ notification: Notification) {
         syncFloatOnTopMenu(notification.object as? NSWindow)
     }
+
 
     @objc private func quickTerminalDidChangeVisibility(_ notification: Notification) {
         guard let quickController = notification.object as? QuickTerminalController else { return }
@@ -1037,6 +1012,25 @@ class AppDelegate: NSObject,
                 }
             }
         }
+    }
+
+    /// Opens the appropriate startup window: RestoreView if workspaces exist, OnboardingView otherwise.
+    @discardableResult
+    func openStartupWindow() -> TerminalController {
+        let manager = WorkspaceManager.shared
+        let mode: WorkspaceStartupMode = manager.formalWorkspaces.isEmpty ? .onboarding : .restore
+        let tempWorkspace = manager.createTemporary()
+        var config = Ghostty.SurfaceConfiguration()
+        config.workingDirectory = tempWorkspace.rootDirExpanded
+        let controller = TerminalController.newWindow(
+            ghostty, withBaseConfig: config,
+            workspaceId: tempWorkspace.id, startupMode: mode
+        )
+        if let window = controller.window {
+            window.title = "✦ Poltertty"
+            manager.registerWindow(window, for: tempWorkspace.id)
+        }
+        return controller
     }
 
     @IBAction func newWorkspace(_ sender: Any?) {

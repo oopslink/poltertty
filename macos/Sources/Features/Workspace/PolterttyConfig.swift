@@ -13,7 +13,7 @@ struct PolterttyConfig {
         let values = Self.parse()
         self.workspaceDir = values["workspace-dir"]
             ?? ("~/.config/poltertty/workspaces" as NSString).expandingTildeInPath
-        self.restoreOnLaunch = (values["workspace-restore-on-launch"] ?? "false") == "true"
+        self.restoreOnLaunch = (values["workspace-restore-on-launch"] ?? "true") == "true"
         self.sidebarVisible = (values["workspace-sidebar-visible"] ?? "true") == "true"
         let rawWidth = Int(values["workspace-sidebar-width"] ?? "200") ?? 200
         self.sidebarWidth = max(100, min(500, rawWidth))
