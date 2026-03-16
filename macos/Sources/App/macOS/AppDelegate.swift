@@ -1096,12 +1096,9 @@ class AppDelegate: NSObject,
 
     @objc func toggleFileBrowser(_ sender: Any?) {
         guard let window = NSApp.keyWindow,
-              let wsId = WorkspaceManager.shared.workspaceId(for: window) else { return }
-        NotificationCenter.default.post(
-            name: .toggleFileBrowser,
-            object: nil,
-            userInfo: ["workspaceId": wsId]
-        )
+              let controller = window.windowController as? TerminalController,
+              let wsId = controller.workspaceId else { return }
+        WorkspaceManager.shared.fileBrowserViewModel(for: wsId).isVisible.toggle()
     }
 
     @IBAction func newTab(_ sender: Any?) {

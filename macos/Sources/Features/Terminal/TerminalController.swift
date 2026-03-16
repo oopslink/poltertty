@@ -410,10 +410,10 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             return nil
         }
 
-        // Create a new window and add it to the parent
-        let controller = TerminalController.init(ghostty, withBaseConfig: baseConfig)
-        // Inherit workspace from parent
-        controller.workspaceId = parentController.workspaceId
+        // Create a new window and add it to the parent.
+        // workspaceId must be passed to init (not set after) because surfaceTreeDidChange
+        // accesses self.window during super.init, triggering windowDidLoad early.
+        let controller = TerminalController.init(ghostty, withBaseConfig: baseConfig, workspaceId: parentController.workspaceId)
         guard let window = controller.window else { return controller }
 
         // If the parent is miniaturized, then macOS exhibits really strange behaviors
@@ -1365,7 +1365,11 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         self.fixTabBar()
         terminalViewContainer?.updateGlassTintOverlay(isKeyWindow: true)
         if let wsId = workspaceId {
-            WorkspaceManager.shared.fileBrowserViewModel(for: wsId).resume()
+            let vm = WorkspaceManager.shared.fileBrowserViewModel(for: wsId)
+            vm.resume()
+            // Force SwiftUI to re-render the file browser panel in case updates
+            // were missed while this window was in a background tab.
+            vm.objectWillChange.send()
         }
     }
 

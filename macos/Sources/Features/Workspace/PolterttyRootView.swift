@@ -201,11 +201,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .onReceive(NotificationCenter.default.publisher(for: .workspaceSidebarNavigateDown)) { _ in
             navigateWorkspace(direction: 1)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleFileBrowser)) { notification in
-            guard let wsId = notification.userInfo?["workspaceId"] as? UUID,
-                  wsId == workspaceId else { return }
-            fileBrowserVM.isVisible.toggle()
-        }
         .sheet(isPresented: $showConvertAlert) {
             convertToFormalSheet
         }
