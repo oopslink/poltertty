@@ -838,6 +838,13 @@ class BaseTerminalController: NSWindowController,
     private func titleDidChange(to: String) {
         lastComputedTitle = to
         applyTitleToWindow()
+
+        // Notify tabBarViewModel to update the tab title for this surface
+        if let tc = self as? TerminalController,
+           let surface = focusedSurface,
+           let surfaceId = tc.tabBarViewModel.surfaces.first(where: { $0.value === surface })?.key {
+            tc.tabBarViewModel.updateTitle(forSurfaceId: surfaceId, title: to)
+        }
     }
 
     private func applyTitleToWindow() {
