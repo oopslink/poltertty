@@ -108,8 +108,8 @@ struct FilePreviewView: View {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-        case .text(let text):
-            textPreview(text)
+        case .text(let text, let language):
+            SyntaxHighlightView(text: text, language: language)
 
         case .image(let nsImage):
             imagePreview(nsImage)
@@ -119,16 +119,6 @@ struct FilePreviewView: View {
 
         case .error(let message):
             errorView(message)
-        }
-    }
-
-    private func textPreview(_ text: String) -> some View {
-        ScrollView([.horizontal, .vertical]) {
-            Text(text)
-                .font(.system(.body, design: .monospaced))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
         }
     }
 
@@ -283,8 +273,9 @@ struct FilePreviewView: View {
             }
 
             guard !Task.isCancelled else { return }
+            let language = detectLanguage()
             await MainActor.run {
-                content = .text(text)
+                content = .text(text, language)
             }
         } catch {
             guard !Task.isCancelled else { return }
@@ -361,13 +352,66 @@ struct FilePreviewView: View {
 
         return extensions.contains(url.pathExtension.lowercased())
     }
+
+    private func detectLanguage() -> String? {
+        // Check filename first (for extensionless files like Makefile, Dockerfile)
+        let filenameMap: [String: String] = [
+            "makefile": "makefile",
+            "dockerfile": "dockerfile",
+            "gemfile": "ruby",
+            "rakefile": "ruby",
+            "podfile": "ruby",
+            "vagrantfile": "ruby",
+            "cmakelists.txt": "cmake",
+        ]
+        if let lang = filenameMap[url.lastPathComponent.lowercased()] { return lang }
+
+        let ext = url.pathExtension.lowercased()
+        guard !ext.isEmpty else { return nil }
+
+        let extMap: [String: String] = [
+            // Swift / Apple
+            "swift": "swift", "m": "objectivec", "mm": "objectivec",
+            // C / C++
+            "c": "c", "h": "c", "cpp": "cpp", "cc": "cpp", "cxx": "cpp", "hpp": "cpp",
+            // JVM
+            "java": "java", "kt": "kotlin", "groovy": "groovy", "gradle": "groovy",
+            "scala": "scala",
+            // .NET
+            "cs": "csharp", "fs": "fsharp", "vb": "vbnet",
+            // Scripting
+            "py": "python", "rb": "ruby", "php": "php", "lua": "lua", "pl": "perl",
+            // Web
+            "js": "javascript", "jsx": "javascript", "ts": "typescript", "tsx": "typescript",
+            "html": "xml", "htm": "xml", "vue": "xml", "svelte": "xml",
+            "css": "css", "scss": "scss", "sass": "scss", "less": "less",
+            // Systems
+            "go": "go", "rs": "rust", "zig": "zig",
+            // Shell
+            "sh": "bash", "bash": "bash", "zsh": "bash", "fish": "bash",
+            // Data / Config
+            "json": "json", "yml": "yaml", "yaml": "yaml",
+            "toml": "ini", "ini": "ini", "conf": "ini", "properties": "properties",
+            "xml": "xml", "plist": "xml",
+            "env": "bash", "gitignore": "bash",
+            // Docs
+            "md": "markdown", "markdown": "markdown", "rst": "markdown",
+            // Query
+            "sql": "sql", "graphql": "graphql",
+            // Build
+            "cmake": "cmake", "mk": "makefile",
+            // Serialization
+            "proto": "protobuf",
+        ]
+        return extMap[ext]
+    }
 }
 
 // MARK: - Supporting Types
 
 private enum PreviewContent {
     case loading
-    case text(String)
+    case text(String, String?)   // (content, highlightLanguage)
     case image(NSImage)
     case notSupported(String)
     case error(String)
