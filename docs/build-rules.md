@@ -6,6 +6,39 @@
 
 ---
 
+## ⚠️ 重要：构建前必读
+
+**为了避免代码签名错误和构建失败，每次构建前必须清理 Xcode DerivedData 缓存。**
+
+### 快速清理命令
+
+```bash
+# 方式 1: 标准清理（推荐）
+rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-* && make clean
+
+# 方式 2: 完整清理（构建失败时使用）
+rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-* && make clean && xattr -cr macos/
+
+# 方式 3: 一键清理并构建
+rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-* && make clean && make dev
+```
+
+### 为什么需要清理？
+
+1. **代码签名问题**：DerivedData 缓存可能包含过期的签名信息，导致 `CodeSign failed` 错误
+2. **模块缓存不一致**：Swift 模块缓存可能与当前代码不匹配
+3. **资源分叉**：macOS 文件系统可能添加扩展属性，干扰构建过程
+
+### 清理时机
+
+- ✅ 每次修改代码后准备构建时
+- ✅ 构建失败后
+- ✅ 切换构建模式时（Dev ↔ Release）
+- ✅ 更新依赖后
+- ✅ Git pull 拉取新代码后
+
+---
+
 ## 构建模式
 
 ### 1. **Dev（开发模式）**
@@ -83,13 +116,17 @@ macos/build/Poltertty-{version}.zip  # 使用 --zip 参数时
 
 | 任务 | 命令 | 说明 |
 |------|------|------|
-| 开发构建 | `make dev` | Debug 模式，快速编译 |
-| 发布构建 | `make release` | Release 模式，优化编译 |
+| 开发构建 | `make dev` | 🔄 自动清理缓存 + Debug 模式构建 |
+| 发布构建 | `make release` | 🔄 自动清理缓存 + Release 模式构建 |
 | 构建并打包 | `make package` | 构建 Release 并打包 zip |
 | 清理构建 | `make clean` | 清理所有构建产物 |
+| 清理 Xcode | `make clean-xcode` | 清理 DerivedData 和扩展属性 |
+| 完全清理 | `make clean-all` | 清理所有（包括 Xcode 缓存） |
 | 运行 Dev | `make run-dev` | 构建并运行 Debug 版本 |
 | 运行 Release | `make run-release` | 构建并运行 Release 版本 |
 | 检查错误 | `make check` | 仅检查 Swift 编译错误 |
+
+**📌 注意：** `make dev` 和 `make release` 已内置自动清理 DerivedData 缓存，无需手动执行清理命令。
 
 ---
 
@@ -101,16 +138,22 @@ macos/build/Poltertty-{version}.zip  # 使用 --zip 参数时
 # 1. 拉取最新代码
 git pull origin main
 
-# 2. 构建开发版本
+# 2. 清理缓存（重要！）
+rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
+make clean
+
+# 3. 构建开发版本
 make dev
 
-# 3. 运行测试
+# 4. 运行测试
 make run-dev
 
-# 4. 修改代码后重新构建
+# 5. 修改代码后重新构建
+# ⚠️ 每次修改后都应清理缓存
+rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
 make dev
 
-# 5. 提交代码
+# 6. 提交代码
 git add .
 git commit -m "feat: add new feature"
 git push
@@ -126,8 +169,11 @@ git pull origin main
 # 2. 更新版本号（如需要）
 # 编辑 macos/Sources/App/Info.plist
 
-# 3. 清理旧构建
+# 3. 彻底清理缓存（关键步骤！）
+rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
+rm -rf ~/Library/Caches/org.swift.swiftpm
 make clean
+xattr -cr macos/
 
 # 4. 构建发布版本
 make release
@@ -196,7 +242,7 @@ xcode-select -p
 
 ## 故障排查
 
-### 1. **构建失败：Code Sign Error**
+### 1. **构建失败：Code Sign Error** ⚠️
 
 **问题：** 代码签名失败，错误信息：
 ```
@@ -204,33 +250,57 @@ resource fork, Finder information, or similar detritus not allowed
 Command CodeSign failed with a nonzero exit code
 ```
 
-**原因：** .app 包中包含 macOS 资源分叉（resource fork）或 Finder 扩展属性，导致 codesign 失败。
+**原因：**
+- Xcode DerivedData 缓存包含过期的签名信息或损坏的模块缓存
+- .app 包中包含 macOS 资源分叉（resource fork）或 Finder 扩展属性
+- 构建缓存与当前代码状态不一致
 
-**解决方案（按顺序尝试）：**
+**✅ 标准解决流程（99% 有效）：**
 
 ```bash
-# 方案 1: 清理 DerivedData、资源分叉和扩展属性（推荐）
+# 步骤 1: 清理 DerivedData 缓存（最重要）
 rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
-find . -name "._*" -delete
-find . -type f -exec xattr -c {} \; 2>/dev/null
-make dev
 
-# 方案 2: 仅清理 DerivedData 和重新构建
+# 步骤 2: 清理项目构建产物
 make clean
-rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
-make dev
 
-# 方案 3: 如果仍然失败，清理所有构建缓存
+# 步骤 3: 清理扩展属性（可选，但推荐）
+xattr -cr macos/
+
+# 步骤 4: 重新构建
+make dev  # 或 make release
+```
+
+**🔧 完整清理流程（如果上述方法失败）：**
+
+```bash
+# 清理所有可能的缓存
 rm -rf ~/Library/Developer/Xcode/DerivedData/*
 rm -rf ~/Library/Caches/org.swift.swiftpm
+find . -name "._*" -delete
+find macos -type f -exec xattr -c {} \; 2>/dev/null
 make clean
+
+# 重新构建
 make dev
 ```
 
-**预防措施：**
-- 避免在 Finder 中复制粘贴 .app 文件（使用命令行 `cp -r` 代替）
-- 避免使用第三方工具修改 .app 包
-- 定期运行 `make clean` 清理构建缓存
+**📋 快速命令（复制即用）：**
+
+```bash
+# 一键清理并构建 Dev
+rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-* && make clean && xattr -cr macos/ && make dev
+
+# 一键清理并构建 Release
+rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-* && make clean && xattr -cr macos/ && make release
+```
+
+**🛡️ 预防措施：**
+- ✅ **每次构建前清理 DerivedData**（养成习惯）
+- ✅ 避免在 Finder 中复制粘贴 .app 文件（使用 `cp -r` 代替）
+- ✅ 避免使用第三方工具修改 .app 包
+- ✅ 定期运行 `make clean`
+- ✅ 构建失败后第一反应：清理缓存
 
 ### 2. **构建失败：zig-out 目录不存在**
 
@@ -369,9 +439,23 @@ jobs:
    - 确保优化后的代码正常工作
    - 验证性能表现
 
-3. **清理构建产物**
-   - 切换模式前运行 `make clean`
-   - 避免缓存问题
+3. **✅ 强制清理构建缓存（重要）**
+   - **每次构建前必须清理 DerivedData 缓存**，防止代码签名和编译问题
+   - 使用以下命令：
+     ```bash
+     # 标准清理流程（推荐）
+     make clean && rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
+     make dev  # 或 make release
+     ```
+   - 为什么需要清理：
+     - Xcode DerivedData 缓存可能包含过期的签名信息
+     - 资源分叉和扩展属性会导致 codesign 失败
+     - 避免 Swift 模块缓存不一致
+   - 清理频率：
+     - ✅ **修改代码后准备构建时**
+     - ✅ **构建失败时**
+     - ✅ **切换构建模式时（Dev ↔ Release）**
+     - ✅ **更新依赖后**
 
 4. **版本控制**
    - 每次发布前打 tag
@@ -393,4 +477,9 @@ jobs:
 
 ## 更新日志
 
-- **2026-03-16**: 初始版本，规范化 Dev/Release 构建流程
+- **2026-03-16**:
+  - 初始版本，规范化 Dev/Release 构建流程
+  - 添加强制清理 DerivedData 缓存的规则
+  - 更新 Makefile，`make dev` 和 `make release` 自动清理缓存
+  - 添加代码签名错误的完整解决方案
+  - 强调构建前清理的重要性和最佳实践

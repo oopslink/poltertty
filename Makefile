@@ -13,7 +13,7 @@ NC := \033[0m # No Color
 ##@ Development
 
 .PHONY: dev
-dev: ## Build in Dev mode (Debug configuration)
+dev: clean-xcode ## Build in Dev mode (Debug configuration) with cache cleanup
 	@echo "$(CYAN)==> Building Dev mode (Debug)$(NC)"
 	@./scripts/build.sh dev
 
@@ -32,7 +32,7 @@ check: ## Check Swift compilation errors only
 ##@ Release
 
 .PHONY: release
-release: ## Build in Release mode (Optimized)
+release: clean-xcode ## Build in Release mode (Optimized) with cache cleanup
 	@echo "$(CYAN)==> Building Release mode$(NC)"
 	@./scripts/build.sh release
 
@@ -58,9 +58,11 @@ clean: ## Clean all build artifacts
 	@echo "$(GREEN)Clean complete$(NC)"
 
 .PHONY: clean-xcode
-clean-xcode: ## Clean Xcode DerivedData
+clean-xcode: ## Clean Xcode DerivedData and extended attributes
 	@echo "$(YELLOW)==> Cleaning Xcode DerivedData$(NC)"
 	@rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
+	@echo "$(YELLOW)==> Removing extended attributes$(NC)"
+	@xattr -cr macos/ 2>/dev/null || true
 	@echo "$(GREEN)Xcode cache cleaned$(NC)"
 
 .PHONY: clean-all
