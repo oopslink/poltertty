@@ -56,6 +56,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// The notification cancellable for focused surface property changes.
     private var surfaceAppearanceCancellables: Set<AnyCancellable> = []
 
+    /// Cancellables for tab bar active-tab observation.
+    private var tabBarCancellables: Set<AnyCancellable> = []
+
     /// The workspace this window is bound to (nil = legacy non-workspace window)
     var workspaceId: UUID?
     var startupMode: WorkspaceStartupMode = .terminal
@@ -1252,6 +1255,21 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         container.initialContentSize = focusedSurface?.initialSize
 
         window.contentView = container
+
+        // Observe active tab changes to keep focusedSurface in sync.
+        // dropFirst() skips the current value so we only respond to user-initiated
+        // tab switches, not the initial registration in the lines above.
+        tabBarViewModel.$activeTabId
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, let surface = self.tabBarViewModel.activeSurface else { return }
+                self.focusedSurfaceDidChange(to: surface)
+                DispatchQueue.main.async {
+                    Ghostty.moveFocus(to: surface)
+                }
+            }
+            .store(in: &tabBarCancellables)
 
         // Restore tab state from snapshot (if available)
         if let wsId = workspaceId,
