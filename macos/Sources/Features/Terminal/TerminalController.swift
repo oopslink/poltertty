@@ -1547,6 +1547,22 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
     }
 
+    @IBAction func selectPreviousTab(_ sender: Any?) {
+        guard let activeId = tabBarViewModel.activeTabId,
+              let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId }),
+              idx > 0
+        else { return }
+        tabBarViewModel.selectTab(tabBarViewModel.tabs[idx - 1].id)
+    }
+
+    @IBAction func selectNextTab(_ sender: Any?) {
+        guard let activeId = tabBarViewModel.activeTabId,
+              let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId }),
+              idx < tabBarViewModel.tabs.count - 1
+        else { return }
+        tabBarViewModel.selectTab(tabBarViewModel.tabs[idx + 1].id)
+    }
+
     @IBAction func returnToDefaultSize(_ sender: Any?) {
         guard let window, let defaultSize else { return }
         defaultSize.apply(to: window)
