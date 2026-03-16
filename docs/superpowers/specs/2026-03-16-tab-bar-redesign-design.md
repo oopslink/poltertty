@@ -38,16 +38,40 @@
 
 ### 新增模型
 
-**TabItem**（ObservableObject）：
+**TabItem**（struct, Identifiable）：
 - `id: UUID`
-- `title: String` — 用户自定义名称，默认从 PTY 标题取
+- `title: String` — 默认从 PTY 标题动态更新；用户双击重命名后锁定（不再跟随 PTY 变化）
+- `titleLocked: Bool` — 是否被用户手动锁定
 - `isActive: Bool`
-- 关联的 `TerminalController` 引用
+- `surfaceId: UUID` — 关联的 `Ghostty.SurfaceView` 标识（非强引用，避免循环引用）
 
 **TabBarViewModel**（ObservableObject）：
 - 持有 `[TabItem]` 数组
+- 持有 `[UUID: Ghostty.SurfaceView]` 字典——作为 SurfaceView 实例的唯一所有者，管理其生命周期
 - 管理：当前选中 tab、添加/关闭/重排 tab、双击重命名
 - 由 `TerminalController` 持有，传入 `PolterttyRootView`
+
+### Surface 生命周期
+
+新建 tab 时：
+1. `TabBarViewModel` 请求 `TerminalController` 创建新的 `Ghostty.SurfaceView`
+2. `TerminalController` 负责底层 surface 创建（调用 Ghostty core C ABI）
+3. 返回的 SurfaceView 存入 `TabBarViewModel` 的字典中
+4. `PolterttyRootView` 根据当前选中 tab 的 surfaceId 从字典中取出对应 SurfaceView 显示
+
+关闭 tab 时：
+1. `TabBarViewModel` 通知 `TerminalController` 销毁对应 surface
+2. 从字典和数组中移除
+3. 自动切换到相邻 tab
+
+`PolterttyRootView` 的接口从接受单个 `terminalView: TerminalContent` 改为接受 `TabBarViewModel`，由 ViewModel 提供当前活跃的 TerminalView。
+
+### Tab 标题更新规则
+
+- `titleLocked == false`：PTY 标题变化时自动更新 `tab.title`（如 cd、SSH 等场景）
+- `titleLocked == true`：忽略 PTY 标题变化，保持用户设置的名称
+- 用户双击重命名 → 设置 `titleLocked = true`
+- 重命名时清空内容 → 恢复为 PTY 标题并设置 `titleLocked = false`
 
 ### Tab 可见性规则
 
@@ -71,7 +95,7 @@ TerminalTabBar (SwiftUI View)
 ### 视觉细节
 
 - 总高度 36px，背景色跟随终端背景（略浅）
-- 选中 tab：文字高亮 + 底部 2px 彩色指示条（可跟随 workspace 颜色）
+- 选中 tab：文字高亮 + 底部 2px 彩色指示条（跟随 workspace 颜色，临时 workspace 用默认蓝色）
 - 未选中 tab：文字灰色，无指示条
 - Tab 宽度：自适应文字内容 + 左右 padding 14px，不设最小宽度
 - 关闭按钮：默认隐藏，hover 该 tab 时淡入显示
@@ -80,10 +104,24 @@ TerminalTabBar (SwiftUI View)
 ### 交互
 
 - 单击 → 切换到该 tab
-- 双击 → 进入重命名（inline editing）
+- 双击 → 进入重命名（SwiftUI inline TextField，Enter 确认，Escape 取消；清空恢复 PTY 标题）
 - 右键 → 上下文菜单（重命名、关闭、关闭其他）
+- 拖拽重排 → 使用 SwiftUI `draggable` / `dropDestination` 修饰符实现 tab 拖拽排序
 - 关闭按钮 → 关闭该 tab（最后一个 tab 时关闭按钮不显示）
 - "+" → 新建 tab
+
+### 键盘快捷键
+
+- `Cmd+T` → 新建 tab（重路由到自定义 tab bar，不再走原生 NSWindow tab）
+- `Cmd+W` → 关闭当前 tab（仅剩一个 tab 时关闭窗口）
+- `Cmd+Shift+[` / `Cmd+Shift+]` → 切换到上一个 / 下一个 tab
+- `Cmd+1` ~ `Cmd+9` → 直接切换到对应位置的 tab
+
+### Tab 溢出行为
+
+当 tab 数量过多导致宽度超出可用空间时：
+- Tab 宽度逐步压缩，最小宽度 60px（保证至少显示几个字符 + 关闭按钮）
+- 超出最小宽度仍放不下时，tab bar 支持水平滚动（隐藏滚动条，trackpad/鼠标滚轮滚动）
 
 ## 第四节：与现有原生 Tab 机制的关系
 
@@ -137,3 +175,17 @@ NSWindow (native titlebar, title = workspace name)
 
 - Tab bar 显示/隐藏：SwiftUI 过渡动画（从上滑入/滑出）
 - Tab 切换：终端视图直接切换，无过渡动画（保证响应速度）
+
+## 第六节：状态持久化
+
+### Workspace Snapshot 集成
+
+Tab 状态纳入现有 `WorkspaceSnapshot` 机制：
+
+- 保存：tab 数量、tab 顺序、每个 tab 的自定义名称（`titleLocked` 的）、当前选中 tab index
+- 恢复：启动时按保存的顺序重建 tabs 和对应的 SurfaceView，恢复选中状态
+- 临时 workspace 不保存 tab 状态（与现有规则一致）
+
+### FileBrowser 全屏预览模式
+
+当 `fileBrowserVM.isPreviewFullscreen == true` 时，tab bar 隐藏（文件预览覆盖整个终端区域）。退出全屏预览后恢复 tab bar 显示。
