@@ -1120,8 +1120,7 @@ class AppDelegate: NSObject,
     }
 
     @IBAction func showHelp(_ sender: Any) {
-        // TODO: Update to poltertty docs site when available
-        guard let url = URL(string: "https://ghostty.org/docs") else { return }
+        guard let url = URL(string: "https://github.com/oopslink/poltertty/blob/main/README.md") else { return }
         NSWorkspace.shared.open(url)
     }
 

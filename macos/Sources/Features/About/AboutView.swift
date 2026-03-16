@@ -3,10 +3,8 @@ import SwiftUI
 struct AboutView: View {
     @Environment(\.openURL) var openURL
 
-    // TODO: Update to poltertty GitHub repo when available
-    private let githubURL = URL(string: "https://github.com/ghostty-org/ghostty")
-    // TODO: Update to poltertty docs site when available
-    private let docsURL = URL(string: "https://ghostty.org/docs")
+    private let githubURL = URL(string: "https://github.com/oopslink/poltertty")
+    private let docsURL = URL(string: "https://github.com/oopslink/poltertty/blob/main/README.md")
 
     /// Read the commit from the bundle.
     private var build: String? { Bundle.main.infoDictionary?["CFBundleVersion"] as? String }
