@@ -60,6 +60,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     var workspaceId: UUID?
     var startupMode: WorkspaceStartupMode = .terminal
 
+    /// Git worktree monitor for this terminal
+    let worktreeMonitor: GitWorktreeMonitor
+
     init(_ ghostty: Ghostty.App,
          withBaseConfig base: Ghostty.SurfaceConfiguration? = nil,
          withSurfaceTree tree: SplitTree<Ghostty.SurfaceView>? = nil,
@@ -70,6 +73,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // Set workspace and startup mode FIRST before anything that might trigger window loading
         self.workspaceId = workspaceId
         self.startupMode = startupMode
+
+        // Initialize worktree monitor with appropriate rootDir
+        let rootDir = workspaceId
+            .flatMap { WorkspaceManager.shared.workspace(for: $0) }?.rootDirExpanded
+            ?? NSHomeDirectory()
+        self.worktreeMonitor = GitWorktreeMonitor(rootDir: rootDir)
 
         // The window we manage is not restorable if we've specified a command
         // to execute. We do this because the restored window is meaningless at the
@@ -541,6 +550,14 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 WorkspaceManager.shared.registerWindow(window, for: targetId)
             }
         }
+    }
+
+    /// Opens a new tab with the working directory set to the given path
+    func openNewTab(cdTo path: String) {
+        guard let window = self.window else { return }
+        var config = Ghostty.SurfaceConfiguration()
+        config.workingDirectory = path
+        _ = TerminalController.newTab(ghostty, from: window, withBaseConfig: config)
     }
 
     /// Injects text into the currently focused surface (e.g. "cd /path\n")
@@ -1170,15 +1187,23 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
 
         // Initialize our content view to the SwiftUI root
+        let isTemporary = workspaceId
+            .flatMap { WorkspaceManager.shared.workspace(for: $0) }?.isTemporary ?? false
+
         let container = TerminalViewContainer {
             PolterttyRootView(
                 workspaceId: self.workspaceId,
                 terminalView: TerminalView(ghostty: ghostty, viewModel: self, delegate: self),
+                worktreeMonitor: self.worktreeMonitor,
+                isTemporaryWorkspace: isTemporary,
                 onSwitchWorkspace: { [weak self] id in
                     self?.switchToWorkspace(id)
                 },
                 onCloseWorkspace: { [weak self] id in
                     self?.closeWorkspace(id)
+                },
+                onSelectWorktree: { [weak self] path in
+                    self?.openNewTab(cdTo: path)
                 },
                 initialStartupMode: self.startupMode,
                 onCreateFormalWorkspace: { [weak self] name, rootDir, colorHex, description in

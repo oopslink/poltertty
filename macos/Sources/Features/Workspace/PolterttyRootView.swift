@@ -15,8 +15,11 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @ObservedObject var manager = WorkspaceManager.shared
     let workspaceId: UUID?
     let terminalView: TerminalContent
+    @ObservedObject var worktreeMonitor: GitWorktreeMonitor
+    let isTemporaryWorkspace: Bool
     let onSwitchWorkspace: (UUID) -> Void
     let onCloseWorkspace: (UUID) -> Void
+    let onSelectWorktree: (String) -> Void
 
     let initialStartupMode: WorkspaceStartupMode
     let onCreateFormalWorkspace: ((_ name: String, _ rootDir: String, _ colorHex: String, _ description: String) -> Void)?
@@ -40,8 +43,11 @@ struct PolterttyRootView<TerminalContent: View>: View {
     init(
         workspaceId: UUID?,
         terminalView: TerminalContent,
+        worktreeMonitor: GitWorktreeMonitor,
+        isTemporaryWorkspace: Bool,
         onSwitchWorkspace: @escaping (UUID) -> Void,
         onCloseWorkspace: @escaping (UUID) -> Void,
+        onSelectWorktree: @escaping (String) -> Void,
         initialStartupMode: WorkspaceStartupMode,
         onCreateFormalWorkspace: ((_ name: String, _ rootDir: String, _ colorHex: String, _ description: String) -> Void)?,
         onCreateTemporaryWorkspace: (() -> Void)?,
@@ -50,8 +56,11 @@ struct PolterttyRootView<TerminalContent: View>: View {
     ) {
         self.workspaceId = workspaceId
         self.terminalView = terminalView
+        self.worktreeMonitor = worktreeMonitor
+        self.isTemporaryWorkspace = isTemporaryWorkspace
         self.onSwitchWorkspace = onSwitchWorkspace
         self.onCloseWorkspace = onCloseWorkspace
+        self.onSelectWorktree = onSelectWorktree
         self.initialStartupMode = initialStartupMode
         self.onCreateFormalWorkspace = onCreateFormalWorkspace
         self.onCreateTemporaryWorkspace = onCreateTemporaryWorkspace
@@ -71,6 +80,10 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
     private var effectiveSidebarWidth: CGFloat {
         sidebarCollapsed ? 48 : sidebarWidth
+    }
+
+    private var showWorktreeBar: Bool {
+        !isTemporaryWorkspace
     }
 
     var body: some View {
@@ -161,6 +174,11 @@ struct PolterttyRootView<TerminalContent: View>: View {
                     },
                     onDismiss: { quickSwitcherVisible = false }
                 )
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if showWorktreeBar {
+                WorktreeStatusBarView(monitor: worktreeMonitor, onSelectWorktree: onSelectWorktree)
             }
         }
         .onAppear { startupMode = initialStartupMode }
