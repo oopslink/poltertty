@@ -1264,10 +1264,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self, let surface = self.tabBarViewModel.activeSurface else { return }
+                let old = self.focusedSurface
                 self.focusedSurfaceDidChange(to: surface)
-                DispatchQueue.main.async {
-                    Ghostty.moveFocus(to: surface)
-                }
+                Ghostty.moveFocus(to: surface, from: old)
             }
             .store(in: &tabBarCancellables)
 
@@ -1893,6 +1892,18 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 extension TerminalController {
     override func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
+        case #selector(selectPreviousTab):
+            guard let activeId = tabBarViewModel.activeTabId,
+                  let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId })
+            else { return false }
+            return idx > 0
+
+        case #selector(selectNextTab):
+            guard let activeId = tabBarViewModel.activeTabId,
+                  let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId })
+            else { return false }
+            return idx < tabBarViewModel.tabs.count - 1
+
         case #selector(closeTabsOnTheRight):
             guard let window, let tabGroup = window.tabGroup else { return false }
             guard let currentIndex = tabGroup.windows.firstIndex(of: window) else { return false }
