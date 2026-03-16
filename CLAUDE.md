@@ -6,11 +6,14 @@ Ghostty 终端模拟器的 fork，添加 Workspace 管理功能。macOS only，S
 
 ### 开发构建（Dev）
 ```bash
-# 使用 Makefile（推荐）
+# 增量构建（推荐，快速）
 make dev
 
-# 或直接运行
+# 构建并运行
 make run-dev
+
+# 清理后重建（构建失败时使用）
+make dev-clean
 ```
 
 ### 发布构建（Release）
@@ -41,3 +44,4 @@ make clean
 
 - **构建和发布**: 必须遵循 [docs/build-rules.md](docs/build-rules.md) 规范
 - **Workspace 开发**: 必须先阅读 [docs/workspace-rules.md](docs/workspace-rules.md)
+- **语言**: 所有回复必须使用中文，禁止使用韩文

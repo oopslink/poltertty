@@ -8,7 +8,7 @@ struct FileBrowserPanel: View {
 
     @State private var renameText: String = ""
     @FocusState private var isFocused: Bool
-    @State private var previewPanelWidth: CGFloat = 400
+    @State private var treeWidth: CGFloat = 260
 
     var body: some View {
         panelContent
@@ -43,12 +43,14 @@ struct FileBrowserPanel: View {
                     treeScrollView
                 }
             }
-            .frame(minWidth: 200, maxWidth: viewModel.showPreviewPanel ? 350 : .infinity)
+            .frame(minWidth: 200, maxWidth: viewModel.showPreviewPanel ? treeWidth : .infinity)
+            .frame(width: viewModel.showPreviewPanel ? treeWidth : nil)
 
             // Right: Preview panel (if enabled)
             if viewModel.showPreviewPanel, let nodeId = viewModel.selectedNodeId,
-               let url = viewModel.findNodeURL(id: nodeId) {
-                Divider()
+               let url = viewModel.findNodeURL(id: nodeId),
+               !url.hasDirectoryPath {
+                draggableDivider
                 FilePreviewView(
                     url: url,
                     isFullscreen: viewModel.isPreviewFullscreen,
@@ -56,9 +58,34 @@ struct FileBrowserPanel: View {
                         viewModel.togglePreviewFullscreen()
                     }
                 )
-                .frame(minWidth: 300)
+                .frame(minWidth: 200)
             }
         }
+    }
+
+    private var draggableDivider: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: 1)
+            .overlay(
+                Color.clear
+                    .frame(width: 8)
+                    .contentShape(Rectangle())
+                    .onHover { inside in
+                        if inside {
+                            NSCursor.resizeLeftRight.push()
+                        } else {
+                            NSCursor.pop()
+                        }
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 1)
+                            .onChanged { value in
+                                let newWidth = treeWidth + value.translation.width
+                                treeWidth = max(200, min(newWidth, 600))
+                            }
+                    )
+            )
     }
 
     // MARK: - Key Handlers

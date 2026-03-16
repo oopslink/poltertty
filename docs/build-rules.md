@@ -31,11 +31,10 @@ rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-* && make clean && make dev
 
 ### 清理时机
 
-- ✅ 每次修改代码后准备构建时
-- ✅ 构建失败后
+- ✅ 构建失败且排除代码错误后
 - ✅ 切换构建模式时（Dev ↔ Release）
 - ✅ 更新依赖后
-- ✅ Git pull 拉取新代码后
+- ❌ **不需要**每次修改代码后清理（使用增量构建 `make dev`）
 
 ---
 
@@ -116,7 +115,8 @@ macos/build/Poltertty-{version}.zip  # 使用 --zip 参数时
 
 | 任务 | 命令 | 说明 |
 |------|------|------|
-| 开发构建 | `make dev` | 🔄 自动清理缓存 + Debug 模式构建 |
+| 开发构建 | `make dev` | ⚡ 增量构建，快速迭代 |
+| 开发构建(清理) | `make dev-clean` | 🔄 清理缓存 + Debug 模式构建 |
 | 发布构建 | `make release` | 🔄 自动清理缓存 + Release 模式构建 |
 | 构建并打包 | `make package` | 构建 Release 并打包 zip |
 | 清理构建 | `make clean` | 清理所有构建产物 |
@@ -126,7 +126,10 @@ macos/build/Poltertty-{version}.zip  # 使用 --zip 参数时
 | 运行 Release | `make run-release` | 构建并运行 Release 版本 |
 | 检查错误 | `make check` | 仅检查 Swift 编译错误 |
 
-**📌 注意：** `make dev` 和 `make release` 已内置自动清理 DerivedData 缓存，无需手动执行清理命令。
+**📌 注意：**
+- `make dev` 使用增量构建，速度快，适合日常开发迭代
+- `make dev-clean` 在构建失败或切换模式时使用，会清理 DerivedData 缓存
+- `make release` 始终清理缓存，确保发布版本的一致性
 
 ---
 
@@ -138,20 +141,17 @@ macos/build/Poltertty-{version}.zip  # 使用 --zip 参数时
 # 1. 拉取最新代码
 git pull origin main
 
-# 2. 清理缓存（重要！）
-rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
-make clean
-
-# 3. 构建开发版本
+# 2. 构建开发版本（增量构建，快速）
 make dev
 
-# 4. 运行测试
+# 3. 运行测试
 make run-dev
 
-# 5. 修改代码后重新构建
-# ⚠️ 每次修改后都应清理缓存
-rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
+# 4. 修改代码后重新构建（增量，只编译改动部分）
 make dev
+
+# 5. 如果构建失败或出现奇怪错误，清理后重建
+make dev-clean
 
 # 6. 提交代码
 git add .
@@ -548,23 +548,10 @@ make package
    - 确保优化后的代码正常工作
    - 验证性能表现
 
-3. **✅ 强制清理构建缓存（重要）**
-   - **每次构建前必须清理 DerivedData 缓存**，防止代码签名和编译问题
-   - 使用以下命令：
-     ```bash
-     # 标准清理流程（推荐）
-     make clean && rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
-     make dev  # 或 make release
-     ```
-   - 为什么需要清理：
-     - Xcode DerivedData 缓存可能包含过期的签名信息
-     - 资源分叉和扩展属性会导致 codesign 失败
-     - 避免 Swift 模块缓存不一致
-   - 清理频率：
-     - ✅ **修改代码后准备构建时**
-     - ✅ **构建失败时**
-     - ✅ **切换构建模式时（Dev ↔ Release）**
-     - ✅ **更新依赖后**
+3. **使用增量构建加速开发**
+   - 日常开发使用 `make dev`（增量构建），仅编译改动部分
+   - 只在构建失败时使用 `make dev-clean`（清理缓存后全量重建）
+   - `make release` 始终自动清理，确保发布一致性
 
 4. **版本控制**
    - 每次发布前打 tag

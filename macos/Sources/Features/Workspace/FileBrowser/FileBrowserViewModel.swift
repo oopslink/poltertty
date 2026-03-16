@@ -294,7 +294,7 @@ final class FileBrowserViewModel: ObservableObject {
 
     func selectNode(id: UUID?) {
         selectedNodeId = id
-        if id != nil {
+        if let id, let node = findNodeInTree(id: id, nodes: rootNodes), !node.isDirectory {
             showPreviewPanel = true
         }
     }

@@ -28,7 +28,10 @@ if [[ "$MODE" == "dev" ]]; then
 
     # 运行 zig build 确保依赖存在
     echo "==> zig build (ensuring dependencies)"
-    zig build -Doptimize=Debug 2>/dev/null || true
+    if ! zig build -Doptimize=Debug; then
+        echo "ERROR: zig build failed. Fix zig errors before building."
+        exit 1
+    fi
 
     # 使用 xcodebuild 进行 Debug 构建
     echo "==> xcodebuild -configuration $CONFIGURATION"

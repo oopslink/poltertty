@@ -13,8 +13,13 @@ NC := \033[0m # No Color
 ##@ Development
 
 .PHONY: dev
-dev: clean-xcode ## Build in Dev mode (Debug configuration) with cache cleanup
-	@echo "$(CYAN)==> Building Dev mode (Debug)$(NC)"
+dev: ## Build in Dev mode (incremental, fast)
+	@echo "$(CYAN)==> Building Dev mode (Debug, incremental)$(NC)"
+	@./scripts/build.sh dev
+
+.PHONY: dev-clean
+dev-clean: clean-xcode ## Build in Dev mode with full cache cleanup
+	@echo "$(CYAN)==> Building Dev mode (Debug, clean)$(NC)"
 	@./scripts/build.sh dev
 
 .PHONY: run-dev
