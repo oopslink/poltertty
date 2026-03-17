@@ -153,6 +153,15 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             name: .fileBrowserOpenInTerminal,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            forName: .agentWriteToSurface,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let surfaceId = note.userInfo?["surfaceId"] as? UUID,
+                  let text = note.userInfo?["text"] as? String else { return }
+            self?.writeToSurface(text: text, surfaceId: surfaceId)
+        }
     }
 
     required init?(coder: NSCoder) {

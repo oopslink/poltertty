@@ -77,9 +77,15 @@ final class AgentSessionManager: ObservableObject {
             updateFromClaudeSession(payload.sessionId) { $0.state = .done(exitCode: 0) }
         case .preToolUse, .postToolUse:
             updateFromClaudeSession(payload.sessionId) { $0.state = .working }
+            if let sid = claudeSessionIndex[payload.sessionId] {
+                AgentService.shared.respawnController?.recordToolUse(surfaceId: sid)
+            }
         case .notification:
             if payload.notificationType == "idle_prompt" {
                 updateFromClaudeSession(payload.sessionId) { $0.state = .idle }
+                if let sid = claudeSessionIndex[payload.sessionId] {
+                    AgentService.shared.respawnController?.handleIdle(surfaceId: sid)
+                }
             }
         case .stop:
             updateFromClaudeSession(payload.sessionId) { $0.state = .idle }

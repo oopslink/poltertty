@@ -17,7 +17,7 @@ final class AgentService {
 
     // 后续 Phase 填充（声明为可选，Phase 2/5/6 取消注释）
     var hookServer: HookServer? = nil
-    var respawnController: Any? = nil
+    var respawnController: RespawnController? = nil
     var tokenTracker: Any? = nil
 
     private init() {}
@@ -26,6 +26,7 @@ final class AgentService {
         Self.logger.info("AgentService starting")
         hookServer = HookServer(sessionManager: sessionManager)
         hookServer?.start()
+        respawnController = RespawnController(sessionManager: sessionManager)
         Self.logger.info("AgentService started")
     }
 
