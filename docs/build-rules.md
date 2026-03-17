@@ -205,11 +205,39 @@ git push origin main
 git push origin v0.1.1
 
 # 7. 创建 GitHub Release
+# ⚠️ Release Notes 必须包含 Features 和 Fixes 两类条目（见下方规范）
 gh release create v0.1.1 \
   macos/build/Poltertty-v0.1.1.zip \
   --title "Poltertty v0.1.1" \
-  --notes "Release notes here"
+  --notes "## Features
+- feat: xxx
+
+## Fixes
+- fix: xxx"
 ```
+
+### Release Notes 规范
+
+每次发布的 Release Notes **必须**同时包含以下两类条目：
+
+| 类型 | 说明 | 示例 |
+|------|------|------|
+| **Features** | 新增功能 | `feat: 新增 workspace 快捷键` |
+| **Fixes** | 问题修复 | `fix: 修复分屏关闭时崩溃问题` |
+
+**标准格式：**
+
+```
+## Features
+- feat: 新增 xxx
+- feat: 支持 xxx
+
+## Fixes
+- fix: 修复 xxx
+- fix: 解决 xxx
+```
+
+> 若某个版本确实无 fix 或无 feature，需在对应段落注明 `无`，不可省略该段落。
 
 ---
 
