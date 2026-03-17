@@ -7,6 +7,7 @@ struct FilePreviewView: View {
     let url: URL
     let isFullscreen: Bool
     let onToggleFullscreen: () -> Void
+    var onClose: (() -> Void)? = nil
 
     @State private var content: PreviewContent = .loading
     @State private var fileInfo: FileInfo?
@@ -75,6 +76,19 @@ struct FilePreviewView: View {
             }
             .buttonStyle(.plain)
             .help(isFullscreen ? "Show Terminal (Esc)" : "Hide Terminal and Maximize Preview")
+
+            // Close preview button
+            if let onClose {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Close Preview (Space)")
+            }
         }
         .padding()
     }

@@ -296,6 +296,9 @@ final class FileBrowserViewModel: ObservableObject {
         selectedNodeId = id
         if let id, let node = findNodeInTree(id: id, nodes: rootNodes), !node.isDirectory {
             showPreviewPanel = true
+        } else {
+            showPreviewPanel = false
+            isPreviewFullscreen = false
         }
     }
 

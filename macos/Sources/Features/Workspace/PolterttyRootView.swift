@@ -41,6 +41,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     let workspaceAccentColor: Color
     let onNewTab: () -> Void
     let onCloseTab: (UUID) -> Void
+    let onSwitchTab: ((UUID) -> Void)?
 
     init(
         ghostty: Ghostty.App,
@@ -56,7 +57,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
         tabBarViewModel: TabBarViewModel,
         workspaceAccentColor: Color,
         onNewTab: @escaping () -> Void,
-        onCloseTab: @escaping (UUID) -> Void
+        onCloseTab: @escaping (UUID) -> Void,
+        onSwitchTab: ((UUID) -> Void)? = nil
     ) {
         self.ghostty = ghostty
         self.workspaceId = workspaceId
@@ -72,6 +74,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
         self.workspaceAccentColor = workspaceAccentColor
         self.onNewTab = onNewTab
         self.onCloseTab = onCloseTab
+        self.onSwitchTab = onSwitchTab
 
         if let wsId = workspaceId {
             self._fileBrowserVM = ObservedObject(
@@ -278,19 +281,15 @@ struct PolterttyRootView<TerminalContent: View>: View {
                     viewModel: tabBarViewModel,
                     accentColor: workspaceAccentColor,
                     onNewTab: onNewTab,
-                    onCloseTab: onCloseTab
+                    onCloseTab: onCloseTab,
+                    onSwitchTab: onSwitchTab
                 )
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
 
-            // 终端内容：优先显示活跃 SurfaceView，否则兜底 terminalView
-            if let activeSurface = tabBarViewModel.activeSurface {
-                Ghostty.SurfaceWrapper(surfaceView: activeSurface)
-                    .environmentObject(ghostty)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                terminalView
-            }
+            // 终端内容：始终使用 terminalView 渲染 surfaceTree（支持 split + tab）
+            // tab 切换通过 onSwitchTab 回调更新 controller 的 surfaceTree
+            terminalView
         }
         .animation(.easeInOut(duration: 0.2), value: tabBarViewModel.tabs.count > 1)
     }

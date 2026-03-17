@@ -5,6 +5,9 @@ import JavaScriptCore
 
 // MARK: - SyntaxHighlightView
 
+/// Uses a container NSView with a gutter (line numbers) and a scroll view side by side.
+/// NSRulerView is NOT used because SwiftUI's NSViewRepresentable prevents NSScrollView
+/// from properly tiling ruler views (the ruler covers the text area).
 struct SyntaxHighlightView: NSViewRepresentable {
     let text: String
     let language: String?
@@ -13,75 +16,27 @@ struct SyntaxHighlightView: NSViewRepresentable {
         Coordinator()
     }
 
-    func makeNSView(context: Context) -> NSScrollView {
-        let textView = makeTextView()
-        let scrollView = makeScrollView(containing: textView)
-
-        scrollView.hasVerticalRuler = true
-        let ruler = LineNumberRulerView(textView: textView, scrollView: scrollView)
-        scrollView.verticalRulerView = ruler
-        scrollView.rulersVisible = true
-
-        context.coordinator.textView = textView
-        context.coordinator.rulerView = ruler
+    func makeNSView(context: Context) -> SyntaxContainerView {
+        let container = SyntaxContainerView()
+        context.coordinator.container = container
         context.coordinator.highlighter = SyntaxHighlighter()
-
-        return scrollView
+        return container
     }
 
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+    func updateNSView(_ container: SyntaxContainerView, context: Context) {
         let coord = context.coordinator
         guard coord.lastText != text || coord.lastLanguage != language else { return }
         coord.lastText = text
         coord.lastLanguage = language
 
-        guard let textView = coord.textView else { return }
-
         let attributed = coord.highlighter?.highlight(text, language: language)
             ?? plainAttributedString(text)
 
-        let theme = AtomOneDark.self
-        textView.backgroundColor = theme.background
-        textView.drawsBackground = true
-        scrollView.backgroundColor = theme.background
-        coord.rulerView?.rulerBackgroundColor = theme.gutterBackground
-
-        textView.textStorage?.setAttributedString(attributed)
-        coord.rulerView?.needsDisplay = true
-    }
-
-    // MARK: - Private helpers
-
-    private func makeTextView() -> NSTextView {
-        let textView = NSTextView()
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.isRichText = true
-        textView.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
-        textView.drawsBackground = true
-        textView.backgroundColor = AtomOneDark.background
-        textView.textContainerInset = NSSize(width: 4, height: 8)
-        textView.isHorizontallyResizable = true
-        textView.isVerticallyResizable = true
-        textView.autoresizingMask = [.width]
-        textView.textContainer?.widthTracksTextView = false
-        textView.textContainer?.containerSize = NSSize(
-            width: CGFloat.greatestFiniteMagnitude,
-            height: CGFloat.greatestFiniteMagnitude
-        )
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        return textView
-    }
-
-    private func makeScrollView(containing textView: NSTextView) -> NSScrollView {
-        let scrollView = NSScrollView()
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = true
-        scrollView.autohidesScrollers = true
-        scrollView.borderType = .noBorder
-        scrollView.backgroundColor = AtomOneDark.background
-        scrollView.documentView = textView
-        return scrollView
+        DispatchQueue.main.async {
+            container.textView.textStorage?.setAttributedString(attributed)
+            container.textView.needsDisplay = true
+            container.gutterView.needsDisplay = true
+        }
     }
 
     private func plainAttributedString(_ text: String) -> NSAttributedString {
@@ -91,14 +46,72 @@ struct SyntaxHighlightView: NSViewRepresentable {
         ])
     }
 
-    // MARK: - Coordinator
-
     class Coordinator {
-        var textView: NSTextView?
-        var rulerView: LineNumberRulerView?
+        var container: SyntaxContainerView?
         var highlighter: SyntaxHighlighter?
         var lastText: String?
         var lastLanguage: String?
+    }
+}
+
+// MARK: - SyntaxContainerView
+
+/// Container that places a line-number gutter and a text scroll view side by side.
+/// Manages layout manually to avoid NSRulerView/SwiftUI conflicts.
+final class SyntaxContainerView: NSView {
+    static let gutterWidth: CGFloat = 44
+
+    let gutterView: LineNumberGutterView
+    let scrollView: NSScrollView
+    let textView: NSTextView
+
+    override init(frame: NSRect) {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
+        scrollView.backgroundColor = AtomOneDark.background
+        scrollView.drawsBackground = true
+
+        let textView = NSTextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.isRichText = true
+        textView.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
+        textView.drawsBackground = true
+        textView.backgroundColor = AtomOneDark.background
+        textView.textContainerInset = NSSize(width: 4, height: 8)
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.autoresizingMask = [.width]
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+
+        scrollView.documentView = textView
+        self.scrollView = scrollView
+        self.textView = textView
+
+        let gutter = LineNumberGutterView(textView: textView, scrollView: scrollView)
+        self.gutterView = gutter
+
+        super.init(frame: frame)
+
+        // Clip subviews to prevent rendering outside SwiftUI-allocated bounds
+        wantsLayer = true
+        layer?.masksToBounds = true
+
+        addSubview(gutterView)
+        addSubview(scrollView)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func layout() {
+        super.layout()
+        let gw = Self.gutterWidth
+        gutterView.frame = NSRect(x: 0, y: 0, width: gw, height: bounds.height)
+        scrollView.frame = NSRect(x: gw, y: 0, width: bounds.width - gw, height: bounds.height)
     }
 }
 
@@ -130,16 +143,24 @@ final class SyntaxHighlighter {
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "`", with: "\\`")
 
-        let script: String
+        // Try specific language, fall back to auto-detection if unsupported
+        var html: String?
         if let lang = language {
-            script = "hljs.highlight(`\(escaped)`, {language: `\(lang)`, ignoreIllegals: true}).value"
-        } else {
-            script = "hljs.highlightAuto(`\(escaped)`).value"
+            let result = ctx.evaluateScript("hljs.highlight(`\(escaped)`, {language: `\(lang)`, ignoreIllegals: true}).value")
+            let str = result?.toString()
+            if let str, !str.isEmpty, str != "undefined" {
+                html = str
+            }
+        }
+        if html == nil {
+            let result = ctx.evaluateScript("hljs.highlightAuto(`\(escaped)`).value")
+            let str = result?.toString()
+            if let str, !str.isEmpty, str != "undefined" {
+                html = str
+            }
         }
 
-        guard let html = ctx.evaluateScript(script)?.toString(), !html.isEmpty else {
-            return nil
-        }
+        guard let html else { return nil }
 
         return parseHighlightHTML(html)
     }
@@ -325,56 +346,55 @@ enum AtomOneDark {
     }
 }
 
-// MARK: - LineNumberRulerView
+// MARK: - LineNumberGutterView
 
-final class LineNumberRulerView: NSRulerView {
-    var rulerBackgroundColor: NSColor = AtomOneDark.gutterBackground {
-        didSet { needsDisplay = true }
-    }
+/// A plain NSView that draws line numbers synchronized with an NSTextView's scroll position.
+/// Does NOT use NSRulerView — avoids SwiftUI/NSViewRepresentable tiling conflicts.
+final class LineNumberGutterView: NSView {
+    override var isFlipped: Bool { true }
 
     private weak var trackedTextView: NSTextView?
+    private weak var trackedScrollView: NSScrollView?
 
     init(textView: NSTextView, scrollView: NSScrollView) {
         self.trackedTextView = textView
-        super.init(scrollView: scrollView, orientation: .verticalRuler)
-        clientView = textView
-        ruleThickness = 44
+        self.trackedScrollView = scrollView
+        super.init(frame: .zero)
 
         NotificationCenter.default.addObserver(
-            self, selector: #selector(textStorageChanged),
+            self, selector: #selector(viewNeedsRedraw),
             name: NSTextStorage.didProcessEditingNotification,
             object: textView.textStorage
         )
         NotificationCenter.default.addObserver(
-            self, selector: #selector(boundsChanged),
+            self, selector: #selector(viewNeedsRedraw),
             name: NSView.boundsDidChangeNotification,
             object: scrollView.contentView
         )
     }
 
-    required init(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
+    required init?(coder: NSCoder) { fatalError() }
     deinit { NotificationCenter.default.removeObserver(self) }
 
-    @objc private func textStorageChanged(_ n: Notification) { needsDisplay = true }
-    @objc private func boundsChanged(_ n: Notification) { needsDisplay = true }
+    @objc private func viewNeedsRedraw(_ n: Notification) { needsDisplay = true }
 
-    override func drawHashMarksAndLabels(in rect: NSRect) {
+    override func draw(_ dirtyRect: NSRect) {
         guard
             let textView = trackedTextView,
             let layoutManager = textView.layoutManager,
             let textContainer = textView.textContainer,
-            let scrollView
+            let scrollView = trackedScrollView
         else { return }
 
-        rulerBackgroundColor.setFill()
-        rect.fill()
+        // Background
+        AtomOneDark.gutterBackground.setFill()
+        dirtyRect.fill()
 
-        // Separator
+        // Separator line
         NSColor.separatorColor.withAlphaComponent(0.4).setStroke()
         let sep = NSBezierPath()
-        sep.move(to: NSPoint(x: bounds.maxX - 0.5, y: rect.minY))
-        sep.line(to: NSPoint(x: bounds.maxX - 0.5, y: rect.maxY))
+        sep.move(to: NSPoint(x: bounds.maxX - 0.5, y: dirtyRect.minY))
+        sep.line(to: NSPoint(x: bounds.maxX - 0.5, y: dirtyRect.maxY))
         sep.lineWidth = 1
         sep.stroke()
 
@@ -404,6 +424,7 @@ final class LineNumberRulerView: NSRulerView {
         }
 
         // Draw visible line numbers
+        let gutterWidth = bounds.width
         idx = visibleChars.location
         while idx < length {
             let lineRange = nsString.lineRange(for: NSRange(location: idx, length: 0))
@@ -411,13 +432,13 @@ final class LineNumberRulerView: NSRulerView {
             var lineRect = layoutManager.boundingRect(forGlyphRange: glyphs, in: textContainer)
             lineRect.origin.y += insetY - visibleRect.origin.y
 
-            if lineRect.minY > rect.height { break }
+            if lineRect.minY > dirtyRect.maxY { break }
 
             let str = "\(lineNum)" as NSString
             let size = str.size(withAttributes: attrs)
             str.draw(
                 at: NSPoint(
-                    x: ruleThickness - size.width - 8,
+                    x: gutterWidth - size.width - 8,
                     y: lineRect.origin.y + (lineRect.height - size.height) / 2
                 ),
                 withAttributes: attrs
