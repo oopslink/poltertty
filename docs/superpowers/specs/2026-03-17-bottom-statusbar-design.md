@@ -1,7 +1,7 @@
 # 底部状态栏设计文档
 
 **日期:** 2026-03-17
-**状态:** 草稿 v1
+**状态:** 草稿 v2
 
 ---
 
@@ -16,7 +16,7 @@
 - 显示当前焦点 surface 的工作目录（`~` 缩写）
 - 显示当前 git 分支名及脏状态计数（`+N ~M`）
 - pwd 变化和 `.git/HEAD` / `.git/index` 变化时即时刷新
-- 非 git repo 时自动隐藏右侧 git 区域
+- 非 git repo 时自动隐藏整个状态栏
 - 临时 workspace 不显示状态栏
 
 ## 非目标
@@ -40,19 +40,20 @@
 - 背景：`Color(nsColor: .windowBackgroundColor).opacity(0.95)`
 - 顶部 1px 分割线：`Color(nsColor: .separatorColor)`
 - 字体：11px system font
-- 左侧路径：`.secondary` 颜色，超长时截断左侧保留末尾
+- 左侧路径：`.secondary` 颜色，超长时截断左侧保留末尾（`.truncationMode(.head)`）
 - 右侧分支名：`.primary` 颜色；`+N` 绿色；`~M` 黄色
-- `isGitRepo == false` 时整个 view 渲染为零高度
 
 **可见性规则：**
 
 | 条件 | 状态栏 |
 |------|--------|
-| 临时 workspace | 不渲染 |
-| `isGitRepo == false` | `EmptyView()`（零高度） |
-| 一个分支，无脏文件 | `⎇ main` |
-| 有脏文件 | `⎇ main  +2 ~1` |
-| detached HEAD | `⎇ detached` |
+| 临时 workspace | 不渲染（由 `PolterttyRootView` 控制） |
+| `isGitRepo == false` | 整个状态栏不渲染（`EmptyView()`，零高度零占位） |
+| 一个分支，无脏文件 | 左侧路径 + 右侧 `⎇ main` |
+| 有脏文件 | 左侧路径 + 右侧 `⎇ main  +2 ~1` |
+| detached HEAD | 左侧路径 + 右侧 `⎇ detached` |
+
+> **注：** `isGitRepo == false` 时状态栏完全消失（含左侧路径），不仅隐藏右侧 git 区域。
 
 ---
 
@@ -82,44 +83,53 @@ class GitStatusMonitor: ObservableObject {
     private func refresh()
     private func setupWatching()
     private func stopWatching()
+
+    private let queue = DispatchQueue(label: "poltertty.git-status-monitor")
 }
 ```
 
+### 内部串行队列
+
+`GitStatusMonitor` 使用私有串行队列 `queue`。所有 `DispatchSource` 的目标 queue 均设为该串行 queue（`source.setTarget(queue: queue)`），确保 source handler 与 `stopWatching()` 串行执行，消除取消竞态。`refresh()` 在串行 queue 上执行，完成后通过 `DispatchQueue.main.async` 更新 `@Published` 属性。
+
 ### 初始化
 
-`init(pwd:)` 检测 git root（`git rev-parse --show-toplevel`），成功则设 `isGitRepo = true` 并调用 `setupWatching()`；失败则 `isGitRepo = false`。
+`init(pwd:)` 在串行 queue 上运行 `/usr/bin/git -C <pwd> rev-parse --show-toplevel`：
+- 成功（exit 0）→ 设 `isGitRepo = true`，调用 `setupWatching()`
+- 失败（exit 非 0）→ `isGitRepo = false`，不启动监听
 
-subprocess 环境：`["HOME": NSHomeDirectory()]`。
+subprocess 使用绝对路径 `/usr/bin/git`，不设自定义环境变量（与现有 `GitStatusService.swift` 保持一致）。
 
 ### 文件监听策略
 
 `DispatchSource.makeFileSystemObjectSource` 监听两个文件：
 
-- `.git/HEAD`：分支切换时触发
-- `.git/index`：暂存区变化时触发
+- `<gitRoot>/.git/HEAD`：分支切换时触发
+- `<gitRoot>/.git/index`：暂存区变化时触发
 
-每个 source 的 fd 在 `makeFileSystemObjectSource` 前 `open(2)`，在 `setCancelHandler` 中 `close(2)`。
+每个 source 的 fd 在 `makeFileSystemObjectSource` 之前 `open(2)`，在 `setCancelHandler` 中 `close(2)`。两个 source 的目标 queue 均设为内部串行 `queue`。
 
-两个 source 触发均走同一 debounced `refresh()`（300ms `DispatchWorkItem`）。
+两个 source 触发均走同一 debounced `refresh()`（300ms `DispatchWorkItem`，调度在串行 `queue` 上）。
 
 ### refresh()
 
-顺序执行两条命令：
+在串行 queue 上顺序执行两条命令：
 
-1. `git -C <pwd> branch --show-current` → `branch`（空输出 = detached HEAD，`branch = nil`）
-2. `git -C <pwd> status --porcelain` → 逐行解析：
-   - `added`：`??` 开头（untracked）+ `A ` 开头（staged new）
-   - `modified`：`M ` / ` M` / `MM` 开头
+1. `/usr/bin/git -C <pwd> branch --show-current` → `branch`（空输出 = detached HEAD，`branch = nil`）
+2. `/usr/bin/git -C <pwd> status --porcelain` → 逐行解析（每行前两字符为 XY 状态码）：
+   - `added`：`chars[0] == "?"` 且 `chars[1] == "?"`（untracked），或 `chars[0] == "A"`（staged new）
+   - `modified`：`chars[0] == "M"` 或 `chars[1] == "M"`（staged/unstaged modified）
 
-结果构造 `GitStatus` 并 `DispatchQueue.main.async` 赋值给 `status`。
+结果构造 `GitStatus`，通过 `DispatchQueue.main.async` 赋值给 `status`。
 
 ### updatePwd
 
-调用 `stopWatching()`，重新检测 git root，调用 `setupWatching()`。
+- `path` 为空时直接返回，保留当前监听和状态（有意保留"上次已知状态"）
+- 否则：调用 `stopWatching()`，重新检测 git root，调用 `setupWatching()`
 
 ### stopWatching
 
-取消所有活跃 `DispatchSource`（cancel handler 关闭 fd），取消 pending `DispatchWorkItem`。`deinit` 中调用。
+取消所有活跃 `DispatchSource`（cancel handler 关闭 fd），取消 pending `DispatchWorkItem`，均在串行 queue 上执行。`deinit` 中调用。
 
 ---
 
@@ -130,44 +140,53 @@ subprocess 环境：`["HOME": NSHomeDirectory()]`。
 ```swift
 struct BottomStatusBarView: View {
     @ObservedObject var monitor: GitStatusMonitor
+    let pwd: String
 }
 ```
 
 布局结构：
 
-```
-VStack(spacing: 0) {
-    Divider()  // 1px 顶部分割线
-    HStack {
-        // 左：文件夹图标 + pwd 路径
-        Label(abbreviatedPwd, systemImage: "folder")
-            .lineLimit(1)
-            .truncationMode(.head)
-        Spacer()
-        // 右：git 区域（isGitRepo == false 时不渲染）
-        if monitor.status.isGitRepo {
-            gitStatusView
+```swift
+var body: some View {
+    let status = monitor.status
+    if !status.isGitRepo {
+        EmptyView()  // 零高度，整个状态栏消失
+    } else {
+        VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: 6) {
+                // 左：路径
+                Label(abbreviatedPwd, systemImage: "folder")
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                Spacer()
+                // 右：git 状态
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.triangle.branch")
+                    Text(status.branch ?? "detached")
+                        .foregroundColor(.primary)
+                    if status.added > 0 {
+                        Text("+\(status.added)").foregroundColor(.green)
+                    }
+                    if status.modified > 0 {
+                        Text("~\(status.modified)").foregroundColor(.yellow)
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
         }
+        .font(.system(size: 11))
     }
-    .padding(.horizontal, 8)
-    .frame(height: 22)
-    .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
+}
+
+private var abbreviatedPwd: String {
+    pwd.replacingOccurrences(of: NSHomeDirectory(), with: "~")
 }
 ```
 
-`abbreviatedPwd`：将 `NSHomeDirectory()` 替换为 `~`。
-
-`gitStatusView`：
-
-```
-HStack(spacing: 4) {
-    Image(systemName: "arrow.triangle.branch")
-    Text(branch ?? "detached")
-    if added > 0 { Text("+\(added)").foregroundColor(.green) }
-    if modified > 0 { Text("~\(modified)").foregroundColor(.yellow) }
-}
-.font(.system(size: 11))
-```
+> `pwd` 由 `PolterttyRootView` 从 `@FocusedValue(\.ghosttySurfacePwd)` 传入，避免 view 内部持有 FocusedValue 依赖。
 
 ---
 
@@ -182,42 +201,49 @@ let statusMonitor: GitStatusMonitor
 let isTemporaryWorkspace: Bool
 ```
 
-`body` 的 `ZStack` 末尾添加：
+新增 `@FocusedValue`：
 
 ```swift
-.safeAreaInset(edge: .bottom, spacing: 0) {
-    if !isTemporaryWorkspace {
-        BottomStatusBarView(monitor: statusMonitor)
-    }
-}
+@FocusedValue(\.ghosttySurfacePwd) private var focusedPwd
 ```
 
-pwd 监听（在 `.terminal` case 的 VStack 或顶层）：
+**`.safeAreaInset` 挂载在 `.terminal` case 的 `HStack` 上**（不挂在外层 ZStack，避免影响 onboarding / restore 界面）：
 
 ```swift
-@FocusedValue(\.ghosttySurfacePwd) var focusedPwd
-
-.onChange(of: focusedPwd) { newPwd in
-    guard let pwd = newPwd else { return }
-    statusMonitor.updatePwd(pwd)
-}
+case .terminal:
+    HStack(spacing: 0) {
+        // ... sidebar, file browser, terminalAreaView ...
+    }
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+        if !isTemporaryWorkspace {
+            BottomStatusBarView(
+                monitor: statusMonitor,
+                pwd: focusedPwd ?? ""
+            )
+        }
+    }
+    .onChange(of: focusedPwd) { newPwd in
+        guard let pwd = newPwd, !pwd.isEmpty else { return }
+        statusMonitor.updatePwd(pwd)
+    }
 ```
 
 ### TerminalController.swift
 
-新增存储属性：
+新增 `let` 存储属性（不可变，Swift 要求在 `super.init` 前完成赋值）：
 
 ```swift
 let statusMonitor: GitStatusMonitor
 ```
 
-初始化（`super.init` 之前，`workspaceId` 赋值之后）：
+初始化位置：在 `self.workspaceId = workspaceId` 之后、`super.init()` 之前，与其他 `let` 属性一起：
 
 ```swift
 let rootDir = workspaceId
     .flatMap { WorkspaceManager.shared.workspace(for: $0) }?.rootDirExpanded
     ?? NSHomeDirectory()
 self.statusMonitor = GitStatusMonitor(pwd: rootDir)
+// super.init(...) 紧随其后
 ```
 
 `windowDidLoad` 新增传参：
@@ -237,13 +263,14 @@ isTemporaryWorkspace: isTemporary,
 
 | 场景 | 行为 |
 |------|------|
-| 不是 git repo | `isGitRepo = false`，右侧 git 区域不渲染 |
+| 不是 git repo | `isGitRepo = false`，整个状态栏不渲染（含路径） |
 | `git` 命令失败 | `NSLog` 错误，保持上次已知状态 |
-| pwd 为空或无效 | `updatePwd` 跳过，不重置监听 |
+| pwd 为空 | `updatePwd` 直接返回，保留当前监听和状态 |
 | `.git/HEAD` / `.git/index` 不存在 | source 不启动，仅依赖 pwd 变化触发刷新 |
 | detached HEAD | `branch = nil`，显示 `⎇ detached` |
 | window 关闭 | `deinit` 调用 `stopWatching()`，fd 全部关闭 |
 | 临时 workspace | view 不渲染，monitor 以 `NSHomeDirectory()` 初始化但不影响性能 |
+| source cancel 竞态 | 串行 queue 保证 cancel 与 handler 不并发 |
 
 ---
 
@@ -254,7 +281,7 @@ isTemporaryWorkspace: isTemporary,
 - `macos/Sources/Features/Workspace/BottomStatusBarView.swift`
 
 **修改：**
-- `macos/Sources/Features/Workspace/PolterttyRootView.swift` — 新增参数 + `.safeAreaInset` + `.onChange`
-- `macos/Sources/Features/Terminal/TerminalController.swift` — 新增 `statusMonitor` 属性 + 初始化 + 传参
+- `macos/Sources/Features/Workspace/PolterttyRootView.swift` — 新增参数 + `.safeAreaInset`（挂 `.terminal` HStack）+ `.onChange`
+- `macos/Sources/Features/Terminal/TerminalController.swift` — 新增 `statusMonitor` `let` 属性 + 初始化 + 传参
 
 **上游文件：零修改**
