@@ -113,6 +113,28 @@ final class SyntaxContainerView: NSView {
         gutterView.frame = NSRect(x: 0, y: 0, width: gw, height: bounds.height)
         scrollView.frame = NSRect(x: gw, y: 0, width: bounds.width - gw, height: bounds.height)
     }
+
+    /// Ensure a click in the preview area makes the text view the first responder,
+    /// so that cmd+c can be dispatched to it via the responder chain.
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(textView)
+        super.mouseDown(with: event)
+    }
+
+    /// Handle cmd+c early in the performKeyEquivalent traversal.
+    /// AppKit walks all views in the hierarchy; by handling it here (the file-browser
+    /// side is traversed before the terminal surface), we prevent the terminal surface
+    /// from stealing the event even if NSTextView hasn't captured first-responder.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.type == .keyDown,
+           event.modifierFlags.intersection([.command, .shift, .option, .control]) == .command,
+           event.charactersIgnoringModifiers?.lowercased() == "c",
+           textView.selectedRange().length > 0 {
+            textView.copy(nil)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 // MARK: - SyntaxHighlighter (JSContext + highlight.js)

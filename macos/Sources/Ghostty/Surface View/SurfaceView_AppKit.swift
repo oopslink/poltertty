@@ -1244,6 +1244,15 @@ extension Ghostty {
                 return false
             }
 
+            // If a non-terminal view (e.g., file preview text view) is the first
+            // responder, don't steal key events from it. AppKit calls
+            // performKeyEquivalent on all views in the hierarchy, so even when a
+            // file-preview NSTextView has focus, we'd otherwise intercept cmd+c.
+            if let fr = window?.firstResponder as? NSView,
+               !fr.isDescendant(of: self), fr != self {
+                return false
+            }
+
             // Get information about if this is a binding.
             let bindingFlags = surfaceModel.flatMap { surface in
                 var ghosttyEvent = event.ghosttyKeyEvent(GHOSTTY_ACTION_PRESS)
