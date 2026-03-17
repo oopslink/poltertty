@@ -32,8 +32,12 @@ final class AgentService {
     }
 
     func cleanupForWorkspace(id: UUID) {
+        let cwds = sessionManager.sessions.values
+            .filter { $0.workspaceId == id }
+            .map { $0.cwd }
         sessionManager.removeAll(for: id)
-        Self.logger.info("Cleaned up sessions for workspace \(id)")
+        cwds.forEach { cleanupHooks(for: $0) }
+        Self.logger.info("Cleaned up sessions and hooks for workspace \(id)")
     }
 
     func shutdown() {

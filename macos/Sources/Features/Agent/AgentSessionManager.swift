@@ -79,7 +79,15 @@ final class AgentSessionManager: ObservableObject {
         case .sessionStart:
             bindOrCreateSession(payload: payload)
         case .sessionEnd:
-            updateFromClaudeSession(payload.sessionId) { $0.state = .done(exitCode: 0) }
+            if let surfaceId = claudeSessionIndex[payload.sessionId] {
+                let cwd = sessions[surfaceId]?.cwd
+                updateFromClaudeSession(payload.sessionId) { $0.state = .done(exitCode: 0) }
+                if let cwd = cwd {
+                    AgentService.shared.cleanupHooks(for: cwd)
+                }
+            } else {
+                updateFromClaudeSession(payload.sessionId) { $0.state = .done(exitCode: 0) }
+            }
         case .preToolUse, .postToolUse:
             updateFromClaudeSession(payload.sessionId) { $0.state = .working }
             if let sid = claudeSessionIndex[payload.sessionId] {

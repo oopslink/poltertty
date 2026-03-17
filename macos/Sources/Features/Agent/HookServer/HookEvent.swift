@@ -13,6 +13,12 @@ enum HookEventType: String, Decodable {
     case preCompact     = "PreCompact"
     case postCompact    = "PostCompact"
     case unknown
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        self = HookEventType(rawValue: raw) ?? .unknown
+    }
 }
 
 struct HookPayload: Decodable {
