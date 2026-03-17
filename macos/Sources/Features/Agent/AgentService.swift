@@ -13,7 +13,7 @@ final class AgentService {
 
     let registry = AgentRegistry.shared
     let sessionManager = AgentSessionManager()
-    // let processMonitor = ProcessMonitor()  // Phase 2.4
+    let processMonitor = ProcessMonitor()
 
     // 后续 Phase 填充（声明为可选，Phase 2/5/6 取消注释）
     var hookServer: HookServer? = nil
@@ -49,8 +49,8 @@ final class AgentService {
     }
 
     func watchProcess(pid: Int32, surfaceId: UUID) {
-        // Phase 2.4: processMonitor.watch(pid: pid, surfaceId: surfaceId) { [weak self] sid, exitCode in
-        //     self?.sessionManager.updateState(.done(exitCode: exitCode), surfaceId: sid)
-        // }
+        processMonitor.watch(pid: pid, surfaceId: surfaceId) { [weak self] sid, exitCode in
+            self?.sessionManager.updateState(.done(exitCode: exitCode), surfaceId: sid)
+        }
     }
 }
