@@ -74,6 +74,12 @@ clean-xcode: ## Clean Xcode DerivedData and extended attributes
 clean-all: clean clean-xcode ## Clean everything including Xcode cache
 	@echo "$(GREEN)All build artifacts cleaned$(NC)"
 
+##@ Setup
+
+.PHONY: init-git-hooks
+init-git-hooks: ## Install local git hooks (protect main branch from direct push)
+	@./scripts/init-git-hooks.sh
+
 ##@ Legacy (from upstream)
 
 init:
