@@ -180,6 +180,10 @@ class WorkspaceManager: ObservableObject {
             window.close()
         }
 
+        let workspaceIdToClean = id
+        Task { @MainActor in
+            AgentService.shared.cleanupForWorkspace(id: workspaceIdToClean)
+        }
         workspaces.removeAll { $0.id == id }
         activeWindows.removeValue(forKey: id)
         removeFileBrowserViewModel(for: id)

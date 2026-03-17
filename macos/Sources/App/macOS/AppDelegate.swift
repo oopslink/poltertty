@@ -361,6 +361,10 @@ class AppDelegate: NSObject,
         // custom tab bar previous/next tab navigation. The @IBAction methods
         // exist on TerminalController but have no menu item wired in the XIB.
         setupTabNavigationMenuItems()
+
+        Task { @MainActor in
+            AgentService.shared.start()
+        }
     }
 
     func applicationDidHide(_ notification: Notification) {
@@ -452,6 +456,7 @@ class AppDelegate: NSObject,
 
     func applicationWillTerminate(_ notification: Notification) {
         isTerminating = true
+        AgentService.shared.shutdown()
         // Save all active workspace snapshots
         let manager = WorkspaceManager.shared
         // Destroy all temporary workspaces BEFORE saving snapshots
