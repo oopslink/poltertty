@@ -187,8 +187,10 @@ class WorkspaceManager: ObservableObject {
         workspaces.removeAll { $0.id == id }
         activeWindows.removeValue(forKey: id)
         removeFileBrowserViewModel(for: id)
-        let path = snapshotPath(for: id)
-        try? FileManager.default.removeItem(atPath: path)
+        let dirPath = workspaceDir(for: id)
+        try? FileManager.default.removeItem(atPath: dirPath)
+        let legacyPath = legacySnapshotPath(for: id)
+        try? FileManager.default.removeItem(atPath: legacyPath)
     }
 
     func workspace(for id: UUID) -> WorkspaceModel? {
@@ -267,8 +269,19 @@ class WorkspaceManager: ObservableObject {
 
     // MARK: - Private
 
-    private func snapshotPath(for id: UUID) -> String {
+    /// Workspace 数据目录（新格式）：{storageDir}/{UUID}/
+    func workspaceDir(for id: UUID) -> String {
+        (storageDir as NSString).appendingPathComponent(id.uuidString)
+    }
+
+    /// 旧格式路径（仅用于迁移检测）
+    private func legacySnapshotPath(for id: UUID) -> String {
         (storageDir as NSString).appendingPathComponent("\(id.uuidString).json")
+    }
+
+    private func snapshotPath(for id: UUID) -> String {
+        let dir = workspaceDir(for: id)
+        return (dir as NSString).appendingPathComponent("workspace.json")
     }
 
     private func ensureStorageDir() {
@@ -281,19 +294,55 @@ class WorkspaceManager: ObservableObject {
 
     private func loadAll() {
         let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(atPath: storageDir) else { return }
-        for file in files where file.hasSuffix(".json") {
-            let path = (storageDir as NSString).appendingPathComponent(file)
-            guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
-                  let snapshot = try? decoder.decode(WorkspaceSnapshot.self, from: data) else { continue }
-            workspaces.append(snapshot.workspace)
+        var loadedIds = Set<UUID>()
+
+        // 加载新格式：{UUID}/ 目录
+        if let entries = try? fm.contentsOfDirectory(atPath: storageDir) {
+            for entry in entries {
+                guard UUID(uuidString: entry) != nil else { continue }
+                let dirPath = (storageDir as NSString).appendingPathComponent(entry)
+                var isDir: ObjCBool = false
+                guard fm.fileExists(atPath: dirPath, isDirectory: &isDir), isDir.boolValue else { continue }
+                let filePath = (dirPath as NSString).appendingPathComponent("workspace.json")
+                guard let data = try? Data(contentsOf: URL(fileURLWithPath: filePath)),
+                      let snapshot = try? decoder.decode(WorkspaceSnapshot.self, from: data) else { continue }
+                workspaces.append(snapshot.workspace)
+                loadedIds.insert(snapshot.workspace.id)
+            }
         }
+
+        // 迁移旧格式：{UUID}.json
+        if let files = try? fm.contentsOfDirectory(atPath: storageDir) {
+            for file in files where file.hasSuffix(".json") {
+                let uuidStr = (file as NSString).deletingPathExtension
+                guard let uuid = UUID(uuidString: uuidStr), !loadedIds.contains(uuid) else { continue }
+                let legacyPath = (storageDir as NSString).appendingPathComponent(file)
+                guard let data = try? Data(contentsOf: URL(fileURLWithPath: legacyPath)),
+                      let snapshot = try? decoder.decode(WorkspaceSnapshot.self, from: data) else { continue }
+                migrateLegacySnapshot(snapshot, legacyPath: legacyPath)
+                workspaces.append(snapshot.workspace)
+            }
+        }
+
         workspaces.sort { $0.createdAt < $1.createdAt }
+    }
+
+    private func migrateLegacySnapshot(_ snapshot: WorkspaceSnapshot, legacyPath: String) {
+        let newDir = workspaceDir(for: snapshot.workspace.id)
+        try? FileManager.default.createDirectory(atPath: newDir, withIntermediateDirectories: true)
+        let newPath = snapshotPath(for: snapshot.workspace.id)
+        guard let data = try? encoder.encode(snapshot) else { return }
+        let tmpPath = newPath + ".tmp"
+        guard (try? data.write(to: URL(fileURLWithPath: tmpPath))) != nil else { return }
+        try? FileManager.default.moveItem(atPath: tmpPath, toPath: newPath)
+        try? FileManager.default.removeItem(atPath: legacyPath)
     }
 
     private func save(_ workspace: WorkspaceModel) {
         // Temporary workspaces are not persisted
         guard !workspace.isTemporary else { return }
+        let dir = workspaceDir(for: workspace.id)
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         let snapshot = WorkspaceSnapshot(
             workspace: workspace,
             sidebarWidth: CGFloat(PolterttyConfig.shared.sidebarWidth),
