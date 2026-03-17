@@ -1114,6 +1114,10 @@ class AppDelegate: NSObject,
         toggleFileBrowser.keyEquivalentModifierMask = .command
         workspaceMenu.addItem(toggleFileBrowser)
 
+        let toggleAgentMonitor = NSMenuItem(title: "Toggle Agent Monitor", action: #selector(toggleAgentMonitor(_:)), keyEquivalent: "m")
+        toggleAgentMonitor.keyEquivalentModifierMask = [.command, .shift]
+        workspaceMenu.addItem(toggleAgentMonitor)
+
         workspaceMenu.addItem(.separator())
 
         let launchAgent = NSMenuItem(title: "Launch Agent", action: #selector(TerminalController.launchAgentAction), keyEquivalent: "a")
@@ -1139,6 +1143,10 @@ class AppDelegate: NSObject,
               let controller = window.windowController as? TerminalController,
               let wsId = controller.workspaceId else { return }
         WorkspaceManager.shared.fileBrowserViewModel(for: wsId).isVisible.toggle()
+    }
+
+    @objc func toggleAgentMonitor(_ sender: Any?) {
+        NotificationCenter.default.post(name: .toggleAgentMonitor, object: nil)
     }
 
     @IBAction func newTab(_ sender: Any?) {

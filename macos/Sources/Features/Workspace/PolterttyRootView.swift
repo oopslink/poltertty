@@ -9,6 +9,7 @@ extension Notification.Name {
     static let workspaceSidebarNavigateDown = Notification.Name("poltertty.workspaceSidebarNavigateDown")
     static let toggleFileBrowser = Notification.Name("poltertty.toggleFileBrowser")
     static let fileBrowserOpenInTerminal = Notification.Name("poltertty.fileBrowserOpenInTerminal")
+    static let toggleAgentMonitor = Notification.Name("poltertty.toggleAgentMonitor")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -37,6 +38,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var convertName = ""
 
     @ObservedObject private var fileBrowserVM: FileBrowserViewModel
+    @ObservedObject private var agentMonitorVM: AgentMonitorViewModel
     @ObservedObject var tabBarViewModel: TabBarViewModel
     let workspaceAccentColor: Color
     let onNewTab: () -> Void
@@ -83,6 +85,16 @@ struct PolterttyRootView<TerminalContent: View>: View {
         } else {
             self._fileBrowserVM = ObservedObject(
                 wrappedValue: FileBrowserViewModel(rootDir: "")
+            )
+        }
+
+        if let wsId = workspaceId {
+            self._agentMonitorVM = ObservedObject(
+                wrappedValue: AgentMonitorViewModel(workspaceId: wsId)
+            )
+        } else {
+            self._agentMonitorVM = ObservedObject(
+                wrappedValue: AgentMonitorViewModel(workspaceId: UUID())
             )
         }
     }
@@ -187,6 +199,12 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         // File browser not visible, show terminal
                         terminalAreaView
                     }
+
+                    // Agent Monitor Panel
+                    if agentMonitorVM.isVisible {
+                        Divider()
+                        AgentMonitorPanel(viewModel: agentMonitorVM)
+                    }
                 }
             }
 
@@ -218,6 +236,9 @@ struct PolterttyRootView<TerminalContent: View>: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .workspaceSidebarNavigateDown)) { _ in
             navigateWorkspace(direction: 1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleAgentMonitor)) { _ in
+            agentMonitorVM.toggle()
         }
         .sheet(isPresented: $showConvertAlert) {
             convertToFormalSheet
