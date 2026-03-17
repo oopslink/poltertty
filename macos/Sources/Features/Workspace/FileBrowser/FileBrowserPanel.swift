@@ -56,6 +56,10 @@ struct FileBrowserPanel: View {
                     isFullscreen: viewModel.isPreviewFullscreen,
                     onToggleFullscreen: {
                         viewModel.togglePreviewFullscreen()
+                    },
+                    onClose: {
+                        viewModel.showPreviewPanel = false
+                        viewModel.isPreviewFullscreen = false
                     }
                 )
                 .frame(minWidth: 200)
