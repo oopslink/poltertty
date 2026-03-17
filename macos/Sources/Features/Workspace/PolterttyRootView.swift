@@ -13,6 +13,7 @@ extension Notification.Name {
 
 struct PolterttyRootView<TerminalContent: View>: View {
     @ObservedObject var manager = WorkspaceManager.shared
+    let ghostty: Ghostty.App
     let workspaceId: UUID?
     let terminalView: TerminalContent
     let onSwitchWorkspace: (UUID) -> Void
@@ -42,6 +43,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     let onCloseTab: (UUID) -> Void
 
     init(
+        ghostty: Ghostty.App,
         workspaceId: UUID?,
         terminalView: TerminalContent,
         onSwitchWorkspace: @escaping (UUID) -> Void,
@@ -56,6 +58,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
         onNewTab: @escaping () -> Void,
         onCloseTab: @escaping (UUID) -> Void
     ) {
+        self.ghostty = ghostty
         self.workspaceId = workspaceId
         self.terminalView = terminalView
         self.onSwitchWorkspace = onSwitchWorkspace
@@ -283,6 +286,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
             // 终端内容：优先显示活跃 SurfaceView，否则兜底 terminalView
             if let activeSurface = tabBarViewModel.activeSurface {
                 Ghostty.SurfaceWrapper(surfaceView: activeSurface)
+                    .environmentObject(ghostty)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 terminalView

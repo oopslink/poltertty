@@ -421,9 +421,38 @@ xcodebuild -project macos/Ghostty.xcodeproj -scheme Ghostty -configuration Debug
 # 查看崩溃日志
 log show --predicate 'process == "Poltertty"' --last 5m
 
-# 从命令行直接运行查看错误
+# 从命令行直接运行查看错误（最有效的诊断方式！）
 ~/Library/Developer/Xcode/DerivedData/Ghostty-*/Build/Products/Debug/Poltertty.app/Contents/MacOS/ghostty
 ```
+
+**📌 诊断技巧：** `open Poltertty.app` 失败时不会显示错误原因，务必直接运行 binary 查看 stderr 输出，崩溃信息会直接打印出来。
+
+---
+
+### 5. **运行时崩溃：SwiftUI EnvironmentObject 未注入** ⚠️
+
+**问题：** app 打开即崩溃，命令行运行 binary 报错：
+```
+Fatal error: No ObservableObject of type App found.
+A View.environmentObject(_:) for App may be missing as an ancestor of this view.
+```
+
+**原因：** 某个 SwiftUI View 使用了 `@EnvironmentObject`，但其渲染路径上的父视图没有调用 `.environmentObject()` 注入。
+
+常见场景：重构时将一个子 View 提升到更高层级渲染，脱离了原来的注入链。例如：
+- `TerminalView` 里注入了 `.environmentObject(ghostty)`
+- 但 `PolterttyRootView` 直接渲染 `Ghostty.SurfaceWrapper`（绕过了 `TerminalView`）
+- `SurfaceWrapper` 内部依赖 `@EnvironmentObject var ghostty: Ghostty.App`，找不到注入 → crash
+
+**✅ 解决方案：**
+
+1. 找到崩溃的 View 及其所需的 EnvironmentObject 类型
+2. 沿渲染树向上找到最近的注入点，确认哪条路径漏掉了注入
+3. 在调用处补充 `.environmentObject(xxx)` 注入，或将依赖的对象通过参数传递下去
+
+**🛡️ 预防措施：**
+- 将子 View 提升层级或在新的渲染分支复用时，检查该 View 所有 `@EnvironmentObject` 依赖是否在新路径上都有注入
+- 新建渲染分支（如直接在 `NSHostingView` 包裹某 View）时，逐一检查 `@EnvironmentObject` 依赖
 
 ---
 
@@ -572,6 +601,11 @@ make package
 ---
 
 ## 更新日志
+
+- **2026-03-17**:
+  - 新增故障排查：SwiftUI EnvironmentObject 未注入导致启动即崩溃的诊断和修复方法
+  - 新增诊断技巧：直接运行 binary 查看 stderr 是定位 crash 原因的最有效方式
+  - 新增 xattr -cr 可以在不完整清理 DerivedData 的情况下修复代码签名失败
 
 - **2026-03-16** (v0.1.1 发布后更新):
   - 完善发布流程：明确 `build.zig.zon` 和 `project.pbxproj` 两处版本号必须同步

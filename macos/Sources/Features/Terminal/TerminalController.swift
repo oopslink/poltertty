@@ -1211,6 +1211,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // Initialize our content view to the SwiftUI root
         let container = TerminalViewContainer {
             PolterttyRootView(
+                ghostty: ghostty,
                 workspaceId: self.workspaceId,
                 terminalView: TerminalView(ghostty: ghostty, viewModel: self, delegate: self),
                 onSwitchWorkspace: { [weak self] id in
