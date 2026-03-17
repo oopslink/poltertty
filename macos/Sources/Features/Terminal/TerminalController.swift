@@ -2033,3 +2033,37 @@ extension TerminalController {
         }
     }
 }
+
+// MARK: - Agent Support
+
+extension TerminalController {
+    /// 向指定 surfaceId 的 surface 写入文本（用于启动命令和 respawn）
+    ///
+    /// surfaceId 对应 SurfaceView.id（不是 TabBarViewModel 字典 key）。
+    func writeToSurface(text: String, surfaceId: UUID) {
+        // 在当前 surfaceTree 中查找匹配的 SurfaceView
+        guard let targetView = surfaceTree.first(where: { $0.id == surfaceId }) else { return }
+        guard let surfaceModel = targetView.surfaceModel else { return }
+        surfaceModel.sendText(text)
+    }
+
+    /// 启动 Agent 菜单（Cmd+Shift+A 触发）
+    func launchAgentAction() {
+        guard let workspaceId = self.workspaceId,
+              let workspace = WorkspaceManager.shared.workspace(for: workspaceId) else { return }
+        showAgentLaunchMenu(workspaceId: workspaceId, cwd: workspace.rootDirExpanded)
+    }
+
+    func showAgentLaunchMenu(workspaceId: UUID, cwd: String) {
+        // Phase 3.3 创建 AgentLaunchMenu 后完善
+        // 暂时直接用默认配置启动 Claude Code
+        let launcher = AgentLauncher(terminalController: self)
+        launcher.launch(
+            definition: .claudeCode,
+            location: .newTab,
+            respawnMode: .manual,
+            workspaceId: workspaceId,
+            cwd: cwd
+        )
+    }
+}
