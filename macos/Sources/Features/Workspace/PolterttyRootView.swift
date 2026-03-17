@@ -29,6 +29,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var sidebarCollapsed: Bool = UserDefaults.standard.bool(forKey: "poltertty.sidebarCollapsed")
     @State private var sidebarWidth: CGFloat = CGFloat(PolterttyConfig.shared.sidebarWidth)
     @State private var quickSwitcherVisible = false
+    @FocusedValue(\.ghosttySurfacePwd) private var focusedPwd
 
     @State private var startupMode: WorkspaceStartupMode = .terminal
 
@@ -39,6 +40,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @ObservedObject private var fileBrowserVM: FileBrowserViewModel
     @ObservedObject var tabBarViewModel: TabBarViewModel
     let workspaceAccentColor: Color
+    let statusMonitor: GitStatusMonitor
+    let showStatusBar: Bool
     let onNewTab: () -> Void
     let onCloseTab: (UUID) -> Void
     let onSwitchTab: ((UUID) -> Void)?
@@ -56,6 +59,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
         onCreateTemporary: (() -> Void)?,
         tabBarViewModel: TabBarViewModel,
         workspaceAccentColor: Color,
+        statusMonitor: GitStatusMonitor,
+        showStatusBar: Bool,
         onNewTab: @escaping () -> Void,
         onCloseTab: @escaping (UUID) -> Void,
         onSwitchTab: ((UUID) -> Void)? = nil
@@ -70,6 +75,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
         self.onCreateTemporaryWorkspace = onCreateTemporaryWorkspace
         self.onRestoreWorkspaces = onRestoreWorkspaces
         self.onCreateTemporary = onCreateTemporary
+        self.statusMonitor = statusMonitor
+        self.showStatusBar = showStatusBar
         self.tabBarViewModel = tabBarViewModel
         self.workspaceAccentColor = workspaceAccentColor
         self.onNewTab = onNewTab
@@ -187,6 +194,19 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         // File browser not visible, show terminal
                         terminalAreaView
                     }
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if showStatusBar {
+                        BottomStatusBarView(
+                            monitor: statusMonitor,
+                            pwd: focusedPwd ?? ""
+                        )
+                    }
+                }
+                .onChange(of: focusedPwd) { newPwd in
+                    // single-parameter closure, compatible with macOS 13+
+                    guard let pwd = newPwd, !pwd.isEmpty else { return }
+                    statusMonitor.updatePwd(pwd)
                 }
             }
 
