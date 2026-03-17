@@ -2057,7 +2057,7 @@ extension TerminalController {
     }
 
     /// 启动 Agent 菜单（Cmd+Shift+A 触发）
-    func launchAgentAction() {
+    @objc func launchAgentAction() {
         guard let workspaceId = self.workspaceId,
               let workspace = WorkspaceManager.shared.workspace(for: workspaceId) else { return }
         showAgentLaunchMenu(workspaceId: workspaceId, cwd: workspace.rootDirExpanded)
@@ -2071,6 +2071,7 @@ extension TerminalController {
             cwd: cwd,
             onLaunch: { [weak self, weak popover] definition, location, respawnMode in
                 popover?.close()
+                guard let self else { return }
                 AgentLauncher(terminalController: self).launch(
                     definition: definition,
                     location: location,

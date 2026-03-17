@@ -45,15 +45,6 @@ enum RespawnMode: String, CaseIterable, Codable {
     }
 }
 
-/// Token 用量（完整实现见 TokenUsage.swift，Phase 6 替换）
-struct TokenUsage: Codable {
-    var inputTokens: Int = 0
-    var outputTokens: Int = 0
-    var cost: Decimal = 0
-    var contextUtilization: Float = 0
-    var compactCount: Int = 0
-}
-
 /// Subagent 信息（由 SubagentStart/Stop hook 事件填充）
 struct SubagentInfo: Identifiable {
     let id: String

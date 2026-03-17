@@ -3,7 +3,7 @@ import Foundation
 import GhosttyKit
 
 /// Agent 启动位置
-enum AgentLaunchLocation {
+enum AgentLaunchLocation: CaseIterable, Equatable, Hashable {
     /// 在当前活跃 pane 启动
     case currentPane
     /// 新建 tab 后启动
@@ -12,6 +12,15 @@ enum AgentLaunchLocation {
     case splitRight
     /// 向下 split 后启动
     case splitBottom
+
+    var displayName: String {
+        switch self {
+        case .currentPane: return "Current Pane"
+        case .newTab:      return "New Tab"
+        case .splitRight:  return "Split Right"
+        case .splitBottom: return "Split Bottom"
+        }
+    }
 }
 
 /// 负责在指定位置启动 Agent 的控制器

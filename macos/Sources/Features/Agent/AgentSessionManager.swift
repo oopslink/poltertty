@@ -39,6 +39,11 @@ final class AgentSessionManager: ObservableObject {
         claudeSessionIndex[claudeSessionId] = surfaceId
     }
 
+    func updateTokenUsage(surfaceId: UUID, usage: TokenUsage) {
+        sessions[surfaceId]?.tokenUsage = usage
+        sessions[surfaceId]?.lastEventAt = Date()
+    }
+
     func updateFromClaudeSession(_ claudeSessionId: String, _ update: (inout AgentSession) -> Void) {
         guard let surfaceId = claudeSessionIndex[claudeSessionId],
               sessions[surfaceId] != nil else { return }
@@ -89,6 +94,14 @@ final class AgentSessionManager: ObservableObject {
             }
         case .stop:
             updateFromClaudeSession(payload.sessionId) { $0.state = .idle }
+            if let sid = claudeSessionIndex[payload.sessionId],
+               let path = payload.transcriptPath {
+                AgentService.shared.tokenTracker?.processStopEvent(
+                    surfaceId: sid,
+                    transcriptPath: path,
+                    model: "claude-sonnet-4"  // TODO: 从 AgentDefinition 读取
+                )
+            }
         case .subagentStart:
             if let agentId = payload.agentId, let name = payload.agentName {
                 updateFromClaudeSession(payload.sessionId) {
