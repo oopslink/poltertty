@@ -72,14 +72,79 @@ CURRENT_VERSION="$(grep -o '\.version = "[^"]*"' build.zig.zon | grep -o '"[^"]*
 info "当前版本：$CURRENT_VERSION  →  新版本：$VERSION"
 
 # ─── Release Notes ───────────────────────────────────────────────────────────
-if [[ -z "$NOTES" ]]; then
+# Release notes 必须包含 Features 和 Fixes 两类条目
+# 结构示例：
+#   ## Features
+#   - feat: 新增 workspace 快捷键
+#   ## Fixes
+#   - fix: 修复分屏关闭崩溃问题
+
+build_notes_interactive() {
     echo ""
-    warn "请输入 Release Notes（输入完成后按 Ctrl+D）："
-    NOTES="$(cat)"
-fi
+    warn "Release Notes 必须包含 Features 和 Fixes 条目。"
+    echo ""
+
+    echo "输入 Features（新功能），每行一条，留空行结束："
+    FEATURES=()
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && break
+        FEATURES+=("- $line")
+    done
+
+    echo ""
+    echo "输入 Fixes（问题修复），每行一条，留空行结束："
+    FIXES=()
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && break
+        FIXES+=("- $line")
+    done
+
+    if [[ ${#FEATURES[@]} -eq 0 ]] && [[ ${#FIXES[@]} -eq 0 ]]; then
+        die "Release Notes 不能为空，至少需要一条 Feature 或 Fix"
+    fi
+
+    NOTES=""
+    if [[ ${#FEATURES[@]} -gt 0 ]]; then
+        NOTES+="## Features"$'\n'
+        for item in "${FEATURES[@]}"; do NOTES+="$item"$'\n'; done
+    fi
+    if [[ ${#FIXES[@]} -gt 0 ]]; then
+        [[ -n "$NOTES" ]] && NOTES+=$'\n'
+        NOTES+="## Fixes"$'\n'
+        for item in "${FIXES[@]}"; do NOTES+="$item"$'\n'; done
+    fi
+}
+
+validate_notes() {
+    local notes="$1"
+    local has_feat=false has_fix=false
+    # 接受 "## Features" 段落 或 "feat:" 前缀条目
+    echo "$notes" | grep -qiE "(^##\s*Features|feat:)" && has_feat=true
+    # 接受 "## Fixes" 段落 或 "fix:" 前缀条目
+    echo "$notes" | grep -qiE "(^##\s*Fix|fix:)" && has_fix=true
+
+    if ! $has_feat; then
+        warn "Release Notes 缺少 Features 条目（应包含 '## Features' 段落或 'feat:' 前缀条目）"
+    fi
+    if ! $has_fix; then
+        warn "Release Notes 缺少 Fixes 条目（应包含 '## Fixes' 段落或 'fix:' 前缀条目）"
+    fi
+    if ! $has_feat || ! $has_fix; then
+        echo ""
+        echo "当前 Notes 内容："
+        echo "---"
+        echo "$notes"
+        echo "---"
+        echo ""
+        read -r -p "继续发布？(y/N) " confirm
+        [[ "$confirm" =~ ^[Yy]$ ]] || die "发布已取消"
+    fi
+}
 
 if [[ -z "$NOTES" ]]; then
-    NOTES="Poltertty ${TAG} 发布"
+    build_notes_interactive
+else
+    validate_notes "$NOTES"
 fi
 
 # ─── 步骤 1：更新版本号 ──────────────────────────────────────────────────────
