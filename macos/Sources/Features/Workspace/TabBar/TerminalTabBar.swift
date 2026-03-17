@@ -5,6 +5,7 @@ struct TerminalTabBar: View {
     let accentColor: Color
     let onNewTab: () -> Void
     let onCloseTab: (UUID) -> Void
+    var onSwitchTab: ((UUID) -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,7 +18,13 @@ struct TerminalTabBar: View {
                                     tab: tab,
                                     accentColor: accentColor,
                                     isLastTab: viewModel.tabs.count == 1,
-                                    onSelect: { viewModel.selectTab(tab.id) },
+                                    onSelect: {
+                                        if let onSwitchTab {
+                                            onSwitchTab(tab.id)
+                                        } else {
+                                            viewModel.selectTab(tab.id)
+                                        }
+                                    },
                                     onClose: { onCloseTab(tab.id) },
                                     onRename: { viewModel.renameTab(tab.id, title: $0) },
                                     onCloseOthers: {

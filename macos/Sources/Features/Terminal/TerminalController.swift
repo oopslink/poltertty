@@ -66,6 +66,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// Custom tab bar view model — owns all SurfaceView instances for this window
     let tabBarViewModel = TabBarViewModel()
 
+    /// Per-tab surface trees: tabId → SplitTree (supports splits within each tab)
+    private var tabSurfaceTrees: [UUID: SplitTree<Ghostty.SurfaceView>] = [:]
+
     init(_ ghostty: Ghostty.App,
          withBaseConfig base: Ghostty.SurfaceConfiguration? = nil,
          withSurfaceTree tree: SplitTree<Ghostty.SurfaceView>? = nil,
@@ -791,6 +794,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     @MainActor
     func addNewTab() {
         guard let ghostty_app = ghostty.app else { return }
+
+        // Save current tab's surface tree
+        if let currentTabId = tabBarViewModel.activeTabId {
+            tabSurfaceTrees[currentTabId] = surfaceTree
+        }
+
         var config = Ghostty.SurfaceConfiguration()
         if let wsId = workspaceId,
            let workspace = WorkspaceManager.shared.workspace(for: wsId) {
@@ -798,6 +807,38 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
         let surface = Ghostty.SurfaceView(ghostty_app, baseConfig: config)
         tabBarViewModel.addTab(surface: surface, title: "Terminal")
+
+        // Create a new surface tree for the new tab and make it active
+        let newTree = SplitTree<Ghostty.SurfaceView>(view: surface)
+        surfaceTree = newTree
+        if let newTabId = tabBarViewModel.activeTabId {
+            tabSurfaceTrees[newTabId] = newTree
+        }
+    }
+
+    /// Switch the active surface tree when tab changes
+    @MainActor
+    func switchToTab(_ tabId: UUID) {
+        let currentTabId = tabBarViewModel.activeTabId
+
+        // Save current tab's tree (may have splits)
+        if let currentTabId {
+            tabSurfaceTrees[currentTabId] = surfaceTree
+        }
+
+        // Activate the tab in the view model
+        tabBarViewModel.selectTab(tabId)
+
+        // Load the target tab's tree
+        if let targetTree = tabSurfaceTrees[tabId] {
+            surfaceTree = targetTree
+            // Focus the first surface in the tree
+            if case .leaf(let view) = targetTree.root {
+                DispatchQueue.main.async {
+                    Ghostty.moveFocus(to: view, from: self.focusedSurface)
+                }
+            }
+        }
     }
 
     /// Close a tab in the custom poltertty tab bar
@@ -1206,6 +1247,10 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // (the surface was already created in BaseTerminalController.init)
         if case .leaf(let existingSurface) = surfaceTree.root {
             tabBarViewModel.addTab(surface: existingSurface, title: "Terminal")
+            // Store the initial tab's surface tree
+            if let tabId = tabBarViewModel.activeTabId {
+                tabSurfaceTrees[tabId] = surfaceTree
+            }
         }
 
         // Initialize our content view to the SwiftUI root
@@ -1245,7 +1290,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                     return .accentColor
                 }(),
                 onNewTab: { [weak self] in self?.addNewTab() },
-                onCloseTab: { [weak self] id in self?.closePolterttyTab(id) }
+                onCloseTab: { [weak self] id in self?.closePolterttyTab(id) },
+                onSwitchTab: { [weak self] id in self?.switchToTab(id) }
             )
         }
 
@@ -1613,7 +1659,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
               let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId }),
               idx > 0
         else { return }
-        tabBarViewModel.selectTab(tabBarViewModel.tabs[idx - 1].id)
+        switchToTab(tabBarViewModel.tabs[idx - 1].id)
     }
 
     @IBAction func selectNextTab(_ sender: Any?) {
@@ -1621,7 +1667,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
               let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId }),
               idx < tabBarViewModel.tabs.count - 1
         else { return }
-        tabBarViewModel.selectTab(tabBarViewModel.tabs[idx + 1].id)
+        switchToTab(tabBarViewModel.tabs[idx + 1].id)
     }
 
     @IBAction func returnToDefaultSize(_ sender: Any?) {
