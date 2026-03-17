@@ -138,7 +138,15 @@ final class FileBrowserViewModel: ObservableObject {
 
     // MARK: - Expand / Collapse
 
+    private var lastToggleTimes: [UUID: Date] = [:]
+    private let toggleDebounceInterval: TimeInterval = 0.3
+
     func toggleExpand(nodeId: UUID) {
+        let now = Date()
+        if let last = lastToggleTimes[nodeId], now.timeIntervalSince(last) < toggleDebounceInterval {
+            return
+        }
+        lastToggleTimes[nodeId] = now
         toggleExpandInTree(&rootNodes, nodeId: nodeId)
     }
 
