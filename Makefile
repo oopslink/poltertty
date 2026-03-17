@@ -47,6 +47,11 @@ package: ## Build Release and create zip package
 	@echo "$(CYAN)==> Building and packaging Release$(NC)"
 	@./scripts/build.sh release --zip
 
+.PHONY: publish
+publish: ## Publish a new release: make publish VERSION=0.1.3 NOTES="release notes"
+	@[[ -n "$(VERSION)" ]] || (echo "Usage: make publish VERSION=x.y.z [NOTES=\"...\"]" && exit 1)
+	@./scripts/release.sh "$(VERSION)" "$(NOTES)"
+
 .PHONY: run-release
 run-release: release ## Build and run Release version
 	@echo "$(GREEN)==> Running Release version$(NC)"
