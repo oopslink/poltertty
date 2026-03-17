@@ -175,6 +175,11 @@ class WorkspaceManager: ObservableObject {
             }
         }
 
+        // Close the workspace window if it's open
+        if let window = windowForWorkspace(id) {
+            window.close()
+        }
+
         workspaces.removeAll { $0.id == id }
         activeWindows.removeValue(forKey: id)
         removeFileBrowserViewModel(for: id)
