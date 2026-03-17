@@ -65,7 +65,7 @@ struct GitStatusMonitorTests {
     // MARK: - GitRepoStatus.empty
     // 注意：模块内已有 FileBrowser.GitStatus enum，故使用 GitRepoStatus 作为仓库级状态模型
 
-    @Test func testGitStatusEmpty() {
+    @Test func testGitRepoStatusEmpty() {
         let s = GitRepoStatus.empty
         #expect(s.isGitRepo == false)
         #expect(s.branch == nil)

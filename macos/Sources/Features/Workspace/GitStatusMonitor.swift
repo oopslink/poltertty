@@ -111,7 +111,7 @@ final class GitStatusMonitor: ObservableObject {
         // queue: 参数直接指定目标队列（等效于 setTarget(queue:)）
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
-            eventMask: .write,
+            eventMask: [.write, .rename, .delete],
             queue: queue
         )
         source.setEventHandler { [weak self] in
