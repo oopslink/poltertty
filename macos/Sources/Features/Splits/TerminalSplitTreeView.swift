@@ -7,6 +7,7 @@ import SwiftUI
 enum TerminalSplitOperation {
     case resize(Resize)
     case drop(Drop)
+    case close(Close)
 
     struct Resize {
         let node: SplitTree<Ghostty.SurfaceView>.Node
@@ -22,6 +23,10 @@ enum TerminalSplitOperation {
 
         /// The zone it was dropped to determine how to split the destination.
         let zone: TerminalSplitDropZone
+    }
+
+    struct Close {
+        let surface: Ghostty.SurfaceView
     }
 }
 
@@ -93,6 +98,7 @@ private struct TerminalSplitLeaf: View {
 
     @State private var dropState: DropState = .idle
     @State private var isSelfDragging: Bool = false
+    @State private var isHovering: Bool = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -118,6 +124,18 @@ private struct TerminalSplitLeaf: View {
                     zone.overlay(in: geometry)
                         .allowsHitTesting(false)
                 }
+            }
+            .overlay(alignment: .topTrailing) {
+                if isSplit && isHovering && !isSelfDragging {
+                    SplitCloseButton {
+                        action(.close(.init(surface: surfaceView)))
+                    }
+                    .padding(6)
+                    .transition(.opacity.animation(.easeInOut(duration: 0.15)))
+                }
+            }
+            .onHover { hovering in
+                isHovering = hovering
             }
             .onPreferenceChange(Ghostty.DraggingSurfaceKey.self) { value in
                 isSelfDragging = value == surfaceView.id
@@ -188,6 +206,37 @@ private struct TerminalSplitLeaf: View {
 
             return true
         }
+    }
+}
+
+private struct SplitCloseButton: View {
+    let action: () -> Void
+
+    @State private var isButtonHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: 16, height: 16)
+                .background(
+                    .regularMaterial,
+                    in: Circle()
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5)
+                )
+                .scaleEffect(isButtonHovering ? 1.1 : 1.0)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isButtonHovering = hovering
+            }
+        }
+        .accessibilityLabel("Close split pane")
     }
 }
 
