@@ -143,16 +143,24 @@ final class SyntaxHighlighter {
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "`", with: "\\`")
 
-        let script: String
+        // Try specific language, fall back to auto-detection if unsupported
+        var html: String?
         if let lang = language {
-            script = "hljs.highlight(`\(escaped)`, {language: `\(lang)`, ignoreIllegals: true}).value"
-        } else {
-            script = "hljs.highlightAuto(`\(escaped)`).value"
+            let result = ctx.evaluateScript("hljs.highlight(`\(escaped)`, {language: `\(lang)`, ignoreIllegals: true}).value")
+            let str = result?.toString()
+            if let str, !str.isEmpty, str != "undefined" {
+                html = str
+            }
+        }
+        if html == nil {
+            let result = ctx.evaluateScript("hljs.highlightAuto(`\(escaped)`).value")
+            let str = result?.toString()
+            if let str, !str.isEmpty, str != "undefined" {
+                html = str
+            }
         }
 
-        guard let html = ctx.evaluateScript(script)?.toString(), !html.isEmpty else {
-            return nil
-        }
+        guard let html else { return nil }
 
         return parseHighlightHTML(html)
     }
