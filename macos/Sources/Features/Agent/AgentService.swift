@@ -41,11 +41,11 @@ final class AgentService {
 
     func injectHooks(for cwd: String) {
         guard let port = hookServer?.port, port > 0 else { return }
-        // HookInjector.inject(cwd: cwd, port: port)  // Phase 2.3
+        HookInjector.inject(cwd: cwd, port: port)
     }
 
     func cleanupHooks(for cwd: String) {
-        // Phase 2: HookInjector.cleanup(cwd: cwd)
+        HookInjector.cleanup(cwd: cwd)
     }
 
     func watchProcess(pid: Int32, surfaceId: UUID) {
