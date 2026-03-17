@@ -43,3 +43,152 @@ enum GitStatusParser {
         return (added: added, modified: modified)
     }
 }
+
+// MARK: - Monitor
+
+final class GitStatusMonitor: ObservableObject {
+    @Published var status: GitRepoStatus = .empty
+
+    private let queue = DispatchQueue(label: "poltertty.git-status-monitor")
+    private var currentPwd: String
+    private var gitRoot: String?
+    private var headSource: DispatchSourceFileSystemObject?
+    private var indexSource: DispatchSourceFileSystemObject?
+    private var debounceWork: DispatchWorkItem?
+
+    init(pwd: String) {
+        self.currentPwd = pwd
+        queue.async { [weak self] in
+            self?.detectAndSetup(pwd: pwd)
+        }
+    }
+
+    func updatePwd(_ path: String) {
+        guard !path.isEmpty else { return }
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.stopWatching()
+            self.currentPwd = path
+            self.detectAndSetup(pwd: path)
+        }
+    }
+
+    deinit {
+        // deinit 可能在任意线程调用，直接 cancel source（不走串行 queue）
+        headSource?.cancel()
+        indexSource?.cancel()
+        debounceWork?.cancel()
+    }
+
+    // MARK: - Private
+
+    private func detectAndSetup(pwd: String) {
+        let result = runGit(["-C", pwd, "rev-parse", "--show-toplevel"])
+        guard result.exitCode == 0,
+              let root = result.output?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !root.isEmpty else {
+            DispatchQueue.main.async { [weak self] in
+                self?.status = .empty
+            }
+            return
+        }
+        gitRoot = root
+        setupWatching(gitRoot: root)
+        refresh()
+    }
+
+    private func setupWatching(gitRoot: String) {
+        startSource(path: "\(gitRoot)/.git/HEAD", store: &headSource)
+        startSource(path: "\(gitRoot)/.git/index", store: &indexSource)
+    }
+
+    private func startSource(path: String, store: inout DispatchSourceFileSystemObject?) {
+        let fd = open(path, O_EVTONLY)
+        guard fd >= 0 else {
+            NSLog("[GitStatusMonitor] open failed for \(path): errno=\(errno)")
+            return
+        }
+        // queue: 参数直接指定目标队列（等效于 setTarget(queue:)）
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: .write,
+            queue: queue
+        )
+        source.setEventHandler { [weak self] in
+            self?.scheduleRefresh()
+        }
+        source.setCancelHandler {
+            close(fd)
+        }
+        store = source
+        source.resume()
+    }
+
+    private func scheduleRefresh() {
+        debounceWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.refresh()
+        }
+        debounceWork = work
+        queue.asyncAfter(deadline: .now() + 0.3, execute: work)
+    }
+
+    private func refresh() {
+        let pwd = gitRoot ?? currentPwd
+        guard !pwd.isEmpty else { return }
+
+        let branchResult = runGit(["-C", pwd, "branch", "--show-current"])
+        let branchOutput = branchResult.output?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let branch: String? = branchOutput.isEmpty ? nil : branchOutput
+
+        let statusResult = runGit(["-C", pwd, "status", "--porcelain"])
+        let porcelain = statusResult.output ?? ""
+        let counts = GitStatusParser.parse(porcelain: porcelain)
+
+        let newStatus = GitRepoStatus(
+            branch: branch,
+            added: counts.added,
+            modified: counts.modified,
+            isGitRepo: true
+        )
+        DispatchQueue.main.async { [weak self] in
+            self?.status = newStatus
+        }
+    }
+
+    private func stopWatching() {
+        headSource?.cancel()
+        headSource = nil
+        indexSource?.cancel()
+        indexSource = nil
+        debounceWork?.cancel()
+        debounceWork = nil
+        gitRoot = nil
+    }
+
+    // MARK: - Subprocess
+
+    private struct GitResult {
+        let exitCode: Int32
+        let output: String?
+    }
+
+    private func runGit(_ args: [String]) -> GitResult {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        proc.arguments = args
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = Pipe()
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let output = String(data: data, encoding: .utf8)
+            return GitResult(exitCode: proc.terminationStatus, output: output)
+        } catch {
+            NSLog("[GitStatusMonitor] git error: \(error)")
+            return GitResult(exitCode: -1, output: nil)
+        }
+    }
+}

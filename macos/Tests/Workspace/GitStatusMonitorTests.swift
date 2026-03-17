@@ -76,14 +76,14 @@ struct GitStatusMonitorTests {
     // MARK: - updatePwd 空路径不重置状态
     // TODO: Task 2 实现后取消注释 GitStatusMonitor
 
-//    @Test func testUpdatePwdEmptyDoesNotReset() async throws {
-//        let monitor = GitStatusMonitor(pwd: NSHomeDirectory())
-//        // 等待初始化完成
-//        try await Task.sleep(nanoseconds: 200_000_000)
-//        let statusBefore = monitor.status
-//        monitor.updatePwd("")
-//        try await Task.sleep(nanoseconds: 200_000_000)
-//        // 状态应保持不变
-//        #expect(monitor.status == statusBefore)
-//    }
+    @Test func testUpdatePwdEmptyDoesNotReset() async throws {
+        let monitor = GitStatusMonitor(pwd: NSHomeDirectory())
+        // 等待初始化完成
+        try await Task.sleep(nanoseconds: 200_000_000)
+        let statusBefore = monitor.status
+        monitor.updatePwd("")
+        try await Task.sleep(nanoseconds: 200_000_000)
+        // 状态应保持不变
+        #expect(monitor.status == statusBefore)
+    }
 }
