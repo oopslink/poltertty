@@ -16,7 +16,7 @@ final class AgentService {
     // let processMonitor = ProcessMonitor()  // Phase 2.4
 
     // 后续 Phase 填充（声明为可选，Phase 2/5/6 取消注释）
-    var hookServer: Any? = nil
+    var hookServer: HookServer? = nil
     var respawnController: Any? = nil
     var tokenTracker: Any? = nil
 
@@ -24,7 +24,8 @@ final class AgentService {
 
     func start() {
         Self.logger.info("AgentService starting")
-        // Phase 2: hookServer = HookServer(sessionManager: sessionManager); hookServer?.start()
+        hookServer = HookServer(sessionManager: sessionManager)
+        hookServer?.start()
         Self.logger.info("AgentService started")
     }
 
@@ -35,12 +36,12 @@ final class AgentService {
 
     func shutdown() {
         Self.logger.info("AgentService shutting down")
-        // Phase 2: hookServer?.stop()
+        hookServer?.stop()
     }
 
     func injectHooks(for cwd: String) {
-        // Phase 2: guard let port = hookServer?.port, port > 0 else { return }
-        // HookInjector.inject(cwd: cwd, port: port)
+        guard let port = hookServer?.port, port > 0 else { return }
+        // HookInjector.inject(cwd: cwd, port: port)  // Phase 2.3
     }
 
     func cleanupHooks(for cwd: String) {
