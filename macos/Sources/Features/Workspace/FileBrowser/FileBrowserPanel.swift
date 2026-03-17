@@ -210,12 +210,13 @@ struct FileBrowserPanel: View {
                         },
                         onSingleClick: {
                             viewModel.selectNode(id: entry.node.id)
+                            if entry.node.isDirectory {
+                                viewModel.toggleExpand(nodeId: entry.node.id)
+                            }
                             isFocused = true
                         },
                         onDoubleClick: {
-                            if entry.node.isDirectory {
-                                viewModel.toggleExpand(nodeId: entry.node.id)
-                            } else {
+                            if !entry.node.isDirectory {
                                 viewModel.openInDefaultApp(entry.node.url)
                             }
                         },
