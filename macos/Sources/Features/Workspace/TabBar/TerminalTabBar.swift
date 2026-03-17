@@ -31,7 +31,8 @@ struct TerminalTabBar: View {
                                         viewModel.tabs
                                             .filter { $0.id != tab.id }
                                             .forEach { onCloseTab($0.id) }
-                                    }
+                                    },
+                                    agentState: viewModel.agentState(for: tab.surfaceId)
                                 )
                                 .id(tab.id)
                                 .dropDestination(for: String.self) { items, _ in
