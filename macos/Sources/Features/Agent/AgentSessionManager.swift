@@ -2,22 +2,6 @@
 import Foundation
 import Combine
 
-// 占位类型，Phase 2（Task 2.1）创建 HookEvent.swift 后删除此 struct
-struct HookPayload {
-    enum EventType {
-        case sessionStart, sessionEnd, preToolUse, postToolUse
-        case notification, stop, subagentStart, subagentStop
-        case preCompact, postCompact, unknown
-    }
-    let hookEventName: EventType
-    let sessionId: String
-    let cwd: String
-    let notificationType: String?
-    let transcriptPath: String?
-    let agentId: String?
-    let agentName: String?
-    let agentType: String?
-}
 
 @MainActor
 final class AgentSessionManager: ObservableObject {
