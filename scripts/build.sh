@@ -24,7 +24,7 @@ if [[ "$MODE" == "dev" ]]; then
     echo "==> Building in Dev mode (Debug configuration)"
     CONFIGURATION="Debug"
     SCHEME="Ghostty"
-    OUTPUT_DIR="$HOME/Library/Developer/Xcode/DerivedData"
+    OUTPUT_DIR="$REPO_ROOT/.build/DerivedData"
 
     # 运行 zig build 确保依赖存在
     echo "==> zig build (ensuring dependencies)"
@@ -33,11 +33,12 @@ if [[ "$MODE" == "dev" ]]; then
         exit 1
     fi
 
-    # 使用 xcodebuild 进行 Debug 构建
+    # 使用 xcodebuild 进行 Debug 构建（每个 worktree 使用独立的 DerivedData）
     echo "==> xcodebuild -configuration $CONFIGURATION"
     xcodebuild -project macos/Ghostty.xcodeproj \
                -scheme "$SCHEME" \
                -configuration "$CONFIGURATION" \
+               -derivedDataPath "$OUTPUT_DIR" \
                build
 
     # 查找实际输出目录

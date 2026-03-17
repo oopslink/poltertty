@@ -15,7 +15,7 @@ NC := \033[0m # No Color
 .PHONY: dev
 dev: ## Build in Dev mode (incremental, fast)
 	@echo "$(CYAN)==> Building Dev mode (Debug, incremental)$(NC)"
-	@xattr -rc ~/Library/Developer/Xcode/DerivedData/Ghostty-*/Build/Products/Debug/Poltertty.app 2>/dev/null || true
+	@xattr -rc .build/DerivedData/Build/Products/Debug/Poltertty.app 2>/dev/null || true
 	@./scripts/build.sh dev
 
 .PHONY: dev-clean
@@ -26,8 +26,8 @@ dev-clean: clean-xcode ## Build in Dev mode with full cache cleanup
 .PHONY: run-dev
 run-dev: dev ## Build and run Dev version
 	@echo "$(GREEN)==> Running Dev version$(NC)"
-	@open ~/Library/Developer/Xcode/DerivedData/Ghostty-*/Build/Products/Debug/Poltertty.app 2>/dev/null || \
-		echo "$(YELLOW)App location may vary in DerivedData. Please locate and run manually.$(NC)"
+	@open .build/DerivedData/Build/Products/Debug/Poltertty.app 2>/dev/null || \
+		echo "$(YELLOW)App not found at .build/DerivedData/Build/Products/Debug/Poltertty.app$(NC)"
 
 .PHONY: check
 check: ## Check Swift compilation errors only
@@ -64,9 +64,9 @@ clean: ## Clean all build artifacts
 	@echo "$(GREEN)Clean complete$(NC)"
 
 .PHONY: clean-xcode
-clean-xcode: ## Clean Xcode DerivedData and extended attributes
-	@echo "$(YELLOW)==> Cleaning Xcode DerivedData$(NC)"
-	@rm -rf ~/Library/Developer/Xcode/DerivedData/Ghostty-*
+clean-xcode: ## Clean local Xcode DerivedData and extended attributes
+	@echo "$(YELLOW)==> Cleaning local Xcode DerivedData$(NC)"
+	@rm -rf .build/DerivedData
 	@echo "$(YELLOW)==> Removing extended attributes$(NC)"
 	@xattr -cr macos/ 2>/dev/null || true
 	@echo "$(GREEN)Xcode cache cleaned$(NC)"
