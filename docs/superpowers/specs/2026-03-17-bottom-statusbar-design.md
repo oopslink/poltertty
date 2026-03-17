@@ -1,7 +1,7 @@
 # 底部状态栏设计文档
 
 **日期:** 2026-03-17
-**状态:** 草稿 v2
+**状态:** 草稿 v3
 
 ---
 
@@ -47,7 +47,7 @@
 
 | 条件 | 状态栏 |
 |------|--------|
-| 临时 workspace | 不渲染（由 `PolterttyRootView` 控制） |
+| 临时 workspace 或 `workspaceId == nil` | 不渲染（`showStatusBar = false`，由 `TerminalController` 计算传入） |
 | `isGitRepo == false` | 整个状态栏不渲染（`EmptyView()`，零高度零占位） |
 | 一个分支，无脏文件 | 左侧路径 + 右侧 `⎇ main` |
 | 有脏文件 | 左侧路径 + 右侧 `⎇ main  +2 ~1` |
@@ -94,8 +94,8 @@ class GitStatusMonitor: ObservableObject {
 
 ### 初始化
 
-`init(pwd:)` 在串行 queue 上运行 `/usr/bin/git -C <pwd> rev-parse --show-toplevel`：
-- 成功（exit 0）→ 设 `isGitRepo = true`，调用 `setupWatching()`
+`init(pwd:)` 通过 `queue.async` 异步分发 git root 检测（`/usr/bin/git -C <pwd> rev-parse --show-toplevel`），不阻塞调用线程（`TerminalController.init` 可安全调用）：
+- 成功（exit 0）→ 在串行 queue 上设 `isGitRepo = true`，调用 `setupWatching()`
 - 失败（exit 非 0）→ `isGitRepo = false`，不启动监听
 
 subprocess 使用绝对路径 `/usr/bin/git`，不设自定义环境变量（与现有 `GitStatusService.swift` 保持一致）。
@@ -107,7 +107,7 @@ subprocess 使用绝对路径 `/usr/bin/git`，不设自定义环境变量（与
 - `<gitRoot>/.git/HEAD`：分支切换时触发
 - `<gitRoot>/.git/index`：暂存区变化时触发
 
-每个 source 的 fd 在 `makeFileSystemObjectSource` 之前 `open(2)`，在 `setCancelHandler` 中 `close(2)`。两个 source 的目标 queue 均设为内部串行 `queue`。
+每个 source 的 fd 在 `makeFileSystemObjectSource` 之前 `open(2)`；`open(2)` 返回 -1 时 `NSLog` 错误并跳过该 source（不启动），不影响另一个 source。fd 有效时在 `setCancelHandler` 中 `close(2)`。两个 source 的目标 queue 均设为内部串行 `queue`。
 
 两个 source 触发均走同一 debounced `refresh()`（300ms `DispatchWorkItem`，调度在串行 `queue` 上）。
 
@@ -116,8 +116,8 @@ subprocess 使用绝对路径 `/usr/bin/git`，不设自定义环境变量（与
 在串行 queue 上顺序执行两条命令：
 
 1. `/usr/bin/git -C <pwd> branch --show-current` → `branch`（空输出 = detached HEAD，`branch = nil`）
-2. `/usr/bin/git -C <pwd> status --porcelain` → 逐行解析（每行前两字符为 XY 状态码）：
-   - `added`：`chars[0] == "?"` 且 `chars[1] == "?"`（untracked），或 `chars[0] == "A"`（staged new）
+2. `/usr/bin/git -C <pwd> status --porcelain` → 逐行解析（每行前两字符为 XY 状态码，`chars[0]` = index 列，`chars[1]` = worktree 列）：
+   - `added`：`chars[0] == "?" && chars[1] == "?"`（untracked），或 `chars[0] == "A"`（staged new，严格匹配 `A`，不含 `R`/`C`，有意设计）
    - `modified`：`chars[0] == "M"` 或 `chars[1] == "M"`（staged/unstaged modified）
 
 结果构造 `GitStatus`，通过 `DispatchQueue.main.async` 赋值给 `status`。
@@ -125,7 +125,7 @@ subprocess 使用绝对路径 `/usr/bin/git`，不设自定义环境变量（与
 ### updatePwd
 
 - `path` 为空时直接返回，保留当前监听和状态（有意保留"上次已知状态"）
-- 否则：调用 `stopWatching()`，重新检测 git root，调用 `setupWatching()`
+- 否则：通过 `queue.async` 分发，在串行 queue 上调用 `stopWatching()`，重新检测 git root，调用 `setupWatching()`
 
 ### stopWatching
 
@@ -194,11 +194,11 @@ private var abbreviatedPwd: String {
 
 ### PolterttyRootView.swift
 
-新增构造参数：
+新增构造参数（加在 `init` 签名末尾，保持现有参数顺序不变）：
 
 ```swift
 let statusMonitor: GitStatusMonitor
-let isTemporaryWorkspace: Bool
+let showStatusBar: Bool   // false = 临时 workspace 或 workspaceId == nil
 ```
 
 新增 `@FocusedValue`：
@@ -215,7 +215,7 @@ case .terminal:
         // ... sidebar, file browser, terminalAreaView ...
     }
     .safeAreaInset(edge: .bottom, spacing: 0) {
-        if !isTemporaryWorkspace {
+        if showStatusBar {
             BottomStatusBarView(
                 monitor: statusMonitor,
                 pwd: focusedPwd ?? ""
@@ -223,6 +223,7 @@ case .terminal:
         }
     }
     .onChange(of: focusedPwd) { newPwd in
+        // 单参数 closure，兼容 macOS 13+（项目最低支持版本）
         guard let pwd = newPwd, !pwd.isEmpty else { return }
         statusMonitor.updatePwd(pwd)
     }
@@ -249,12 +250,16 @@ self.statusMonitor = GitStatusMonitor(pwd: rootDir)
 `windowDidLoad` 新增传参：
 
 ```swift
-let isTemporary = workspaceId
-    .flatMap { WorkspaceManager.shared.workspace(for: $0) }?.isTemporary ?? false
+// workspaceId == nil（非 workspace 窗口）或 isTemporary 时均不显示状态栏
+let showStatusBar: Bool = {
+    guard let id = workspaceId,
+          let ws = WorkspaceManager.shared.workspace(for: id) else { return false }
+    return !ws.isTemporary
+}()
 
-// PolterttyRootView(...) 新增：
+// PolterttyRootView(...) 新增（末尾参数）：
 statusMonitor: self.statusMonitor,
-isTemporaryWorkspace: isTemporary,
+showStatusBar: showStatusBar,
 ```
 
 ---
@@ -269,7 +274,7 @@ isTemporaryWorkspace: isTemporary,
 | `.git/HEAD` / `.git/index` 不存在 | source 不启动，仅依赖 pwd 变化触发刷新 |
 | detached HEAD | `branch = nil`，显示 `⎇ detached` |
 | window 关闭 | `deinit` 调用 `stopWatching()`，fd 全部关闭 |
-| 临时 workspace | view 不渲染，monitor 以 `NSHomeDirectory()` 初始化但不影响性能 |
+| 临时 workspace 或 `workspaceId == nil` | `showStatusBar = false`，view 不渲染；monitor 以 `NSHomeDirectory()` 初始化但不影响性能 |
 | source cancel 竞态 | 串行 queue 保证 cancel 与 handler 不并发 |
 
 ---
