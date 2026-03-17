@@ -15,6 +15,7 @@ NC := \033[0m # No Color
 .PHONY: dev
 dev: ## Build in Dev mode (incremental, fast)
 	@echo "$(CYAN)==> Building Dev mode (Debug, incremental)$(NC)"
+	@xattr -rc ~/Library/Developer/Xcode/DerivedData/Ghostty-*/Build/Products/Debug/Poltertty.app 2>/dev/null || true
 	@./scripts/build.sh dev
 
 .PHONY: dev-clean
