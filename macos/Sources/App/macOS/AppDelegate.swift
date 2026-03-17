@@ -1114,6 +1114,12 @@ class AppDelegate: NSObject,
         toggleFileBrowser.keyEquivalentModifierMask = .command
         workspaceMenu.addItem(toggleFileBrowser)
 
+        workspaceMenu.addItem(.separator())
+
+        let launchAgent = NSMenuItem(title: "Launch Agent", action: #selector(TerminalController.launchAgentAction), keyEquivalent: "a")
+        launchAgent.keyEquivalentModifierMask = [.command, .shift]
+        workspaceMenu.addItem(launchAgent)
+
         let menuItem = NSMenuItem(title: "Workspace", action: nil, keyEquivalent: "")
         menuItem.submenu = workspaceMenu
 

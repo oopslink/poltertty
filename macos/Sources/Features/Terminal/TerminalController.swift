@@ -2055,15 +2055,26 @@ extension TerminalController {
     }
 
     func showAgentLaunchMenu(workspaceId: UUID, cwd: String) {
-        // Phase 3.3 创建 AgentLaunchMenu 后完善
-        // 暂时直接用默认配置启动 Claude Code
-        let launcher = AgentLauncher(terminalController: self)
-        launcher.launch(
-            definition: .claudeCode,
-            location: .newTab,
-            respawnMode: .manual,
+        let popover = NSPopover()
+        popover.behavior = .transient
+        let menu = AgentLaunchMenu(
             workspaceId: workspaceId,
-            cwd: cwd
+            cwd: cwd,
+            onLaunch: { [weak self, weak popover] definition, location, respawnMode in
+                popover?.close()
+                AgentLauncher(terminalController: self).launch(
+                    definition: definition,
+                    location: location,
+                    respawnMode: respawnMode,
+                    workspaceId: workspaceId,
+                    cwd: cwd
+                )
+            },
+            onCancel: { [weak popover] in popover?.close() }
         )
+        popover.contentViewController = NSHostingController(rootView: menu)
+        if let view = self.window?.contentView {
+            popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
+        }
     }
 }
