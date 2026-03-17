@@ -195,14 +195,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         terminalAreaView
                     }
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if showStatusBar {
-                        BottomStatusBarView(
-                            monitor: statusMonitor,
-                            pwd: focusedPwd ?? ""
-                        )
-                    }
-                }
                 .onChange(of: focusedPwd) { newPwd in
                     // single-parameter closure, compatible with macOS 13+
                     guard let pwd = newPwd, !pwd.isEmpty else { return }
@@ -310,6 +302,14 @@ struct PolterttyRootView<TerminalContent: View>: View {
             // 终端内容：始终使用 terminalView 渲染 surfaceTree（支持 split + tab）
             // tab 切换通过 onSwitchTab 回调更新 controller 的 surfaceTree
             terminalView
+
+            // Status bar 在 shell 区域正下方，与 shell 区域对齐
+            if showStatusBar {
+                BottomStatusBarView(
+                    monitor: statusMonitor,
+                    pwd: focusedPwd ?? ""
+                )
+            }
         }
         .animation(.easeInOut(duration: 0.2), value: tabBarViewModel.tabs.count > 1)
     }
