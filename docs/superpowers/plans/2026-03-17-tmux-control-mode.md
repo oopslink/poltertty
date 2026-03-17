@@ -24,7 +24,7 @@
 | `macos/Sources/Features/Workspace/Tmux/TmuxPaneLayoutView.swift` | SwiftUI 递归 pane 分屏渲染 |
 | `macos/Sources/Features/Workspace/Tmux/TmuxDivider.swift` | 可拖拽分割线，发 resize-pane 命令 |
 | `macos/Tests/Splits/TmuxWindowDiffTests.swift` | TmuxWindowDiff 纯逻辑单元测试（放入已有 Splits 目录）|
-| `macos/Tests/Splits/TmuxLayoutNodeTests.swift` | TmuxLayoutNode 解析单元测试 |
+（TmuxLayoutNode 解析测试可在后续迭代补充）|
 
 ### 修改文件（仅追加，不改现有内容）
 
@@ -741,8 +741,9 @@ final class TmuxSessionManager: ObservableObject {
     @Published private(set) var windowLayouts: [UInt: TmuxLayoutNode] = [:]
     @Published private(set) var activePaneId: UInt = 0
 
-    // pane_id → Ghostty.Surface（每个 pane 对应真实 surface）
-    private var paneSurfaces: [UInt: Ghostty.Surface] = [:]
+    // pane_id → Ghostty.SurfaceView（NSView-backed ObservableObject，供 SurfaceWrapper 使用）
+    // 注：是 Ghostty.SurfaceView 而非 Ghostty.Surface（后者是薄包装，没有 .view 属性）
+    private var paneSurfaces: [UInt: Ghostty.SurfaceView] = [:]
     private var currentWindows: [TmuxWindowSnapshot] = []
 
     private let viewer = Ghostty.TmuxViewer()
@@ -836,9 +837,11 @@ final class TmuxSessionManager: ObservableObject {
         // 直接调用 ghostty_surface_new() C API 创建 surface（实现阶段确认具体 API）
         // 占位实现：开发者需在此处接入实际 surface 创建路径
         for paneId in paneIds where paneSurfaces[paneId] == nil {
-            // TODO: 调用 ghostty_surface_new() 或等效 API
-            // let surface = Ghostty.Surface(app: ghosttyApp, ...)
-            // paneSurfaces[paneId] = surface
+            // TODO: 创建 Ghostty.SurfaceView 实例
+            // SurfaceView 是 NSView subclass（ObservableObject），通过 ghostty_surface_new() 初始化
+            // 参考 TerminalController.swift 中创建 surface 的方式
+            // let surfaceView = Ghostty.SurfaceView(app: ghosttyApp.app, config: ghosttyApp.config)
+            // paneSurfaces[paneId] = surfaceView
             _ = paneId
         }
         // 移除消失的 pane
@@ -863,7 +866,7 @@ final class TmuxSessionManager: ObservableObject {
         currentWindows.removeAll()
     }
 
-    func surface(for paneId: UInt) -> Ghostty.Surface? {
+    func surface(for paneId: UInt) -> Ghostty.SurfaceView? {
         paneSurfaces[paneId]
     }
 }
@@ -953,6 +956,7 @@ struct TmuxPaneLayoutView: View {
     let layout: TmuxLayoutNode
     let activePaneId: UInt
     @ObservedObject var sessionManager: TmuxSessionManager
+    @EnvironmentObject var ghostty: Ghostty.App  // 传给 SurfaceWrapper
 
     var body: some View {
         switch layout {
@@ -985,14 +989,16 @@ struct TmuxPaneLayoutView: View {
 
     @ViewBuilder
     private func paneView(id: UInt) -> some View {
-        if let surface = sessionManager.surface(for: id) {
-            Ghostty.SurfaceWrapper(surfaceView: surface.view)
+        if let surfaceView = sessionManager.surface(for: id) {
+            // surface(for:) 返回 Ghostty.SurfaceView（NSView-backed），直接传给 SurfaceWrapper
+            Ghostty.SurfaceWrapper(surfaceView: surfaceView)
                 .overlay(
                     activePaneId == id
                         ? RoundedRectangle(cornerRadius: 0).stroke(Color.accentColor, lineWidth: 1)
                         : nil
                 )
                 .onTapGesture { sessionManager.focusPane(id) }
+                .environmentObject(ghostty)  // SurfaceWrapper 需要 ghostty EnvironmentObject
         } else {
             Color.black  // placeholder while surface initializes
         }
@@ -1022,7 +1028,10 @@ struct TmuxDivider: View {
     @GestureState private var isDragging = false
     @State private var previewOffset: CGFloat = 0
 
-    // 字体格宽高从 Ghostty config 获取（默认值保底）
+    @EnvironmentObject var ghostty: Ghostty.App
+
+    // 字体格宽高：理想情况从 ghostty.config 取，暂用默认值保底
+    // 后续可通过 ghostty.config.fontSize 和字体 metrics 计算精确值
     private var cellWidth: CGFloat  { 8.0 }
     private var cellHeight: CGFloat { 16.0 }
 
