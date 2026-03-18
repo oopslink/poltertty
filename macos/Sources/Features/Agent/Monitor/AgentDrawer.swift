@@ -16,6 +16,7 @@ struct AgentDrawer: View {
                             AgentDrawerPanel(item: item) {
                                 viewModel.closePanel(item)
                             }
+                            .id(item.id)
                             if item != viewModel.selectedItems.last {
                                 Divider()
                             }

@@ -4,6 +4,8 @@ import SwiftUI
 struct AgentSessionGroup: View {
     let session: AgentSession
     @ObservedObject var viewModel: AgentMonitorViewModel
+    @State private var tick = Date()
+    private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -16,6 +18,7 @@ struct AgentSessionGroup: View {
                 }
             }
         }
+        .onReceive(timer) { t in tick = t }
     }
 
     // MARK: - Session row
@@ -89,7 +92,7 @@ struct AgentSessionGroup: View {
     }
 
     private func elapsedLabel(_ sub: SubagentInfo) -> String {
-        let end = sub.finishedAt ?? Date()
+        let end = sub.finishedAt ?? tick
         let secs = max(0, Int(end.timeIntervalSince(sub.startedAt)))
         if secs < 60 { return "\(secs)s" }
         return "\(secs/60)m\(secs%60)s"

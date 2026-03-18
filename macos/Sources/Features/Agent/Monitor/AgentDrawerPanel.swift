@@ -12,6 +12,8 @@ struct AgentDrawerPanel: View {
     let item: DrawerItem
     let onClose: () -> Void
     @State private var tab: DrawerTab
+    @State private var tick = Date()
+    private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
     init(item: DrawerItem, onClose: @escaping () -> Void) {
         self.item = item
@@ -30,6 +32,7 @@ struct AgentDrawerPanel: View {
             contentArea
         }
         .background(Color(.windowBackgroundColor))
+        .onReceive(timer) { t in if case .subagentDetail(_, let sub) = item, sub.state.isActive { tick = t } }
     }
 
     // MARK: - Header
@@ -72,7 +75,7 @@ struct AgentDrawerPanel: View {
 
     private func metricsRow(_ sub: SubagentInfo) -> some View {
         let elapsed: String = {
-            let end = sub.finishedAt ?? Date()
+            let end = sub.finishedAt ?? tick
             let s = max(0, Int(end.timeIntervalSince(sub.startedAt)))
             return s < 60 ? "\(s)s" : "\(s/60)m\(s%60)s"
         }()
