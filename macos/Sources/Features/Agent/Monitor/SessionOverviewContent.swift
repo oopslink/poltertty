@@ -36,6 +36,17 @@ struct SessionOverviewContent: View {
                 Divider().padding(.vertical, 6)
                 Text("点击 subagent 查看详情 · Cmd+Click 并排对比")
                     .font(.system(size: 9)).foregroundStyle(.tertiary)
+
+                if !session.subagents.isEmpty {
+                    Divider().padding(.vertical, 6)
+                    Text("AGENT GRAPH")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .padding(.bottom, 4)
+                    AgentGraphView(session: session, tick: tick) { sub in
+                        onSubagentTap?(sub)
+                    }
+                }
             }
             .padding(12)
         }
