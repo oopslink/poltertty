@@ -27,13 +27,21 @@ struct AgentDrawerPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            panelHeader
+            // 单面板 sessionOverview 时全局 header 已显示标题，跳过重复的 panelHeader
+            if viewModel.selectedItems.count > 1 || isSubagentDetail {
+                panelHeader
+            }
             tabBar
             Divider()
             contentArea
         }
         .background(Color(.windowBackgroundColor))
         .onReceive(timer) { t in if case .subagentDetail(_, let sub) = item, sub.state.isActive { tick = t } }
+    }
+
+    private var isSubagentDetail: Bool {
+        if case .subagentDetail = item { return true }
+        return false
     }
 
     // MARK: - Header

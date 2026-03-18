@@ -33,6 +33,9 @@ struct AgentDrawer: View {
 
     private var drawerHeader: some View {
         HStack(spacing: 8) {
+            if let state = singleItemState {
+                AgentStateDot(state: state)
+            }
             Text(headerTitle)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.secondary)
@@ -57,8 +60,18 @@ struct AgentDrawer: View {
             return "对比模式"
         }
         switch first {
-        case .sessionOverview(let s):   return s.definition.name
-        case .subagentDetail(let s, _): return s.definition.name
+        case .sessionOverview(let s):       return s.definition.name
+        case .subagentDetail(let s, _):     return s.definition.name
+        }
+    }
+
+    private var singleItemState: AgentState? {
+        guard viewModel.selectedItems.count == 1, let first = viewModel.selectedItems.first else {
+            return nil
+        }
+        switch first {
+        case .sessionOverview(let s):       return s.state
+        case .subagentDetail(_, let sub):   return sub.state
         }
     }
 
