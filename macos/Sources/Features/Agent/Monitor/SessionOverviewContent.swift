@@ -1,6 +1,14 @@
 // macos/Sources/Features/Agent/Monitor/SessionOverviewContent.swift
 import SwiftUI
 
+/// 跨 subagent 全局工具调用事件（供 Overview ActivityLog 使用）
+struct RecentEventEntry {
+    let time: Date
+    let subagentName: String
+    let toolName: String
+    let isDone: Bool
+}
+
 struct SessionOverviewContent: View {
     let session: AgentSession
     var onSubagentTap: ((SubagentInfo) -> Void)? = nil
@@ -10,6 +18,19 @@ struct SessionOverviewContent: View {
 
     private var subagents: [SubagentInfo] {
         Array(session.subagents.values).sorted { $0.startedAt < $1.startedAt }
+    }
+
+    private var recentEvents: [RecentEventEntry] {
+        session.subagents.values
+            .flatMap { sub in sub.toolCalls.map { call in
+                RecentEventEntry(time: call.startedAt,
+                                 subagentName: String(sub.name.prefix(10)),
+                                 toolName: call.toolName,
+                                 isDone: call.isDone)
+            }}
+            .sorted { $0.time > $1.time }
+            .prefix(50)
+            .map { $0 }
     }
 
     var body: some View {
@@ -46,6 +67,18 @@ struct SessionOverviewContent: View {
                     AgentGraphView(session: session, tick: tick) { sub in
                         onSubagentTap?(sub)
                     }
+                }
+
+                // MARK: - Activity Log
+                let events = recentEvents
+                let totalToolCalls = session.subagents.values.reduce(0) { $0 + $1.toolCalls.count }
+                if !events.isEmpty {
+                    Divider().padding(.vertical, 6)
+                    Text("ACTIVITY")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                        .padding(.bottom, 4)
+                    eventLogSection(events, total: totalToolCalls)
                 }
             }
             .padding(12)
@@ -132,5 +165,44 @@ struct SessionOverviewContent: View {
         let end = sub.finishedAt ?? tick
         let s = max(0, Int(end.timeIntervalSince(sub.startedAt)))
         return s < 60 ? "\(s)s" : "\(s/60)m\(s%60)s"
+    }
+
+    private static let eventTimeFmt: DateFormatter = {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.dateFormat = "HH:mm:ss"
+        return fmt
+    }()
+
+    private func eventLogSection(_ events: [RecentEventEntry], total: Int) -> some View {
+        let fmt = Self.eventTimeFmt
+        return VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(events.enumerated()), id: \.offset) { _, ev in
+                HStack(spacing: 4) {
+                    Text(fmt.string(from: ev.time))
+                        .font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
+                        .frame(width: 54, alignment: .leading)
+                    Text(ev.subagentName)
+                        .font(.system(size: 9)).foregroundStyle(.secondary)
+                        .frame(width: 64, alignment: .leading)
+                        .lineLimit(1).truncationMode(.tail)
+                    Text(ev.toolName)
+                        .font(.system(size: 9)).foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Spacer()
+                    if ev.isDone {
+                        Text("✓").font(.system(size: 9)).foregroundStyle(Color(hex: "#4caf50") ?? .green)
+                    } else {
+                        Text("⏳").font(.system(size: 9)).foregroundStyle(.orange)
+                    }
+                }
+                .padding(.vertical, 1)
+            }
+            if total > 50 {
+                Text("… and \(total - 50) more")
+                    .font(.system(size: 9)).foregroundStyle(.tertiary)
+                    .padding(.top, 2)
+            }
+        }
     }
 }
