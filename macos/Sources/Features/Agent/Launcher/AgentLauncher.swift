@@ -75,24 +75,27 @@ final class AgentLauncher {
 
         guard let targetSurface = surfaceView else { return }
 
-        // 2. 注册 AgentSession
+        // 2. 注册 AgentSession（解析 symlink，保证与 Claude Code hook payload 的 cwd 一致）
+        // macOS 上 /Users 是 /private/Users 的符号链接，Claude Code 在 hook 中报告的是解析后的路径
+        let expandedCwd = (cwd as NSString).expandingTildeInPath
+        let normalizedCwd = URL(fileURLWithPath: expandedCwd).resolvingSymlinksInPath().path
         let session = AgentSession(
             id: UUID(),
             surfaceId: targetSurface.id,
             definition: definition,
             workspaceId: workspaceId,
-            cwd: cwd,
+            cwd: normalizedCwd,
             respawnMode: respawnMode
         )
         AgentService.shared.sessionManager.register(session)
 
         // 3. 注入 hooks（仅 .full capability）
         if definition.hookCapability == .full {
-            AgentService.shared.injectHooks(for: cwd)
+            AgentService.shared.injectHooks(for: normalizedCwd)
         }
 
         // 4. 写入启动命令（cd + 命令），使用异步延迟确保 surface 已就绪
-        let command = buildLaunchCommand(definition: definition, cwd: cwd)
+        let command = buildLaunchCommand(definition: definition, cwd: normalizedCwd)
         guard let surfaceModel = targetSurface.surfaceModel else { return }
         // 对于新 tab/split，surface 初始化需要一个 run-loop 才能完全就绪
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {

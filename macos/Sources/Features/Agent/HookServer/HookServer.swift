@@ -96,41 +96,80 @@ final class HookServer {
 
     // MARK: - HTTP 处理
 
+    private static let headerSeparator = Data([0x0D, 0x0A, 0x0D, 0x0A]) // \r\n\r\n
+
     private func handleConnection(_ connection: NWConnection) {
         connection.start(queue: .global(qos: .utility))
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, _, _ in
-            guard let self, let data, !data.isEmpty else { return }
-            self.processRequest(data: data, connection: connection)
+        accumulateRequest(connection: connection, buffer: Data())
+    }
+
+    /// 递归读取数据，直到收齐 HTTP headers + body（按 Content-Length）
+    private func accumulateRequest(connection: NWConnection, buffer: Data) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 131072) { [weak self] data, _, isComplete, error in
+            guard let self else { return }
+            var buf = buffer
+            if let data { buf.append(data) }
+
+            // 超过 1MB 保护
+            guard buf.count < 1_048_576 else {
+                self.sendResponse(connection, status: 413, body: #"{"error":"too large"}"#); return
+            }
+
+            guard let headerEnd = buf.range(of: Self.headerSeparator) else {
+                if isComplete || error != nil {
+                    self.sendResponse(connection, status: 400, body: #"{"error":"incomplete headers"}"#)
+                } else {
+                    self.accumulateRequest(connection: connection, buffer: buf)
+                }
+                return
+            }
+
+            // 解析 Content-Length，判断 body 是否完整
+            let headerStr = String(data: buf[..<headerEnd.lowerBound], encoding: .utf8) ?? ""
+            let contentLength = headerStr.components(separatedBy: "\r\n")
+                .first { $0.lowercased().hasPrefix("content-length:") }
+                .flatMap { Int($0.split(separator: ":").last?.trimmingCharacters(in: .whitespaces) ?? "") } ?? 0
+
+            let bodyStart = headerEnd.upperBound
+            let receivedBody = buf.count - bodyStart
+            if receivedBody < contentLength && !isComplete && error == nil {
+                self.accumulateRequest(connection: connection, buffer: buf)
+                return
+            }
+
+            // 完整请求已收齐，处理
+            let firstLine = headerStr.components(separatedBy: "\r\n").first ?? ""
+            let bodyData = buf[bodyStart...]
+            self.processRequest(firstLine: firstLine, bodyData: bodyData, connection: connection)
         }
     }
 
-    private func processRequest(data: Data, connection: NWConnection) {
-        let separator = Data([0x0D, 0x0A, 0x0D, 0x0A])
-        guard let range = data.range(of: separator) else {
-            sendResponse(connection, status: 400, body: "Bad Request"); return
+    private func processRequest(firstLine: String, bodyData: Data.SubSequence, connection: NWConnection) {
+        // 匹配 "GET /health" 或 "GET http://localhost:.../health"
+        if firstLine.hasPrefix("GET") && firstLine.contains("/health") {
+            sendResponse(connection, status: 200, body: "{}"); return
         }
-        let headerStr = String(data: data[..<range.lowerBound], encoding: .utf8) ?? ""
-        let firstLine = headerStr.components(separatedBy: "\r\n").first ?? ""
-
-        if firstLine.hasPrefix("GET /health") {
-            sendResponse(connection, status: 200, body: "ok"); return
-        }
-        guard firstLine.hasPrefix("POST /hook") else {
-            sendResponse(connection, status: 404, body: "Not Found"); return
+        // 匹配 "POST /hook" 或 "POST http://localhost:.../hook"
+        guard firstLine.hasPrefix("POST") && firstLine.contains("/hook") else {
+            Self.logger.warning("HookServer: rejected \(firstLine)")
+            sendResponse(connection, status: 404, body: #"{"error":"not found"}"#); return
         }
 
-        let bodyData = data[range.upperBound...]
-        guard let payload = try? decoder.decode(HookPayload.self, from: bodyData) else {
-            Self.logger.warning("HookServer: failed to decode hook payload")
-            sendResponse(connection, status: 400, body: "Invalid JSON"); return
+        let rawBodyData = Data(bodyData)
+        guard let payload = try? decoder.decode(HookPayload.self, from: rawBodyData) else {
+            let bodyPreview = String(data: rawBodyData.prefix(500), encoding: .utf8) ?? "(binary)"
+            Self.logger.warning("HookServer: failed to decode hook payload (\(rawBodyData.count) bytes): \(bodyPreview)")
+            sendResponse(connection, status: 400, body: #"{"error":"invalid json"}"#); return
         }
-        sendResponse(connection, status: 200, body: "ok")
+        Self.logger.warning("HookServer: event=\(payload.hookEventName.rawValue) sid=\(payload.sessionId ?? "nil") tool=\(payload.toolName ?? "-") toolUseId=\(payload.toolUseId ?? "-")")
+        sendResponse(connection, status: 200, body: "{}")
         Task { @MainActor in self.sessionManager.processHookEvent(payload) }
     }
 
     private func sendResponse(_ connection: NWConnection, status: Int, body: String) {
-        let bodyData = (body.data(using: .utf8)) ?? Data()
-        let header = "HTTP/1.1 \(status) \(status == 200 ? "OK" : "Error")\r\nContent-Length: \(bodyData.count)\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n"
+        let bodyData = body.data(using: .utf8) ?? Data()
+        let statusText = status == 200 ? "OK" : "Error"
+        let header = "HTTP/1.1 \(status) \(statusText)\r\nContent-Length: \(bodyData.count)\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n"
         var resp = header.data(using: .utf8)!
         resp.append(bodyData)
         connection.send(content: resp, completion: .contentProcessed { _ in connection.cancel() })

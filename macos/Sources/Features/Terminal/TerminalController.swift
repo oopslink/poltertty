@@ -192,6 +192,13 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         if to.isEmpty {
             self.window?.close()
         }
+
+        // 清理已关闭 surface 的 agent session
+        let fromIds = Set(from.map { $0.id })
+        let toIds = Set(to.map { $0.id })
+        for removedId in fromIds.subtracting(toIds) {
+            AgentService.shared.sessionManager.remove(surfaceId: removedId)
+        }
     }
 
     override func replaceSurfaceTree(

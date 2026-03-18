@@ -1114,23 +1114,30 @@ class AppDelegate: NSObject,
         toggleFileBrowser.keyEquivalentModifierMask = .command
         workspaceMenu.addItem(toggleFileBrowser)
 
-        let toggleAgentMonitor = NSMenuItem(title: "Toggle Agent Monitor", action: #selector(toggleAgentMonitor(_:)), keyEquivalent: "m")
-        toggleAgentMonitor.keyEquivalentModifierMask = [.command, .shift]
-        workspaceMenu.addItem(toggleAgentMonitor)
+        let workspaceMenuItem = NSMenuItem(title: "Workspace", action: nil, keyEquivalent: "")
+        workspaceMenuItem.submenu = workspaceMenu
 
-        workspaceMenu.addItem(.separator())
+        // Agent 菜单（顶层，与 Workspace 同级）
+        let agentMenu = NSMenu(title: "Agent")
 
         let launchAgent = NSMenuItem(title: "Launch Agent", action: #selector(TerminalController.launchAgentAction), keyEquivalent: "a")
         launchAgent.keyEquivalentModifierMask = [.command, .shift]
-        workspaceMenu.addItem(launchAgent)
+        agentMenu.addItem(launchAgent)
 
-        let menuItem = NSMenuItem(title: "Workspace", action: nil, keyEquivalent: "")
-        menuItem.submenu = workspaceMenu
+        agentMenu.addItem(.separator())
 
-        // Insert before "Window" menu
+        let toggleAgentMonitor = NSMenuItem(title: "Toggle Agent Monitor", action: #selector(toggleAgentMonitor(_:)), keyEquivalent: "m")
+        toggleAgentMonitor.keyEquivalentModifierMask = [.command, .shift]
+        agentMenu.addItem(toggleAgentMonitor)
+
+        let agentMenuItem = NSMenuItem(title: "Agent", action: nil, keyEquivalent: "")
+        agentMenuItem.submenu = agentMenu
+
+        // 依次插入 Workspace、Agent（都在 Window 之前）
         if let mainMenu = NSApp.mainMenu,
            let windowMenuIndex = mainMenu.items.firstIndex(where: { $0.title == "Window" }) {
-            mainMenu.insertItem(menuItem, at: windowMenuIndex)
+            mainMenu.insertItem(workspaceMenuItem, at: windowMenuIndex)
+            mainMenu.insertItem(agentMenuItem, at: windowMenuIndex + 1)
         }
     }
 

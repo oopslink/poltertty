@@ -1,10 +1,15 @@
 // macos/Sources/Features/Agent/AgentSessionManager.swift
 import Foundation
 import Combine
+import OSLog
 
 
 @MainActor
 final class AgentSessionManager: ObservableObject {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier!,
+        category: "AgentSessionManager"
+    )
     @Published private(set) var sessions: [UUID: AgentSession] = [:]  // surfaceId → session
     private var claudeSessionIndex: [String: UUID] = [:]              // claudeSessionId → surfaceId
 
@@ -61,8 +66,18 @@ final class AgentSessionManager: ObservableObject {
     }
 
     /// cwd 匹配、尚未绑定 claudeSessionId 的候选 surface（用于 SessionStart 关联）
+    /// 解析 symlink（macOS 上 /Users 是 /private/Users 的符号链接），保证路径一致
     func candidateSurfaces(for cwd: String) -> [UUID] {
-        sessions.filter { $0.value.cwd == cwd && $0.value.claudeSessionId == nil }.map(\.key)
+        let expandedCwd = Self.realPath(cwd)
+        return sessions.filter {
+            Self.realPath($0.value.cwd) == expandedCwd
+            && $0.value.claudeSessionId == nil
+        }.map(\.key)
+    }
+
+    private static func realPath(_ path: String) -> String {
+        let expanded = (path as NSString).expandingTildeInPath
+        return URL(fileURLWithPath: expanded).resolvingSymlinksInPath().path
     }
 
     /// 给定 workspaceId 的聚合状态（最高优先级）
@@ -75,66 +90,138 @@ final class AgentSessionManager: ObservableObject {
     // MARK: - Hook 事件处理
 
     func processHookEvent(_ payload: HookPayload) {
+        let sid = payload.sessionId  // optional String?
+
+        // 在任意事件中尝试绑定：SessionStart 可能在 hooks 加载前就触发了
+        if let sid, claudeSessionIndex[sid] == nil, let cwd = payload.cwd {
+            bindOrCreateSession(sessionId: sid, cwd: cwd)
+        }
+
         switch payload.hookEventName {
         case .sessionStart:
-            bindOrCreateSession(payload: payload)
+            // 已在上面处理
+            break
         case .sessionEnd:
-            if let surfaceId = claudeSessionIndex[payload.sessionId] {
+            guard let sid else { return }
+            if let surfaceId = claudeSessionIndex[sid] {
                 let cwd = sessions[surfaceId]?.cwd
-                updateFromClaudeSession(payload.sessionId) { $0.state = .done(exitCode: 0) }
+                updateFromClaudeSession(sid) { $0.state = .done(exitCode: 0) }
                 if let cwd = cwd {
                     AgentService.shared.cleanupHooks(for: cwd)
                 }
             } else {
-                updateFromClaudeSession(payload.sessionId) { $0.state = .done(exitCode: 0) }
+                updateFromClaudeSession(sid) { $0.state = .done(exitCode: 0) }
             }
-        case .preToolUse, .postToolUse:
-            updateFromClaudeSession(payload.sessionId) { $0.state = .working }
-            if let sid = claudeSessionIndex[payload.sessionId] {
-                AgentService.shared.respawnController?.recordToolUse(surfaceId: sid)
+        case .preToolUse:
+            guard let sid else { Self.logger.warning("preToolUse: no sessionId"); return }
+            let indexed = claudeSessionIndex[sid] != nil
+            Self.logger.warning("preToolUse: sid=\(sid) indexed=\(indexed) tool=\(payload.toolName ?? "nil") toolUseId=\(payload.toolUseId ?? "nil") agentId=\(payload.agentId ?? "-")")
+            updateFromClaudeSession(sid) { $0.state = .working }
+            if payload.toolName == "Agent" {
+                // Agent tool → 新建 subagent 记录（去重）
+                let toolUseId = payload.toolUseId ?? UUID().uuidString
+                let name = payload.toolInput?.description ?? payload.agentName ?? "Subagent"
+                let prompt = payload.toolInput?.prompt
+                updateFromClaudeSession(sid) {
+                    if $0.subagents[toolUseId] == nil {
+                        $0.subagents[toolUseId] = SubagentInfo(
+                            id: toolUseId, name: name, agentType: "agent", prompt: prompt
+                        )
+                    }
+                }
+            } else if let agentId = payload.agentId,
+                      let toolUseId = payload.toolUseId,
+                      let toolName = payload.toolName {
+                // Subagent 内部的工具调用 → 追加到对应 SubagentInfo
+                let record = ToolCallRecord(id: toolUseId, toolName: toolName)
+                updateFromClaudeSession(sid) { session in
+                    guard let key = session.subagents.values
+                        .first(where: { $0.agentId == agentId })?.id else { return }
+                    // 去重
+                    if session.subagents[key]?.toolCalls.contains(where: { $0.id == toolUseId }) == false {
+                        session.subagents[key]?.toolCalls.append(record)
+                    }
+                }
+            }
+        case .postToolUse:
+            guard let sid else { Self.logger.warning("postToolUse: no sessionId"); return }
+            Self.logger.info("postToolUse: sid=\(sid) tool=\(payload.toolName ?? "nil") toolUseId=\(payload.toolUseId ?? "nil") agentId=\(payload.agentId ?? "-")")
+            updateFromClaudeSession(sid) { $0.state = .working }
+            if let surfaceId = claudeSessionIndex[sid] {
+                AgentService.shared.respawnController?.recordToolUse(surfaceId: surfaceId)
+            }
+            if payload.toolName == "Agent" {
+                // Agent tool 完成 → 标记 subagent done
+                let toolUseId = payload.toolUseId ?? ""
+                if !toolUseId.isEmpty {
+                    updateFromClaudeSession(sid) {
+                        $0.subagents[toolUseId]?.state = .done(exitCode: 0)
+                        $0.subagents[toolUseId]?.finishedAt = Date()
+                    }
+                }
+            } else if let agentId = payload.agentId, let toolUseId = payload.toolUseId {
+                // Subagent 的工具调用完成 → 标记 done
+                updateFromClaudeSession(sid) { session in
+                    guard let key = session.subagents.values
+                        .first(where: { $0.agentId == agentId })?.id else { return }
+                    if let idx = session.subagents[key]?.toolCalls.firstIndex(where: { $0.id == toolUseId }) {
+                        session.subagents[key]?.toolCalls[idx].isDone = true
+                    }
+                }
             }
         case .notification:
+            guard let sid else { return }
             if payload.notificationType == "idle_prompt" {
-                updateFromClaudeSession(payload.sessionId) { $0.state = .idle }
-                if let sid = claudeSessionIndex[payload.sessionId] {
-                    AgentService.shared.respawnController?.handleIdle(surfaceId: sid)
+                updateFromClaudeSession(sid) { $0.state = .idle }
+                if let surfaceId = claudeSessionIndex[sid] {
+                    AgentService.shared.respawnController?.handleIdle(surfaceId: surfaceId)
                 }
             }
         case .stop:
-            updateFromClaudeSession(payload.sessionId) { $0.state = .idle }
-            if let sid = claudeSessionIndex[payload.sessionId],
+            guard let sid else { return }
+            updateFromClaudeSession(sid) { $0.state = .idle }
+            if let surfaceId = claudeSessionIndex[sid],
                let path = payload.transcriptPath {
                 AgentService.shared.tokenTracker?.processStopEvent(
-                    surfaceId: sid,
+                    surfaceId: surfaceId,
                     transcriptPath: path,
                     model: "claude-sonnet-4"  // TODO: 从 AgentDefinition 读取
                 )
             }
         case .subagentStart:
-            if let agentId = payload.agentId, let name = payload.agentName {
-                updateFromClaudeSession(payload.sessionId) {
-                    $0.subagents[agentId] = SubagentInfo(
-                        id: agentId, name: name,
-                        agentType: payload.agentType ?? "subagent"
-                    )
+            // 将 agentId 绑定到对应的 SubagentInfo（通过 toolUseId 匹配）
+            guard let sid, let agentId = payload.agentId else { break }
+            if let toolUseId = payload.toolUseId {
+                updateFromClaudeSession(sid) { $0.subagents[toolUseId]?.agentId = agentId }
+            } else {
+                // 回退：绑定到最早创建且尚未关联 agentId 的 subagent
+                updateFromClaudeSession(sid) { session in
+                    guard let key = session.subagents.values
+                        .filter({ $0.agentId == nil && $0.state.isActive })
+                        .sorted(by: { $0.startedAt < $1.startedAt })
+                        .first?.id else { return }
+                    session.subagents[key]?.agentId = agentId
                 }
             }
         case .subagentStop:
-            if let agentId = payload.agentId {
-                updateFromClaudeSession(payload.sessionId) {
-                    $0.subagents[agentId]?.state = .done(exitCode: 0)
-                    $0.subagents[agentId]?.finishedAt = Date()
-                }
-            }
+            break
         default:
             break
         }
     }
 
-    private func bindOrCreateSession(payload: HookPayload) {
-        if let surfaceId = candidateSurfaces(for: payload.cwd).first {
-            bindClaudeSession(surfaceId: surfaceId, claudeSessionId: payload.sessionId)
+    private func bindOrCreateSession(sessionId: String, cwd: String) {
+        let candidates = candidateSurfaces(for: cwd)
+        let indexCount = self.claudeSessionIndex.count
+        Self.logger.warning("bindOrCreateSession: sid=\(sessionId) cwd=\(cwd) candidates=\(candidates.count) indexed=\(indexCount)")
+        if let surfaceId = candidates.first {
+            bindClaudeSession(surfaceId: surfaceId, claudeSessionId: sessionId)
             updateState(.working, surfaceId: surfaceId)
+            Self.logger.warning("bindOrCreateSession: BOUND sid=\(sessionId) to surface=\(surfaceId)")
+        } else {
+            let sessionCount = self.sessions.count
+            let cwds = self.sessions.values.map { $0.cwd }
+            Self.logger.warning("bindOrCreateSession: no candidate, sessions=\(sessionCount) cwds=\(cwds)")
         }
     }
 }

@@ -45,14 +45,25 @@ enum RespawnMode: String, CaseIterable, Codable {
     }
 }
 
-/// Subagent 信息（由 SubagentStart/Stop hook 事件填充）
+/// Subagent 内部的单次工具调用记录
+struct ToolCallRecord: Identifiable {
+    let id: String       // toolUseId
+    let toolName: String
+    var isDone: Bool = false
+    var startedAt: Date = Date()
+}
+
+/// Subagent 信息（由 PreToolUse:Agent + SubagentStart hook 事件填充）
 struct SubagentInfo: Identifiable {
-    let id: String
-    var name: String
+    let id: String           // parent 的 toolUseId（Agent 调用时产生）
+    var name: String         // description 字段
     var agentType: String
+    var prompt: String? = nil        // 发给 subagent 的完整 prompt
+    var agentId: String? = nil       // Claude Code 内部 agentId（用于匹配 hook）
     var state: AgentState = .launching
     var startedAt: Date = Date()
     var finishedAt: Date? = nil
+    var toolCalls: [ToolCallRecord] = []
 }
 
 /// 一个活跃 agent 的运行时状态
