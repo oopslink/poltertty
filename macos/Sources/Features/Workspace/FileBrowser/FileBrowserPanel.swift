@@ -8,7 +8,7 @@ struct FileBrowserPanel: View {
 
     @State private var renameText: String = ""
     @FocusState private var isFocused: Bool
-    @State private var treeWidth: CGFloat = 260
+    @State private var treeDividerHovered = false
 
     var body: some View {
         panelContent
@@ -43,8 +43,8 @@ struct FileBrowserPanel: View {
                     treeScrollView
                 }
             }
-            .frame(minWidth: 200, maxWidth: viewModel.showPreviewPanel ? treeWidth : .infinity)
-            .frame(width: viewModel.showPreviewPanel ? treeWidth : nil)
+            .frame(minWidth: 200, maxWidth: viewModel.showPreviewPanel ? viewModel.treeWidth : .infinity)
+            .frame(width: viewModel.showPreviewPanel ? viewModel.treeWidth : nil)
 
             // Right: Preview panel (if enabled)
             if viewModel.showPreviewPanel, let nodeId = viewModel.selectedNodeId,
@@ -58,8 +58,10 @@ struct FileBrowserPanel: View {
                         viewModel.togglePreviewFullscreen()
                     },
                     onClose: {
-                        viewModel.showPreviewPanel = false
-                        viewModel.isPreviewFullscreen = false
+                        withAnimation(nil) {
+                            viewModel.showPreviewPanel = false
+                            viewModel.isPreviewFullscreen = false
+                        }
                     }
                 )
                 .frame(minWidth: 200)
@@ -68,28 +70,30 @@ struct FileBrowserPanel: View {
     }
 
     private var draggableDivider: some View {
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(width: 1)
-            .overlay(
-                Color.clear
-                    .frame(width: 8)
-                    .contentShape(Rectangle())
-                    .onHover { inside in
-                        if inside {
-                            NSCursor.resizeLeftRight.push()
-                        } else {
-                            NSCursor.pop()
-                        }
-                    }
-                    .gesture(
-                        DragGesture(minimumDistance: 1)
-                            .onChanged { value in
-                                let newWidth = treeWidth + value.translation.width
-                                treeWidth = max(200, min(newWidth, 600))
-                            }
-                    )
-            )
+        ZStack {
+            Color(nsColor: .separatorColor)
+                .frame(width: 1)
+            if treeDividerHovered {
+                DividerGripHandle()
+            }
+        }
+        .frame(width: 16)
+        .contentShape(Rectangle())
+        .onHover { inside in
+            treeDividerHovered = inside
+            if inside {
+                NSCursor.resizeLeftRight.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    let newWidth = viewModel.treeWidth + value.translation.width
+                    viewModel.treeWidth = max(200, min(newWidth, 600))
+                }
+        )
     }
 
     // MARK: - Key Handlers

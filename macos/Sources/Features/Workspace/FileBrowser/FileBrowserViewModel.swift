@@ -17,6 +17,8 @@ final class FileBrowserViewModel: ObservableObject {
     @Published var selectedNodeId: UUID? = nil
     @Published var showPreviewPanel: Bool = false
     @Published var isPreviewFullscreen: Bool = false
+    @Published var treeWidth: CGFloat = 260
+    @Published var previewTotalWidth: CGFloat = 700
 
     // MARK: - Internal State
 
