@@ -59,7 +59,8 @@ final class TokenTracker {
 
         guard let session = sessionManager.session(for: surfaceId),
               let path = liveTranscriptPath(for: session) else { return }
-        let model = session.definition.command == "claude" ? "claude-sonnet-4" : "claude-sonnet-4"
+        // TODO: 从 AgentDefinition 读取实际 model 名；暂时硬编码
+        let model = "claude-sonnet-4"
 
         Task.detached(priority: .utility) { [weak self] in
             let usage = await self?.parseTranscript(at: path, model: model) ?? TokenUsage()

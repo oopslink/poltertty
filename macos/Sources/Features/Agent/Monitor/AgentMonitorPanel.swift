@@ -47,6 +47,7 @@ struct AgentMonitorPanel: View {
     private var historySectionView: some View {
         VStack(alignment: .leading, spacing: 0) {
             // 折叠/展开 header
+
             Button(action: { viewModel.toggleHistory() }) {
                 HStack(spacing: 4) {
                     Image(systemName: viewModel.historyExpanded ? "chevron.down" : "chevron.right")
@@ -57,12 +58,6 @@ struct AgentMonitorPanel: View {
                 .padding(.horizontal, 10).padding(.vertical, 5)
             }
             .buttonStyle(.plain)
-            .onAppear {
-                viewModel.loadHistory()
-                if viewModel.sessions.isEmpty {
-                    viewModel.historyExpanded = true
-                }
-            }
 
             if viewModel.historyExpanded {
                 ForEach(viewModel.historicalSessions) { ps in
@@ -71,6 +66,12 @@ struct AgentMonitorPanel: View {
             }
         }
         .background(Color(.windowBackgroundColor))
+        .onAppear {
+            viewModel.loadHistory()
+            if viewModel.sessions.isEmpty {
+                viewModel.historyExpanded = true
+            }
+        }
     }
 
     private func historyRow(_ ps: PersistedSession) -> some View {

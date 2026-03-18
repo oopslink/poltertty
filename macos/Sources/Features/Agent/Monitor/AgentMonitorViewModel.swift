@@ -31,14 +31,16 @@ final class AgentMonitorViewModel: ObservableObject {
                 self.selectedItems = self.selectedItems.compactMap { item in
                     switch item {
                     case .sessionOverview(let old):
-                        return updatedSessions.values
-                            .first(where: { $0.surfaceId == old.surfaceId })
-                            .map { .sessionOverview($0) }
+                        // 历史 session 的 surfaceId 不在 updatedSessions 中，直接保留
+                        if let fresh = updatedSessions.values.first(where: { $0.surfaceId == old.surfaceId }) {
+                            return .sessionOverview(fresh)
+                        }
+                        return item
                     case .subagentDetail(let oldSession, let oldSub):
                         guard let freshSession = updatedSessions.values
                                 .first(where: { $0.surfaceId == oldSession.surfaceId }),
                               let freshSub = freshSession.subagents[oldSub.id]
-                        else { return nil }
+                        else { return item }  // 历史 session 保留原样
                         return .subagentDetail(freshSession, freshSub)
                     }
                 }
