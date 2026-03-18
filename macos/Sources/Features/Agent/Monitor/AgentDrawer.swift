@@ -13,9 +13,7 @@ struct AgentDrawer: View {
                     Divider()
                     HStack(spacing: 0) {
                         ForEach(viewModel.selectedItems) { item in
-                            AgentDrawerPanel(item: item) {
-                                viewModel.closePanel(item)
-                            }
+                            AgentDrawerPanel(item: item, onClose: { viewModel.closePanel(item) }, viewModel: viewModel)
                             .id(item.id)
                             if item != viewModel.selectedItems.last {
                                 Divider()

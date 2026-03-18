@@ -10,13 +10,15 @@ enum DrawerTab: String, CaseIterable {
 struct AgentDrawerPanel: View {
     let item: DrawerItem
     let onClose: () -> Void
+    let viewModel: AgentMonitorViewModel
     @State private var tab: DrawerTab
     @State private var tick = Date()
     private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
-    init(item: DrawerItem, onClose: @escaping () -> Void) {
+    init(item: DrawerItem, onClose: @escaping () -> Void, viewModel: AgentMonitorViewModel) {
         self.item = item
         self.onClose = onClose
+        self.viewModel = viewModel
         switch item {
         case .sessionOverview:   _tab = State(initialValue: .overview)
         case .subagentDetail:    _tab = State(initialValue: .output)
