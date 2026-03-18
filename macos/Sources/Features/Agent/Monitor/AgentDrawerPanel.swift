@@ -2,7 +2,7 @@
 import SwiftUI
 
 enum DrawerTab: String, CaseIterable {
-    case output   = "Output"
+    case output   = "Messages"
     case trace    = "Trace"
     case overview = "Overview"
 }
@@ -152,7 +152,7 @@ struct AgentDrawerPanel: View {
             }
         case .subagentDetail(let session, let sub):
             switch tab {
-            case .output:    SubagentOutputContent(session: session, subagent: sub)
+            case .output:    SubagentMessagesView(session: session, subagent: sub)
             case .trace:     SubagentTraceContent(subagent: sub)
             case .overview:  EmptyView()
             }
