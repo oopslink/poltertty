@@ -59,27 +59,29 @@ struct SubagentOutputContent: View {
         }
     }
 
+    @ViewBuilder
     private var completedCallsView: some View {
         let done = subagent.toolCalls.filter { $0.isDone }
         let total = subagent.toolCalls.count
-        guard !done.isEmpty else { return AnyView(EmptyView()) }
-        return AnyView(VStack(alignment: .leading, spacing: 3) {
-            Text("已完成调用 (\(done.count)/\(total))：")
-                .font(.system(size: 9)).foregroundStyle(.secondary)
-            ForEach(done) { call in
-                HStack(spacing: 4) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 8)).foregroundStyle(Color(hex: "#4caf50") ?? .green)
-                    Text(call.toolName).font(.system(size: 9)).foregroundStyle(.secondary)
+        if !done.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("已完成调用 (\(done.count)/\(total))：")
+                    .font(.system(size: 9)).foregroundStyle(.secondary)
+                ForEach(done) { call in
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 8)).foregroundStyle(Color(hex: "#4caf50") ?? .green)
+                        Text(call.toolName).font(.system(size: 9)).foregroundStyle(.secondary)
+                    }
+                }
+                if total > done.count {
+                    HStack(spacing: 4) {
+                        Image(systemName: "minus.circle")
+                            .font(.system(size: 8)).foregroundStyle(.orange)
+                        Text("未完成: \(total - done.count) 个").font(.system(size: 9)).foregroundStyle(.tertiary)
+                    }
                 }
             }
-            if total > done.count {
-                HStack(spacing: 4) {
-                    Image(systemName: "minus.circle")
-                        .font(.system(size: 8)).foregroundStyle(.orange)
-                    Text("未完成: \(total - done.count) 个").font(.system(size: 9)).foregroundStyle(.tertiary)
-                }
-            }
-        })
+        }
     }
 }

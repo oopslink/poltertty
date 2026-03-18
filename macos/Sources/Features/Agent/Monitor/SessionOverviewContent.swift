@@ -4,6 +4,9 @@ import SwiftUI
 struct SessionOverviewContent: View {
     let session: AgentSession
 
+    @State private var tick = Date()
+    private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+
     private var subagents: [SubagentInfo] {
         Array(session.subagents.values).sorted { $0.startedAt < $1.startedAt }
     }
@@ -33,6 +36,7 @@ struct SessionOverviewContent: View {
             }
             .padding(12)
         }
+        .onReceive(timer) { t in if session.state.isActive { tick = t } }
     }
 
     private func statRow(_ label: String, value: String) -> some View {
@@ -100,7 +104,7 @@ struct SessionOverviewContent: View {
     }
 
     private var elapsedSinceStart: String {
-        let secs = max(0, Int(Date().timeIntervalSince(session.startedAt)))
+        let secs = max(0, Int(tick.timeIntervalSince(session.startedAt)))
         if secs < 60 { return "\(secs)s" }
         return "\(secs/60)m \(secs%60)s"
     }
@@ -111,7 +115,7 @@ struct SessionOverviewContent: View {
     }
 
     private func elapsed(_ sub: SubagentInfo) -> String {
-        let end = sub.finishedAt ?? Date()
+        let end = sub.finishedAt ?? tick
         let s = max(0, Int(end.timeIntervalSince(sub.startedAt)))
         return s < 60 ? "\(s)s" : "\(s/60)m\(s%60)s"
     }
