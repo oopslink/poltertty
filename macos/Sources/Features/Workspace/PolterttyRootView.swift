@@ -34,6 +34,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var startupMode: WorkspaceStartupMode = .terminal
 
     @State private var showConvertAlert = false
+    @State private var fileBrowserDividerHovered = false
     @State private var convertTargetId: UUID?
     @State private var convertName = ""
 
@@ -181,9 +182,12 @@ struct PolterttyRootView<TerminalContent: View>: View {
                                 }
                             )
                             .frame(
-                                minWidth: fileBrowserVM.showPreviewPanel ? 600 : 160,
-                                idealWidth: fileBrowserVM.showPreviewPanel ? 800 : fileBrowserVM.panelWidth,
-                                maxWidth: fileBrowserVM.showPreviewPanel ? .infinity : fileBrowserVM.panelWidth
+                                minWidth: fileBrowserVM.showPreviewPanel
+                                    ? (fileBrowserVM.treeWidth + 217)
+                                    : 160,
+                                maxWidth: fileBrowserVM.showPreviewPanel
+                                    ? fileBrowserVM.previewTotalWidth
+                                    : fileBrowserVM.panelWidth
                             )
 
                             fileBrowserDivider
@@ -315,25 +319,33 @@ struct PolterttyRootView<TerminalContent: View>: View {
     }
 
     private var fileBrowserDivider: some View {
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(width: 1)
-            .overlay(
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(width: 8)
-                    .onHover { hovering in
-                        if hovering { NSCursor.resizeLeftRight.push() }
-                        else { NSCursor.pop() }
+        ZStack {
+            Color(nsColor: .separatorColor)
+                .frame(width: 1)
+            if fileBrowserDividerHovered {
+                DividerGripHandle()
+            }
+        }
+        .frame(width: 16)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            fileBrowserDividerHovered = hovering
+            if hovering { NSCursor.resizeLeftRight.push() }
+            else { NSCursor.pop() }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    if fileBrowserVM.showPreviewPanel {
+                        let minW = fileBrowserVM.treeWidth + 217
+                        let newWidth = fileBrowserVM.previewTotalWidth + value.translation.width
+                        fileBrowserVM.previewTotalWidth = max(minW, min(1200, newWidth))
+                    } else {
+                        let newWidth = fileBrowserVM.panelWidth + value.translation.width
+                        fileBrowserVM.panelWidth = max(160, min(600, newWidth))
                     }
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                let newWidth = fileBrowserVM.panelWidth + value.translation.width
-                                fileBrowserVM.panelWidth = max(160, min(600, newWidth))
-                            }
-                    )
-            )
+                }
+        )
     }
 
     // Called by TerminalController to get current sidebar state for snapshots
