@@ -96,7 +96,7 @@ extension PersistedSession {
 
 // MARK: - SessionStore
 
-final class SessionStore {
+final class SessionStore: @unchecked Sendable {
     static let shared = SessionStore()
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "poltertty",
@@ -139,7 +139,7 @@ final class SessionStore {
         decoder.dateDecodingStrategy = .iso8601
         guard let files = try? FileManager.default.contentsOfDirectory(atPath: dir) else { return [] }
         return files
-            .filter { $0.hasSuffix(".json") }
+            .filter { $0.hasSuffix(".json") && !$0.hasSuffix(".tmp") }
             .compactMap { name -> PersistedSession? in
                 let path = (dir as NSString).appendingPathComponent(name)
                 guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return nil }
