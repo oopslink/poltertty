@@ -71,25 +71,11 @@ struct WorkspaceSidebar: View {
 
             Divider()
 
-            // Workspace icons
-            ScrollView {
-                LazyVStack(spacing: 4) {
-                    ForEach(manager.formalWorkspaces) { workspace in
-                        CollapsedWorkspaceIcon(
-                            workspace: workspace,
-                            isActive: workspace.id == currentWorkspaceId,
-                            isOpen: manager.windowForWorkspace(workspace.id) != nil,
-                            onTap: { onSwitch(workspace.id) },
-                            onClose: { onClose(workspace.id) },
-                            onDelete: { manager.delete(id: workspace.id) },
-                            onEdit: { editingWorkspace = workspace }
-                        )
-                    }
-
-                    if manager.hasTemporaryWorkspaces {
-                        Divider().padding(.horizontal, 8).padding(.vertical, 4)
-
-                        ForEach(manager.temporaryWorkspaces) { workspace in
+            // Workspace icons + blank area (double-click blank to create temporary)
+            VStack(spacing: 0) {
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        ForEach(manager.formalWorkspaces) { workspace in
                             CollapsedWorkspaceIcon(
                                 workspace: workspace,
                                 isActive: workspace.id == currentWorkspaceId,
@@ -100,12 +86,29 @@ struct WorkspaceSidebar: View {
                                 onEdit: { editingWorkspace = workspace }
                             )
                         }
-                    }
-                }
-                .padding(.vertical, 6)
-            }
 
-            Spacer()
+                        if manager.hasTemporaryWorkspaces {
+                            Divider().padding(.horizontal, 8).padding(.vertical, 4)
+
+                            ForEach(manager.temporaryWorkspaces) { workspace in
+                                CollapsedWorkspaceIcon(
+                                    workspace: workspace,
+                                    isActive: workspace.id == currentWorkspaceId,
+                                    isOpen: manager.windowForWorkspace(workspace.id) != nil,
+                                    onTap: { onSwitch(workspace.id) },
+                                    onClose: { onClose(workspace.id) },
+                                    onDelete: { manager.delete(id: workspace.id) },
+                                    onEdit: { editingWorkspace = workspace }
+                                )
+                            }
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+                Spacer()
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) { onCreateTemporary() }
 
             Divider()
 
@@ -155,37 +158,12 @@ struct WorkspaceSidebar: View {
 
             Divider()
 
-            // Workspace list
-            ScrollView {
-                LazyVStack(spacing: 2) {
-                    // Formal workspaces
-                    ForEach(manager.formalWorkspaces) { workspace in
-                        ExpandedWorkspaceItem(
-                            workspace: workspace,
-                            isActive: workspace.id == currentWorkspaceId,
-                            isOpen: manager.windowForWorkspace(workspace.id) != nil,
-                            animationNamespace: sidebarAnimation,
-                            onTap: { onSwitch(workspace.id) },
-                            onClose: { onClose(workspace.id) },
-                            onDelete: { manager.delete(id: workspace.id) },
-                            onConvert: { onConvert(workspace) },
-                            onEdit: { editingWorkspace = workspace }
-                        )
-                    }
-
-                    // Temporary section
-                    if manager.hasTemporaryWorkspaces {
-                        HStack {
-                            Text("Temporary")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.secondary.opacity(0.6))
-                            Spacer()
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.top, 8)
-                        .padding(.bottom, 2)
-
-                        ForEach(manager.temporaryWorkspaces) { workspace in
+            // Workspace list + blank area (double-click blank to create temporary)
+            VStack(spacing: 0) {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        // Formal workspaces
+                        ForEach(manager.formalWorkspaces) { workspace in
                             ExpandedWorkspaceItem(
                                 workspace: workspace,
                                 isActive: workspace.id == currentWorkspaceId,
@@ -198,12 +176,40 @@ struct WorkspaceSidebar: View {
                                 onEdit: { editingWorkspace = workspace }
                             )
                         }
-                    }
-                }
-                .padding(.vertical, 4)
-            }
 
-            Spacer()
+                        // Temporary section
+                        if manager.hasTemporaryWorkspaces {
+                            HStack {
+                                Text("Temporary")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(.secondary.opacity(0.6))
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.top, 8)
+                            .padding(.bottom, 2)
+
+                            ForEach(manager.temporaryWorkspaces) { workspace in
+                                ExpandedWorkspaceItem(
+                                    workspace: workspace,
+                                    isActive: workspace.id == currentWorkspaceId,
+                                    isOpen: manager.windowForWorkspace(workspace.id) != nil,
+                                    animationNamespace: sidebarAnimation,
+                                    onTap: { onSwitch(workspace.id) },
+                                    onClose: { onClose(workspace.id) },
+                                    onDelete: { manager.delete(id: workspace.id) },
+                                    onConvert: { onConvert(workspace) },
+                                    onEdit: { editingWorkspace = workspace }
+                                )
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                Spacer()
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) { onCreateTemporary() }
 
             Divider()
 
@@ -316,6 +322,7 @@ struct CollapsedWorkspaceIcon: View {
             }
             Button("Delete Workspace", role: .destructive) { onDelete() }
         }
+        .onTapGesture(count: 2) {}  // prevent double-tap from passing through to blank area handler
     }
 }
 
@@ -416,5 +423,6 @@ struct ExpandedWorkspaceItem: View {
             }
             Button("Delete Workspace", role: .destructive) { onDelete() }
         }
+        .onTapGesture(count: 2) {}  // prevent double-tap from passing through to blank area handler
     }
 }
