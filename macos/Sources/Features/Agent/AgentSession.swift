@@ -66,6 +66,7 @@ struct SubagentInfo: Identifiable {
     var finishedAt: Date? = nil
     var toolCalls: [ToolCallRecord] = []
     var output: String? = nil       // agent 最终输出文本（PostToolUse tool_response）
+    var isHistorical: Bool = false   // 由 PersistedSession.toAgentSession() 设置，标识只读历史记录
 }
 
 /// 一个活跃 agent 的运行时状态
