@@ -24,9 +24,9 @@ struct AgentDrawer: View {
                 }
                 .frame(width: viewModel.drawerWidth)
                 .background(Color(.windowBackgroundColor))
-                .transition(.move(edge: .trailing).combined(with: .opacity))
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.selectedItems.count)
             }
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.selectedItems.count)
+            .transition(.move(edge: .trailing).combined(with: .opacity))
         }
     }
 
@@ -54,14 +54,12 @@ struct AgentDrawer: View {
     }
 
     private var headerTitle: String {
-        switch viewModel.selectedItems.count {
-        case 1:
-            switch viewModel.selectedItems[0] {
-            case .sessionOverview(let s):     return s.definition.name
-            case .subagentDetail(let s, _):   return s.definition.name
-            }
-        default:
+        guard viewModel.selectedItems.count == 1, let first = viewModel.selectedItems.first else {
             return "对比模式"
+        }
+        switch first {
+        case .sessionOverview(let s):   return s.definition.name
+        case .subagentDetail(let s, _): return s.definition.name
         }
     }
 
