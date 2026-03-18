@@ -156,10 +156,17 @@ final class HookServer {
         }
 
         let rawBodyData = Data(bodyData)
-        guard let payload = try? decoder.decode(HookPayload.self, from: rawBodyData) else {
+        guard var payload = try? decoder.decode(HookPayload.self, from: rawBodyData) else {
             let bodyPreview = String(data: rawBodyData.prefix(500), encoding: .utf8) ?? "(binary)"
             Self.logger.warning("HookServer: failed to decode hook payload (\(rawBodyData.count) bytes): \(bodyPreview)")
             sendResponse(connection, status: 400, body: #"{"error":"invalid json"}"#); return
+        }
+        // 注入 tool_input 原始 JSON（用于 Trace 显示参数）
+        if let jsonObj = try? JSONSerialization.jsonObject(with: rawBodyData) as? [String: Any],
+           let toolInput = jsonObj["tool_input"],
+           let inputData = try? JSONSerialization.data(withJSONObject: toolInput, options: [.sortedKeys]),
+           let inputStr = String(data: inputData, encoding: .utf8) {
+            payload.toolInputRaw = inputStr
         }
         Self.logger.warning("HookServer: event=\(payload.hookEventName.rawValue) sid=\(payload.sessionId ?? "nil") tool=\(payload.toolName ?? "-") toolUseId=\(payload.toolUseId ?? "-")")
         sendResponse(connection, status: 200, body: "{}")

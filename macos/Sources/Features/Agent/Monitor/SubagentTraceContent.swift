@@ -27,24 +27,43 @@ struct SubagentTraceContent: View {
     }
 
     private func callRow(_ call: ToolCallRecord, isLast: Bool) -> some View {
-        HStack(spacing: 4) {
-            Spacer().frame(width: 12)
-            treeConnector(last: isLast)
-            if call.isDone {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 9)).foregroundStyle(Color(hex: "#4caf50") ?? .green)
-            } else {
-                Circle().fill(Color.orange).frame(width: 6, height: 6)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 4) {
+                Spacer().frame(width: 12)
+                treeConnector(last: isLast && call.toolInput == nil)
+                if call.isDone {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 9)).foregroundStyle(Color(hex: "#4caf50") ?? .green)
+                } else {
+                    Circle().fill(Color.orange).frame(width: 6, height: 6)
+                }
+                Text(call.toolName)
+                    .font(.system(size: 10, weight: call.isDone ? .regular : .medium))
+                    .foregroundStyle(call.isDone ? Color.secondary : Color.primary)
+                Spacer()
+                Text(durationFor(call))
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundStyle(call.isDone ? Color.secondary.opacity(0.6) : Color.orange)
             }
-            Text(call.toolName)
-                .font(.system(size: 10, weight: call.isDone ? .regular : .medium))
-                .foregroundStyle(call.isDone ? Color.secondary : Color.primary)
-            Spacer()
-            Text(durationFor(call))
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(call.isDone ? Color.secondary.opacity(0.6) : Color.orange)
+            .frame(height: 18)
+            // tool input 参数展示
+            if let input = call.toolInput, !input.isEmpty {
+                HStack(alignment: .top, spacing: 0) {
+                    Spacer().frame(width: 26)  // 与 toolName 对齐
+                    Text(input)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .textSelection(.enabled)
+                        .lineLimit(6)
+                        .padding(.vertical, 3)
+                        .padding(.horizontal, 6)
+                        .background(Color(.textBackgroundColor).opacity(0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+                .padding(.bottom, 4)
+            }
         }
-        .padding(.trailing, 12).frame(height: 18)
+        .padding(.trailing, 12)
     }
 
     private func treeConnector(last: Bool) -> some View {

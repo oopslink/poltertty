@@ -51,6 +51,7 @@ struct ToolCallRecord: Identifiable {
     let toolName: String
     var isDone: Bool = false
     var startedAt: Date = Date()
+    var toolInput: String? = nil   // raw JSON string of tool_input
 }
 
 /// Subagent 信息（由 PreToolUse:Agent + SubagentStart hook 事件填充）

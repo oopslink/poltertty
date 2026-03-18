@@ -133,7 +133,7 @@ final class AgentSessionManager: ObservableObject {
                       let toolUseId = payload.toolUseId,
                       let toolName = payload.toolName {
                 // Subagent 内部的工具调用 → 追加到对应 SubagentInfo
-                let record = ToolCallRecord(id: toolUseId, toolName: toolName)
+                let record = ToolCallRecord(id: toolUseId, toolName: toolName, toolInput: payload.toolInputRaw)
                 updateFromClaudeSession(sid) { session in
                     guard let key = session.subagents.values
                         .first(where: { $0.agentId == agentId })?.id else { return }

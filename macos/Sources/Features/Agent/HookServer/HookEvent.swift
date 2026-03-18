@@ -50,6 +50,7 @@ struct HookPayload: Decodable {
     let agentName: String?
     let agentType: String?
     let toolResponse: String?       // PostToolUse 的 tool_response（agent 输出文本）
+    var toolInputRaw: String? = nil // 由 HookServer 注入的 tool_input 原始 JSON（不参与 Decodable）
 
     enum CodingKeys: String, CodingKey {
         case hookEventName   = "hook_event_name"

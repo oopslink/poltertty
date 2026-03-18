@@ -23,7 +23,24 @@ final class AgentMonitorViewModel: ObservableObject {
         self.workspaceId = workspaceId
         AgentService.shared.sessionManager.$sessions
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .sink { [weak self] updatedSessions in
+                guard let self else { return }
+                // 用最新 session 数据刷新 selectedItems 快照，保证 state/output 实时更新
+                self.selectedItems = self.selectedItems.compactMap { item in
+                    switch item {
+                    case .sessionOverview(let old):
+                        return updatedSessions.values
+                            .first(where: { $0.surfaceId == old.surfaceId })
+                            .map { .sessionOverview($0) }
+                    case .subagentDetail(let oldSession, let oldSub):
+                        guard let freshSession = updatedSessions.values
+                                .first(where: { $0.surfaceId == oldSession.surfaceId }),
+                              let freshSub = freshSession.subagents[oldSub.id]
+                        else { return nil }
+                        return .subagentDetail(freshSession, freshSub)
+                    }
+                }
+            }
             .store(in: &cancellables)
     }
 
