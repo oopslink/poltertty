@@ -121,10 +121,10 @@ struct AgentDrawerPanel: View {
             SessionOverviewContent(session: session)
         case .subagentDetail(let session, let sub):
             switch tab {
-            case .output:   SubagentOutputContent(session: session, subagent: sub)
-            case .trace:    SubagentTraceContent(subagent: sub)
-            case .prompt:   SubagentPromptContent(subagent: sub)
-            default:        EmptyView()
+            case .output:    SubagentOutputContent(session: session, subagent: sub)
+            case .trace:     SubagentTraceContent(subagent: sub)
+            case .prompt:    SubagentPromptContent(subagent: sub)
+            case .overview:  EmptyView()
             }
         }
     }
