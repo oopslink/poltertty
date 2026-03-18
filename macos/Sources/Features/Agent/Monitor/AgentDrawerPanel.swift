@@ -2,9 +2,8 @@
 import SwiftUI
 
 enum DrawerTab: String, CaseIterable {
-    case output = "Output"
-    case trace  = "Trace"
-    case prompt = "Prompt"
+    case output   = "Output"
+    case trace    = "Trace"
     case overview = "Overview"
 }
 
@@ -74,14 +73,31 @@ struct AgentDrawerPanel: View {
     }
 
     private func metricsRow(_ sub: SubagentInfo) -> some View {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "HH:mm:ss"
+        let startStr = fmt.string(from: sub.startedAt)
+        let endStr = sub.finishedAt.map { fmt.string(from: $0) }
         let elapsed: String = {
             let end = sub.finishedAt ?? tick
             let s = max(0, Int(end.timeIntervalSince(sub.startedAt)))
             return s < 60 ? "\(s)s" : "\(s/60)m\(s%60)s"
         }()
         return HStack(spacing: 6) {
+            // 时间段
+            if let end = endStr {
+                Text("\(startStr) → \(end)")
+                    .font(.system(size: 9, design: .monospaced)).foregroundStyle(.secondary)
+            } else {
+                Text(startStr)
+                    .font(.system(size: 9, design: .monospaced)).foregroundStyle(.secondary)
+            }
+            Text("·").foregroundStyle(.tertiary).font(.system(size: 9))
+            // 耗时
             Label(elapsed, systemImage: "clock").font(.system(size: 9)).foregroundStyle(.secondary)
-            Label("\(sub.toolCalls.count)", systemImage: "wrench").font(.system(size: 9)).foregroundStyle(.secondary)
+            // 工具调用数
+            if sub.toolCalls.count > 0 {
+                Label("\(sub.toolCalls.count)", systemImage: "wrench").font(.system(size: 9)).foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -90,7 +106,7 @@ struct AgentDrawerPanel: View {
     private var availableTabs: [DrawerTab] {
         switch item {
         case .sessionOverview:  return [.overview]
-        case .subagentDetail:   return [.output, .trace, .prompt]
+        case .subagentDetail:   return [.output, .trace]
         }
     }
 
@@ -126,7 +142,6 @@ struct AgentDrawerPanel: View {
             switch tab {
             case .output:    SubagentOutputContent(session: session, subagent: sub)
             case .trace:     SubagentTraceContent(subagent: sub)
-            case .prompt:    SubagentPromptContent(subagent: sub)
             case .overview:  EmptyView()
             }
         }

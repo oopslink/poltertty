@@ -64,6 +64,7 @@ struct SubagentInfo: Identifiable {
     var startedAt: Date = Date()
     var finishedAt: Date? = nil
     var toolCalls: [ToolCallRecord] = []
+    var output: String? = nil       // agent 最终输出文本（PostToolUse tool_response）
 }
 
 /// 一个活跃 agent 的运行时状态

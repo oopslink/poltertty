@@ -49,6 +49,7 @@ struct HookPayload: Decodable {
     let agentId: String?
     let agentName: String?
     let agentType: String?
+    let toolResponse: String?       // PostToolUse 的 tool_response（agent 输出文本）
 
     enum CodingKeys: String, CodingKey {
         case hookEventName   = "hook_event_name"
@@ -62,5 +63,6 @@ struct HookPayload: Decodable {
         case agentId         = "agent_id"
         case agentName       = "agent_name"
         case agentType       = "agent_type"
+        case toolResponse    = "tool_response"
     }
 }

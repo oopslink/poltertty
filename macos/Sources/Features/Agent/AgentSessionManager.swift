@@ -151,12 +151,14 @@ final class AgentSessionManager: ObservableObject {
                 AgentService.shared.respawnController?.recordToolUse(surfaceId: surfaceId)
             }
             if payload.toolName == "Agent" {
-                // Agent tool 完成 → 标记 subagent done
+                // Agent tool 完成 → 标记 subagent done，保存输出
                 let toolUseId = payload.toolUseId ?? ""
                 if !toolUseId.isEmpty {
+                    let output = payload.toolResponse
                     updateFromClaudeSession(sid) {
                         $0.subagents[toolUseId]?.state = .done(exitCode: 0)
                         $0.subagents[toolUseId]?.finishedAt = Date()
+                        if let output { $0.subagents[toolUseId]?.output = output }
                     }
                 }
             } else if let agentId = payload.agentId, let toolUseId = payload.toolUseId {
