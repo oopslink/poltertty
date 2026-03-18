@@ -65,9 +65,41 @@ final class HookServer {
             return false
         }
         if lock.pid == getpid() { return false }
+        // PID 单独检查不可靠（OS 会复用 PID），额外用 TCP connect 验证端口确实在监听
+        guard isPortListening(lock.port) else {
+            Self.logger.warning("HookServer: lock file PID \(lock.pid) alive but port \(lock.port) not responding — stale lock")
+            try? FileManager.default.removeItem(atPath: Self.lockFilePath)
+            return false
+        }
         self.port = lock.port
         Self.logger.info("HookServer: reusing port \(lock.port) from PID \(lock.pid)")
         return true
+    }
+
+    /// TCP connect 验证：尝试连接 localhost:{port}，成功则说明有进程在监听
+    private func isPortListening(_ port: UInt16) -> Bool {
+        guard let portObj = NWEndpoint.Port(rawValue: port) else { return false }
+        let conn = NWConnection(
+            to: .hostPort(host: .ipv4(.loopback), port: portObj),
+            using: .tcp
+        )
+        let semaphore = DispatchSemaphore(value: 0)
+        var connected = false
+        conn.stateUpdateHandler = { state in
+            switch state {
+            case .ready:
+                connected = true
+                conn.cancel()
+                semaphore.signal()
+            case .failed, .cancelled:
+                semaphore.signal()
+            default: break
+            }
+        }
+        conn.start(queue: .global(qos: .utility))
+        let result = semaphore.wait(timeout: .now() + 1.0)
+        if result == .timedOut { conn.cancel() }
+        return connected
     }
 
     private func tryListen(on port: UInt16) -> Bool {
@@ -88,7 +120,11 @@ final class HookServer {
         }
         listener.newConnectionHandler = { [weak self] conn in self?.handleConnection(conn) }
         listener.start(queue: .global(qos: .utility))
-        semaphore.wait()
+        let result = semaphore.wait(timeout: .now() + 5.0)
+        if result == .timedOut {
+            Self.logger.error("HookServer: tryListen timed out on port \(port)")
+            listener.cancel()
+        }
 
         if success { self.listener = listener; self.port = port }
         return success
