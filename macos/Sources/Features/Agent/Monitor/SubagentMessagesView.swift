@@ -8,7 +8,7 @@ struct SubagentMessagesView: View {
     @State private var transcript: SubagentTranscript? = nil
     @State private var isLoading = true
     @State private var tick = Date()
-    private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ScrollView {

@@ -4,7 +4,7 @@ import SwiftUI
 struct SubagentTraceContent: View {
     let subagent: SubagentInfo
     @State private var tick = Date()
-    private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ScrollView {
