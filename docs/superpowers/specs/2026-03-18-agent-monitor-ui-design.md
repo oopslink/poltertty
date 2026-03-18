@@ -31,7 +31,7 @@
 
 - **侧边栏**：固定 180px，始终可见，列出所有 session 及其 subagent
 - **Drawer**：从侧边栏左侧滑出，宽度随选中 subagent 数量自动扩展
-- **终端区域**：不被侧边栏或 Drawer 影响（Drawer 覆盖在终端上方，或终端区域 flex 压缩）
+- **终端区域**：Drawer 以 overlay 形式浮于终端上方，不占用 flex 空间、不压缩终端宽度
 
 ---
 
@@ -72,8 +72,8 @@
 | 点击 Subagent 行 | 打开详情（400px） |
 | Cmd+Click 第 2 个 | 扩展为 Split 2（800px） |
 | Cmd+Click 第 3 个 | 扩展为 Split 3（1200px） |
-| 点 Panel 的 ✕ | 关闭该 panel，Drawer 收缩 |
-| 点 Drawer 全局 ✕ | 关闭整个 Drawer |
+| 点 Panel 的 ✕ | 关闭该 panel，Drawer 收缩；若最后一个 panel 被关闭，Drawer 整体关闭 |
+| 点 Drawer 全局 ✕ | 关闭整个 Drawer，清空所有 selectedItems |
 
 ### Drawer Header（全局工具栏）
 
