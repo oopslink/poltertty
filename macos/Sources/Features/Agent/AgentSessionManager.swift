@@ -107,6 +107,13 @@ final class AgentSessionManager: ObservableObject {
             if let surfaceId = claudeSessionIndex[sid] {
                 let cwd = sessions[surfaceId]?.cwd
                 updateFromClaudeSession(sid) { $0.state = .done(exitCode: 0) }
+                // F5: 持久化到磁盘
+                if let session = sessions[surfaceId] {
+                    let snap = session  // 值拷贝，避免后续修改竞争
+                    Task.detached(priority: .utility) {
+                        SessionStore.shared.save(snap)
+                    }
+                }
                 if let cwd = cwd {
                     AgentService.shared.cleanupHooks(for: cwd)
                 }

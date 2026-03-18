@@ -6,6 +6,8 @@ import Combine
 final class AgentMonitorViewModel: ObservableObject {
     @Published var isVisible: Bool = false
     @Published var selectedItems: [DrawerItem] = []
+    @Published private(set) var historicalSessions: [PersistedSession] = []
+    @Published var historyExpanded: Bool = false
 
     var drawerWidth: CGFloat {
         switch selectedItems.count {
@@ -72,5 +74,24 @@ final class AgentMonitorViewModel: ObservableObject {
 
     func closeDrawer() {
         selectedItems = []
+    }
+
+    func loadHistory() {
+        let wid = workspaceId
+        Task.detached(priority: .utility) { [weak self] in
+            let sessions = SessionStore.shared.load(for: wid)
+            await MainActor.run { self?.historicalSessions = sessions }
+        }
+    }
+
+    func toggleHistory() {
+        historyExpanded.toggle()
+        if historyExpanded { loadHistory() }
+    }
+
+    /// 点击历史 session → 在 Drawer 中显示只读 Overview
+    func selectHistory(_ ps: PersistedSession) {
+        let session = ps.toAgentSession()
+        selectedItems = [.sessionOverview(session)]
     }
 }

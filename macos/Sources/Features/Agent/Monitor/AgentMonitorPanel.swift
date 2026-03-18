@@ -37,8 +37,72 @@ struct AgentMonitorPanel: View {
                     }
                 }
             }
+            // F5: HISTORY section — 放在 if/else 之外，无论是否有活跃 session 均显示
+            historySectionView
         }
         .frame(width: 180)
         .background(Color(.windowBackgroundColor))
+    }
+
+    private var historySectionView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // 折叠/展开 header
+            Button(action: { viewModel.toggleHistory() }) {
+                HStack(spacing: 4) {
+                    Image(systemName: viewModel.historyExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 8)).foregroundStyle(.tertiary)
+                    Text("HISTORY")
+                        .font(.system(size: 8, weight: .semibold)).foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 5)
+            }
+            .buttonStyle(.plain)
+            .onAppear {
+                viewModel.loadHistory()
+                if viewModel.sessions.isEmpty {
+                    viewModel.historyExpanded = true
+                }
+            }
+
+            if viewModel.historyExpanded {
+                ForEach(viewModel.historicalSessions) { ps in
+                    historyRow(ps)
+                }
+            }
+        }
+        .background(Color(.windowBackgroundColor))
+    }
+
+    private func historyRow(_ ps: PersistedSession) -> some View {
+        Button(action: {
+            viewModel.isVisible = true
+            viewModel.selectHistory(ps)
+        }) {
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 8)).foregroundStyle(Color(hex: "#4caf50") ?? .green)
+                Text(ps.agentName)
+                    .font(.system(size: 9)).foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.tail)
+                Spacer()
+                let cost = NSDecimalNumber(decimal: ps.tokenUsage.cost).doubleValue
+                if cost > 0 {
+                    Text(String(format: "$%.2f", cost))
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundStyle(Color(hex: "#4caf50") ?? .green)
+                }
+                Text(relativeTime(ps.finishedAt))
+                    .font(.system(size: 8, design: .monospaced)).foregroundStyle(.tertiary)
+            }
+            .padding(.leading, 18).padding(.trailing, 10).padding(.vertical, 3)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func relativeTime(_ date: Date) -> String {
+        let secs = Int(Date().timeIntervalSince(date))
+        if secs < 3600  { return "\(secs / 60)m" }
+        if secs < 86400 { return "\(secs / 3600)h" }
+        return "\(secs / 86400)d"
     }
 }

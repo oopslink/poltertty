@@ -10,9 +10,24 @@ struct SubagentTraceContent: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if subagent.toolCalls.isEmpty {
-                    Text(subagent.state.isActive ? "等待工具调用…" : "无工具调用记录")
-                        .font(.system(size: 10)).foregroundStyle(.tertiary)
-                        .padding(12)
+                    if subagent.isHistorical {
+                        // 历史记录：toolCalls 为空是因为持久化不保留详情（isHistorical 标记由 toAgentSession() 设置）
+                        Text("历史记录不保留工具调用详情")
+                            .font(.system(size: 10)).foregroundStyle(.tertiary).padding(12)
+                        if let output = subagent.output {
+                            Text("最终输出：")
+                                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+                                .padding(.horizontal, 12)
+                            Text(output)
+                                .font(.system(size: 10)).foregroundStyle(.primary)
+                                .textSelection(.enabled)
+                                .padding(.horizontal, 12).padding(.top, 4)
+                        }
+                    } else {
+                        Text(subagent.state.isActive ? "等待工具调用…" : "无工具调用记录")
+                            .font(.system(size: 10)).foregroundStyle(.tertiary)
+                            .padding(12)
+                    }
                 } else {
                     Text("Tool calls (\(subagent.toolCalls.count))")
                         .font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
