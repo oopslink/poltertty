@@ -67,6 +67,14 @@ struct AgentSessionGroup: View {
                 .foregroundStyle(isSelected ? (Color(hex: "#90bfff") ?? .blue) : .secondary)
                 .lineLimit(1).truncationMode(.tail)
             Spacer()
+            // F2: 工具气泡
+            if sub.state.isActive,
+               let activeTool = sub.toolCalls.last(where: { !$0.isDone }) {
+                Text(String(activeTool.toolName.prefix(12)))
+                    .font(.system(size: 8))
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+            }
             Text(elapsedLabel(sub))
                 .font(.system(size: 8, design: .monospaced))
                 .foregroundStyle(isSelected ? (Color(hex: "#4a6a99") ?? Color(.tertiaryLabelColor)) : Color(.tertiaryLabelColor))
