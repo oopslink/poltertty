@@ -214,6 +214,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
                             Spacer().frame(width: 181)
                         }
                     }
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: agentMonitorVM.selectedItems.isEmpty)
                 }
             }
 
