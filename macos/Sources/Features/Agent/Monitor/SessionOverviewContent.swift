@@ -83,7 +83,13 @@ struct SessionOverviewContent: View {
             }
             .padding(12)
         }
-        .onReceive(timer) { t in if session.state.isActive { tick = t } }
+        .onReceive(timer) { t in
+            if session.state.isActive {
+                tick = t
+                // F1: 保底 token 更新（仅 active session；历史 session 的 isActive==false，不会触发）
+                AgentService.shared.tokenTracker?.pollLiveTokens(surfaceId: session.surfaceId)
+            }
+        }
     }
 
     private func statRow(_ label: String, value: String) -> some View {

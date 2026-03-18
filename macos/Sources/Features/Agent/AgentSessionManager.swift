@@ -24,6 +24,7 @@ final class AgentSessionManager: ObservableObject {
             claudeSessionIndex.removeValue(forKey: sid)
         }
         sessions.removeValue(forKey: surfaceId)
+        AgentService.shared.tokenTracker?.clearThrottle(surfaceId: surfaceId)
     }
 
     func removeAll(for workspaceId: UUID) {
@@ -170,6 +171,10 @@ final class AgentSessionManager: ObservableObject {
                         session.subagents[key]?.toolCalls[idx].isDone = true
                     }
                 }
+            }
+            // F1: 实时 token 轮询
+            if let surfaceId = claudeSessionIndex[sid] {
+                AgentService.shared.tokenTracker?.pollLiveTokens(surfaceId: surfaceId)
             }
         case .notification:
             guard let sid else { return }

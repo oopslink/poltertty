@@ -10,6 +10,9 @@ final class TokenTracker {
     )
 
     private let sessionManager: AgentSessionManager
+    private var lastPollDates: [UUID: Date] = [:]
+    private static let pollInterval: TimeInterval = 5
+
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.outputFormatting = .prettyPrinted
@@ -38,6 +41,37 @@ final class TokenTracker {
                 }
             }
         }
+    }
+
+    private func liveTranscriptPath(for session: AgentSession) -> String? {
+        guard let claudeSessionId = session.claudeSessionId else { return nil }
+        let sanitized = SubagentTranscriptReader.sanitizeCwd(session.cwd)
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return "\(home)/.claude/projects/\(sanitized)/\(claudeSessionId).jsonl"
+    }
+
+    /// 节流轮询主 session transcript，在 postToolUse 和 Overview timer 时调用
+    func pollLiveTokens(surfaceId: UUID) {
+        let now = Date()
+        if let last = lastPollDates[surfaceId],
+           now.timeIntervalSince(last) < Self.pollInterval { return }
+        lastPollDates[surfaceId] = now
+
+        guard let session = sessionManager.session(for: surfaceId),
+              let path = liveTranscriptPath(for: session) else { return }
+        let model = session.definition.command == "claude" ? "claude-sonnet-4" : "claude-sonnet-4"
+
+        Task.detached(priority: .utility) { [weak self] in
+            let usage = await self?.parseTranscript(at: path, model: model) ?? TokenUsage()
+            guard usage.totalTokens > 0 else { return }
+            await MainActor.run {
+                self?.sessionManager.updateTokenUsage(surfaceId: surfaceId, usage: usage)
+            }
+        }
+    }
+
+    func clearThrottle(surfaceId: UUID) {
+        lastPollDates.removeValue(forKey: surfaceId)
     }
 
     private func parseTranscript(at path: String, model: String) async -> TokenUsage {
