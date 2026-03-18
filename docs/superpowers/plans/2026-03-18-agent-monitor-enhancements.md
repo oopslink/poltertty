@@ -258,9 +258,14 @@ if !events.isEmpty {
 并添加 `eventLogSection` 视图函数：
 
 ```swift
-private func eventLogSection(_ events: [RecentEventEntry]) -> some View {
+private static let eventTimeFmt: DateFormatter = {
     let fmt = DateFormatter()
     fmt.dateFormat = "HH:mm:ss"
+    return fmt
+}()
+
+private func eventLogSection(_ events: [RecentEventEntry]) -> some View {
+    let fmt = Self.eventTimeFmt
     let total = session.subagents.values.flatMap { $0.toolCalls }.count
     return VStack(alignment: .leading, spacing: 0) {
         ForEach(Array(events.enumerated()), id: \.offset) { _, ev in
@@ -712,7 +717,7 @@ extension AgentSession {
             definitionId: definition.id, agentName: definition.name,
             agentCommand: definition.command, agentIcon: definition.icon,
             cwd: cwd, claudeSessionId: claudeSessionId,
-            startedAt: startedAt, finishedAt: lastEventAt,
+            startedAt: startedAt, finishedAt: finishedAt,
             tokenUsage: tokenUsage, subagents: persistedSubs
         )
     }
@@ -890,12 +895,28 @@ func selectHistory(_ ps: PersistedSession) {
 
 - [ ] **Step 3: AgentMonitorPanel 添加 HISTORY section**
 
-在 `AgentMonitorPanel.swift` 的 `body` 中，在 `ForEach(viewModel.sessions)` 之后，`}` (ScrollView 关闭) 之前添加：
+在 `AgentMonitorPanel.swift` 的 `body` 中，修改整体结构：将 HISTORY section 放在 `if/else` 之外（`ScrollView` 之外），使其在活跃 session 为空时也可见：
 
 ```swift
-// F5: 历史 session
-if !viewModel.historicalSessions.isEmpty || viewModel.historyExpanded {
-    historySectionView
+// 原结构（活跃 sessions）
+if viewModel.sessions.isEmpty {
+    // empty state view
+} else {
+    ScrollView { LazyVStack { ForEach(viewModel.sessions) { ... } } }
+}
+// F5: HISTORY section — 放在 if/else 之外，无论是否有活跃 session 均显示
+// 无活跃 session 时自动展开（onAppear 调用 loadHistory）
+historySectionView
+```
+
+并在 `historySectionView` 的 `.onAppear` 中，当 `viewModel.sessions.isEmpty` 时自动展开：
+
+```swift
+.onAppear {
+    viewModel.loadHistory()
+    if viewModel.sessions.isEmpty {
+        viewModel.historyExpanded = true
+    }
 }
 ```
 
