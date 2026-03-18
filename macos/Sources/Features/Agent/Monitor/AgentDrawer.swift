@@ -11,12 +11,18 @@ struct AgentDrawer: View {
                 VStack(spacing: 0) {
                     drawerHeader
                     Divider()
-                    HStack(spacing: 0) {
-                        ForEach(viewModel.selectedItems) { item in
-                            AgentDrawerPanel(item: item, onClose: { viewModel.closePanel(item) }, viewModel: viewModel)
-                            .id(item.id)
-                            if item != viewModel.selectedItems.last {
-                                Divider()
+                    if let session = viewModel.unifiedSession {
+                        // 统一两列视图：左 overview + 右 subagent detail
+                        SessionDetailView(session: session, viewModel: viewModel)
+                    } else {
+                        // 对比模式：多面板并排
+                        HStack(spacing: 0) {
+                            ForEach(viewModel.selectedItems) { item in
+                                AgentDrawerPanel(item: item, onClose: { viewModel.closePanel(item) }, viewModel: viewModel)
+                                .id(item.id)
+                                if item != viewModel.selectedItems.last {
+                                    Divider()
+                                }
                             }
                         }
                     }
@@ -40,12 +46,6 @@ struct AgentDrawer: View {
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.secondary)
             Spacer()
-            // 布局切换按钮（上下分屏暂不实现，保留 UI）
-            HStack(spacing: 3) {
-                layoutBtn(icon: "square.split.2x1", isActive: true)
-                layoutBtn(icon: "square.split.1x2", isActive: false)
-                    .opacity(0.4)  // disabled
-            }
             Button(action: viewModel.closeDrawer) {
                 Image(systemName: "xmark").font(.system(size: 10))
             }
@@ -73,14 +73,5 @@ struct AgentDrawer: View {
         case .sessionOverview(let s):       return s.state
         case .subagentDetail(_, let sub):   return sub.state
         }
-    }
-
-    private func layoutBtn(icon: String, isActive: Bool) -> some View {
-        Image(systemName: icon)
-            .font(.system(size: 10))
-            .padding(4)
-            .background(isActive ? Color.accentColor.opacity(0.2) : Color.clear)
-            .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
-            .clipShape(RoundedRectangle(cornerRadius: 3))
     }
 }

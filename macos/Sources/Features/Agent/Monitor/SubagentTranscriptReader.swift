@@ -47,11 +47,12 @@ struct SubagentTranscript {
 final class SubagentTranscriptReader {
 
     /// 将 cwd 转换为 Claude Code 使用的目录名：将 / 和空格替换为 -，去掉开头的 -
+    /// 将 cwd 转换为 Claude Code 使用的项目目录名
+    /// Claude Code 只保留 ASCII 字母数字和 ._-，其余字符替换为 -
+    /// 注意：不能用 CharacterSet.alphanumerics（它包含 Unicode 字母如中文）
     static func sanitizeCwd(_ cwd: String) -> String {
-        var s = cwd.replacingOccurrences(of: "/", with: "-")
-                   .replacingOccurrences(of: " ", with: "-")
-        if s.hasPrefix("-") { s = String(s.dropFirst()) }
-        return s
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+        return String(cwd.unicodeScalars.map { allowed.contains($0) ? Character($0) : "-" })
     }
 
     /// 派生 JSONL 文件路径，任意必要字段为 nil 时返回 nil

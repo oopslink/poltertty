@@ -81,8 +81,11 @@ final class TokenTracker {
         var totalInput = 0, totalOutput = 0
         for line in content.components(separatedBy: .newlines) {
             guard let data = line.data(using: .utf8),
-                  let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let u = event["usage"] as? [String: Any] else { continue }
+                  let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+            // usage 字段在 message.usage 中（Claude Code transcript 格式）
+            let u = (event["message"] as? [String: Any])?["usage"] as? [String: Any]
+                 ?? event["usage"] as? [String: Any]
+            guard let u else { continue }
             totalInput  = (u["input_tokens"]  as? Int) ?? totalInput
             totalOutput = (u["output_tokens"] as? Int) ?? totalOutput
         }

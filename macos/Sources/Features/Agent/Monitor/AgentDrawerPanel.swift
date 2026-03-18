@@ -31,8 +31,11 @@ struct AgentDrawerPanel: View {
             if viewModel.selectedItems.count > 1 || isSubagentDetail {
                 panelHeader
             }
-            tabBar
-            Divider()
+            // sessionOverview 只有一个 tab，不需要 tab bar
+            if availableTabs.count > 1 {
+                tabBar
+                Divider()
+            }
             contentArea
         }
         .background(Color(.windowBackgroundColor))
@@ -82,9 +85,15 @@ struct AgentDrawerPanel: View {
         }
     }
 
-    private func metricsRow(_ sub: SubagentInfo) -> some View {
+    private static let metricsFmt: DateFormatter = {
         let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
         fmt.dateFormat = "HH:mm:ss"
+        return fmt
+    }()
+
+    private func metricsRow(_ sub: SubagentInfo) -> some View {
+        let fmt = Self.metricsFmt
         let startStr = fmt.string(from: sub.startedAt)
         let endStr = sub.finishedAt.map { fmt.string(from: $0) }
         let elapsed: String = {
@@ -148,7 +157,7 @@ struct AgentDrawerPanel: View {
         switch item {
         case .sessionOverview(let session):
             SessionOverviewContent(session: session) { sub in
-                viewModel.select(.subagentDetail(session, sub))
+                viewModel.selectSubagentInSidebar(sub, in: session)
             }
         case .subagentDetail(let session, let sub):
             switch tab {

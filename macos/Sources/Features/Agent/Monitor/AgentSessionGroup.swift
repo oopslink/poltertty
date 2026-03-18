@@ -18,7 +18,7 @@ struct AgentSessionGroup: View {
                 }
             }
         }
-        .onReceive(timer) { t in tick = t }
+        .onReceive(timer) { t in if session.state.isActive { tick = t } }
     }
 
     // MARK: - Session row
@@ -58,8 +58,7 @@ struct AgentSessionGroup: View {
     // MARK: - Subagent row
 
     private func subagentRow(_ sub: SubagentInfo) -> some View {
-        let item = DrawerItem.subagentDetail(session, sub)
-        let isSelected = viewModel.selectedItems.contains(item)
+        let isSelected = viewModel.selectedSubagentId == sub.id
         return HStack(spacing: 4) {
             AgentStateDot(state: sub.state)
             Text(sub.name)
@@ -82,11 +81,10 @@ struct AgentSessionGroup: View {
         .padding(.leading, 20).padding(.trailing, 10).padding(.vertical, 3)
         .background(isSelected ? (Color(hex: "#152040") ?? Color.accentColor.opacity(0.15)) : Color.clear)
         .contentShape(Rectangle())
-        .onTapGesture { viewModel.select(item) }
-        // Cmd+Click 多选
-        .simultaneousGesture(TapGesture().modifiers(.command).onEnded { _ in
-            viewModel.cmdClick(item)
-        })
+        .onTapGesture {
+            // 打开统一视图，预选此 subagent
+            viewModel.selectSubagentInSidebar(sub, in: session)
+        }
     }
 
     // MARK: - Helpers

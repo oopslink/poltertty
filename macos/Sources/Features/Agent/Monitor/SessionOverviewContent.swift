@@ -14,6 +14,9 @@ struct SessionOverviewContent: View {
     var onSubagentTap: ((SubagentInfo) -> Void)? = nil
 
     @State private var tick = Date()
+    @State private var subagentsExpanded: Bool = true
+    @State private var activityExpanded: Bool = true
+    @State private var graphExpanded: Bool = false
     private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
     private var subagents: [SubagentInfo] {
@@ -21,13 +24,26 @@ struct SessionOverviewContent: View {
     }
 
     private var recentEvents: [RecentEventEntry] {
-        session.subagents.values
-            .flatMap { sub in sub.toolCalls.map { call in
-                RecentEventEntry(time: call.startedAt,
-                                 subagentName: String(sub.name.prefix(10)),
-                                 toolName: call.toolName,
-                                 isDone: call.isDone)
-            }}
+        var events: [RecentEventEntry] = []
+        for sub in session.subagents.values {
+            // subagent 创建事件（Agent tool call）
+            events.append(RecentEventEntry(
+                time: sub.startedAt,
+                subagentName: String(sub.name.prefix(10)),
+                toolName: "Agent",
+                isDone: !sub.state.isActive
+            ))
+            // subagent 内部工具调用
+            for call in sub.toolCalls {
+                events.append(RecentEventEntry(
+                    time: call.startedAt,
+                    subagentName: String(sub.name.prefix(10)),
+                    toolName: call.toolName,
+                    isDone: call.isDone
+                ))
+            }
+        }
+        return events
             .sorted { $0.time > $1.time }
             .prefix(50)
             .map { $0 }
@@ -38,47 +54,30 @@ struct SessionOverviewContent: View {
             VStack(alignment: .leading, spacing: 0) {
                 statRow("总耗时", value: elapsedSinceStart)
                 statRow("Cost",   value: costLabel)
+                statRow("Tokens", value: tokensLabel)
                 statRow("Context", value: String(format: "%.0f%%", session.tokenUsage.contextUtilization * 100))
                 contextBar
                     .padding(.bottom, 8)
                 Divider().padding(.vertical, 6)
 
-                Text("SUBAGENTS")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                    .padding(.bottom, 4)
-
-                ForEach(subagents) { sub in
-                    overviewRow(sub)
-                        .onTapGesture { onSubagentTap?(sub) }
-                        .contentShape(Rectangle())
-                }
+                subagentsSection
 
                 Divider().padding(.vertical, 6)
                 Text("点击 subagent 查看详情 · Cmd+Click 并排对比")
                     .font(.system(size: 9)).foregroundStyle(.tertiary)
 
-                if !session.subagents.isEmpty {
-                    Divider().padding(.vertical, 6)
-                    Text("AGENT GRAPH")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                        .padding(.bottom, 4)
-                    AgentGraphView(session: session, tick: tick) { sub in
-                        onSubagentTap?(sub)
-                    }
-                }
-
-                // MARK: - Activity Log
+                // MARK: - Activity Log（可折叠，固定高度）
                 let events = recentEvents
-                let totalToolCalls = session.subagents.values.reduce(0) { $0 + $1.toolCalls.count }
+                let totalToolCalls = session.subagents.count + session.subagents.values.reduce(0) { $0 + $1.toolCalls.count }
                 if !events.isEmpty {
                     Divider().padding(.vertical, 6)
-                    Text("ACTIVITY")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.tertiary)
-                        .padding(.bottom, 4)
-                    eventLogSection(events, total: totalToolCalls)
+                    activitySection(events, total: totalToolCalls)
+                }
+
+                // MARK: - Agent Graph（可折叠，固定高度）
+                if !session.subagents.isEmpty {
+                    Divider().padding(.vertical, 6)
+                    agentGraphSection
                 }
             }
             .padding(12)
@@ -167,6 +166,17 @@ struct SessionOverviewContent: View {
         return d > 0 ? String(format: "$%.4f", d) : "—"
     }
 
+    private var tokensLabel: String {
+        let input = session.tokenUsage.inputTokens
+        let output = session.tokenUsage.outputTokens
+        guard input > 0 || output > 0 else { return "—" }
+        return "↑\(formatK(input)) ↓\(formatK(output))"
+    }
+
+    private func formatK(_ n: Int) -> String {
+        n >= 1000 ? String(format: "%.1fK", Double(n) / 1000) : "\(n)"
+    }
+
     private func elapsed(_ sub: SubagentInfo) -> String {
         let end = sub.finishedAt ?? tick
         let s = max(0, Int(end.timeIntervalSince(sub.startedAt)))
@@ -179,6 +189,58 @@ struct SessionOverviewContent: View {
         fmt.dateFormat = "HH:mm:ss"
         return fmt
     }()
+
+    // MARK: - Subagents Section（可折叠，固定高度）
+
+    private var subagentsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { subagentsExpanded.toggle() } }) {
+                HStack(spacing: 4) {
+                    Image(systemName: subagentsExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 8)).foregroundStyle(.tertiary)
+                    Text("SUBAGENTS")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 4)
+
+            if subagentsExpanded {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(subagents) { sub in
+                        overviewRow(sub)
+                            .onTapGesture { onSubagentTap?(sub) }
+                            .contentShape(Rectangle())
+                    }
+                }
+                .frame(maxHeight: 200)
+                .clipped()
+            }
+        }
+    }
+
+    private func activitySection(_ events: [RecentEventEntry], total: Int) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { activityExpanded.toggle() } }) {
+                HStack(spacing: 4) {
+                    Image(systemName: activityExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 8)).foregroundStyle(.tertiary)
+                    Text("ACTIVITY")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 4)
+
+            if activityExpanded {
+                eventLogSection(events, total: total)
+                    .frame(maxHeight: 200)
+                    .clipped()
+            }
+        }
+    }
 
     private func eventLogSection(_ events: [RecentEventEntry], total: Int) -> some View {
         let fmt = Self.eventTimeFmt
@@ -208,6 +270,32 @@ struct SessionOverviewContent: View {
                 Text("… and \(total - 50) more")
                     .font(.system(size: 9)).foregroundStyle(.tertiary)
                     .padding(.top, 2)
+            }
+        }
+    }
+
+    // MARK: - Agent Graph（可折叠，固定高度）
+
+    private var agentGraphSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { graphExpanded.toggle() } }) {
+                HStack(spacing: 4) {
+                    Image(systemName: graphExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 8)).foregroundStyle(.tertiary)
+                    Text("AGENT GRAPH")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 4)
+
+            if graphExpanded {
+                AgentGraphView(session: session, tick: tick) { sub in
+                    onSubagentTap?(sub)
+                }
+                .frame(height: 240)
+                .clipped()
             }
         }
     }

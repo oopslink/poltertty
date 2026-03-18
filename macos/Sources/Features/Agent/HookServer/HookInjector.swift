@@ -9,7 +9,8 @@ final class HookInjector {
         category: "HookInjector"
     )
 
-    private static let marker = "_poltertty"
+    /// 用 URL query param 标识我们的 hook（避免在 hook 对象中使用非标准字段导致 Claude Code 报错）
+    private static let markerQuery = "src=poltertty"
 
     private static let hookEventNames = [
         "SessionStart", "SessionEnd", "Notification",
@@ -19,15 +20,16 @@ final class HookInjector {
 
     static func inject(cwd: String, port: UInt16) {
         let path = settingsPath(cwd: cwd)
-        let url = "http://localhost:\(port)/hook"
+        let url = "http://localhost:\(port)/hook?\(markerQuery)"
         modifySettings(at: path) { settings in
             var hooks = settings["hooks"] as? [String: Any] ?? [:]
-            let entry: [String: Any] = ["type": "http", "url": url, marker: true]
-            let wrapper: [String: Any] = ["hooks": [entry]]
+            // 只使用标准字段 type + url，不添加额外字段
+            let entry: [String: Any] = ["type": "http", "url": url]
             for event in hookEventNames {
                 var list = hooks[event] as? [[String: Any]] ?? []
-                list.removeAll { ($0[marker] as? Bool) == true }
-                list.append(wrapper)
+                // 清理：匹配 URL 中的 marker query 或旧的 _poltertty 字段
+                list.removeAll { isOurHook($0) }
+                list.append(entry)
                 hooks[event] = list
             }
             settings["hooks"] = hooks
@@ -41,10 +43,7 @@ final class HookInjector {
             guard var hooks = settings["hooks"] as? [String: Any] else { return }
             for event in hookEventNames {
                 if var list = hooks[event] as? [[String: Any]] {
-                    list.removeAll { entry in
-                        (entry[marker] as? Bool) == true ||
-                        ((entry["hooks"] as? [[String: Any]])?.contains { ($0[marker] as? Bool) == true } ?? false)
-                    }
+                    list.removeAll { isOurHook($0) }
                     hooks[event] = list.isEmpty ? nil : list
                 }
             }
@@ -53,6 +52,25 @@ final class HookInjector {
     }
 
     // MARK: - Private
+
+    /// 判断一个 hook 条目是否是我们注入的
+    private static func isOurHook(_ item: [String: Any]) -> Bool {
+        // 新格式：URL 包含 src=poltertty
+        if let url = item["url"] as? String, url.contains(markerQuery) { return true }
+        // 旧格式：_poltertty 字段
+        if (item["_poltertty"] as? Bool) == true { return true }
+        // 旧格式：URL 匹配 localhost:PORT/hook（无 query）
+        if let url = item["url"] as? String, isLocalhostHook(url) { return true }
+        // 旧嵌套 wrapper 格式
+        if let inner = item["hooks"] as? [[String: Any]] {
+            return inner.contains { isOurHook($0) }
+        }
+        return false
+    }
+
+    private static func isLocalhostHook(_ url: String) -> Bool {
+        url.hasPrefix("http://localhost:") && url.contains("/hook")
+    }
 
     private static func settingsPath(cwd: String) -> String {
         let claudeDir = (cwd as NSString).appendingPathComponent(".claude")

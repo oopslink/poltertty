@@ -8,6 +8,8 @@ struct SubagentMessagesView: View {
     @State private var transcript: SubagentTranscript? = nil
     @State private var isLoading = true
     @State private var tick = Date()
+    /// 展开的 tool_use block IDs（提升到此层级，避免 transcript 刷新时丢失展开状态）
+    @State private var expandedToolIds: Set<String> = []
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -99,7 +101,7 @@ struct SubagentMessagesView: View {
     private func messageList(_ transcript: SubagentTranscript) -> some View {
         LazyVStack(alignment: .leading, spacing: 6) {
             ForEach(transcript.turns) { turn in
-                TurnView(turn: turn)
+                TurnView(turn: turn, expandedToolIds: $expandedToolIds)
             }
         }
     }
@@ -119,7 +121,7 @@ struct SubagentMessagesView: View {
 
 private struct TurnView: View {
     let turn: TranscriptTurn
-    @State private var expandedToolIds: Set<String> = []
+    @Binding var expandedToolIds: Set<String>
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {

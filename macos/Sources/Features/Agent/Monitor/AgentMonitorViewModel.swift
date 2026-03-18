@@ -8,14 +8,31 @@ final class AgentMonitorViewModel: ObservableObject {
     @Published var selectedItems: [DrawerItem] = []
     @Published private(set) var historicalSessions: [PersistedSession] = []
     @Published var historyExpanded: Bool = false
+    /// 统一视图中当前选中的 subagent ID（右列显示哪个 subagent）
+    @Published var selectedSubagentId: String? = nil
 
+    /// drawer 宽度：统一视图 800，对比模式按面板数
     var drawerWidth: CGFloat {
+        if unifiedSession != nil { return 800 }
         switch selectedItems.count {
         case 0:  return 0
         case 1:  return 400
         case 2:  return 800
         default: return 1200
         }
+    }
+
+    /// 当 selectedItems 只有一个 sessionOverview 时，使用统一两列视图
+    var unifiedSession: AgentSession? {
+        guard viewModel_selectedItemsIsUnified else { return nil }
+        if case .sessionOverview(let session) = selectedItems.first { return session }
+        return nil
+    }
+
+    private var viewModel_selectedItemsIsUnified: Bool {
+        guard selectedItems.count == 1, let first = selectedItems.first else { return false }
+        if case .sessionOverview = first { return true }
+        return false
     }
 
     let workspaceId: UUID
@@ -76,6 +93,12 @@ final class AgentMonitorViewModel: ObservableObject {
 
     func closeDrawer() {
         selectedItems = []
+    }
+
+    /// 侧边栏点击 subagent：打开统一视图并预选该 subagent
+    func selectSubagentInSidebar(_ sub: SubagentInfo, in session: AgentSession) {
+        selectedSubagentId = sub.id
+        selectedItems = [.sessionOverview(session)]
     }
 
     func loadHistory() {
