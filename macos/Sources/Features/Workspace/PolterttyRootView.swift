@@ -206,6 +206,15 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         AgentMonitorPanel(viewModel: agentMonitorVM)
                     }
                 }
+                .overlay(alignment: .trailing) {
+                    HStack(spacing: 0) {
+                        AgentDrawer(viewModel: agentMonitorVM)
+                        // 占位 180px + 1px divider，使 Drawer 浮于终端上方而不遮盖侧边栏
+                        if agentMonitorVM.isVisible {
+                            Spacer().frame(width: 181)
+                        }
+                    }
+                }
             }
 
             // Quick switcher overlay (always available in terminal mode)
