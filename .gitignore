@@ -32,5 +32,6 @@ macos/macos/
 *.profraw
 .superpowers/
 .claude/settings.local.json
+.claude/worktrees
 .worktrees/
 .build/
