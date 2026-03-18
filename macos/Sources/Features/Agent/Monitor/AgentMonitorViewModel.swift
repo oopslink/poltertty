@@ -5,7 +5,6 @@ import Combine
 @MainActor
 final class AgentMonitorViewModel: ObservableObject {
     @Published var isVisible: Bool = false
-    @Published var width: CGFloat = 280
     @Published var selectedItems: [DrawerItem] = []
 
     var drawerWidth: CGFloat {
