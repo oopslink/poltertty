@@ -139,7 +139,9 @@ struct AgentDrawerPanel: View {
     private var contentArea: some View {
         switch item {
         case .sessionOverview(let session):
-            SessionOverviewContent(session: session)
+            SessionOverviewContent(session: session) { sub in
+                viewModel.select(.subagentDetail(session, sub))
+            }
         case .subagentDetail(let session, let sub):
             switch tab {
             case .output:    SubagentOutputContent(session: session, subagent: sub)

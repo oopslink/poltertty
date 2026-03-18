@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SessionOverviewContent: View {
     let session: AgentSession
+    var onSubagentTap: ((SubagentInfo) -> Void)? = nil
 
     @State private var tick = Date()
     private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
@@ -28,6 +29,8 @@ struct SessionOverviewContent: View {
 
                 ForEach(subagents) { sub in
                     overviewRow(sub)
+                        .onTapGesture { onSubagentTap?(sub) }
+                        .contentShape(Rectangle())
                 }
 
                 Divider().padding(.vertical, 6)
