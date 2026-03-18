@@ -58,7 +58,7 @@ struct AgentSessionGroup: View {
         let item = DrawerItem.subagentDetail(session, sub)
         let isSelected = viewModel.selectedItems.contains(item)
         return HStack(spacing: 4) {
-            stateDot(sub.state)
+            AgentStateDot(state: sub.state)
             Text(sub.name)
                 .font(.system(size: 9))
                 .foregroundStyle(isSelected ? (Color(hex: "#90bfff") ?? .blue) : .secondary)
@@ -86,18 +86,6 @@ struct AgentSessionGroup: View {
 
     private var activeCount: Int {
         session.subagents.values.filter { $0.state.isActive }.count
-    }
-
-    private func stateDot(_ state: AgentState) -> some View {
-        let color: Color = {
-            switch state {
-            case .working:  return Color(hex: "#4caf50") ?? .green
-            case .error:    return Color(hex: "#f44336") ?? .red
-            case .idle:     return Color(hex: "#ff9800") ?? .orange
-            default:        return Color(hex: "#555555") ?? .gray
-            }
-        }()
-        return Circle().fill(color).frame(width: 5, height: 5)
     }
 
     private func elapsedLabel(_ sub: SubagentInfo) -> String {
