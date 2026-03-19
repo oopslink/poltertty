@@ -321,8 +321,15 @@ final class FileBrowserViewModel: ObservableObject {
     @discardableResult
     func deleteSelected() -> [String] {
         let urls = selectedNodeIds.compactMap { findNodeURL(id: $0) }
+        // 过滤：如果某 URL 的父路径链上已有另一个被选中的目录，跳过它（随父一起删除）
+        let filteredURLs = urls.filter { url in
+            !urls.contains(where: { parent in
+                parent != url && parent.hasDirectoryPath &&
+                url.standardized.path.hasPrefix(parent.standardized.path + "/")
+            })
+        }
         var errors: [String] = []
-        for url in urls {
+        for url in filteredURLs {
             do {
                 try FileManager.default.trashItem(at: url, resultingItemURL: nil)
             } catch {
@@ -338,7 +345,9 @@ final class FileBrowserViewModel: ObservableObject {
     func move(urls: [URL], to destination: URL) -> [String] {
         // 校验：目标不能是被移动目录的子路径
         for url in urls where url.hasDirectoryPath {
-            if destination.path.hasPrefix(url.path + "/") || destination.path == url.path {
+            let destStd = destination.standardized
+            let urlStd = url.standardized
+            if destStd.path.hasPrefix(urlStd.path + "/") || destStd.path == urlStd.path {
                 return ["目标路径不合法：不能移动到自身子目录"]
             }
         }
@@ -356,7 +365,19 @@ final class FileBrowserViewModel: ObservableObject {
                 errors.append(url.lastPathComponent)
             }
         }
-        clearSelection()
+        // 仅清除成功移动项的选中状态，失败项保留高亮
+        let successURLs = Set(urls.filter { !errors.contains($0.lastPathComponent) })
+        selectedNodeIds = selectedNodeIds.filter { id in
+            guard let url = findNodeURL(id: id) else { return false }
+            return !successURLs.contains(url)
+        }
+        if selectedNodeIds.isEmpty {
+            lastSelectedId = nil
+            showPreviewPanel = false
+            isPreviewFullscreen = false
+        } else if let last = lastSelectedId, !selectedNodeIds.contains(last) {
+            lastSelectedId = nil
+        }
         return errors
     }
 
