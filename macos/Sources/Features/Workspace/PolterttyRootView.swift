@@ -155,7 +155,11 @@ struct PolterttyRootView<TerminalContent: View>: View {
                                 showConvertAlert = true
                             },
                             onLaunchAgent: {
-                                NotificationCenter.default.post(name: .launchAgentFromSidebar, object: nil)
+                                NotificationCenter.default.post(
+                                    name: .launchAgentFromSidebar,
+                                    object: nil,
+                                    userInfo: ["workspaceId": workspaceId as Any]
+                                )
                             },
                             isCollapsed: $sidebarCollapsed
                         )

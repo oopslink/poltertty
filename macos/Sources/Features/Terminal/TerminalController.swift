@@ -174,8 +174,11 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             forName: .launchAgentFromSidebar,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
-            self?.launchAgentAction()
+        ) { [weak self] notification in
+            guard let self,
+                  let notifId = notification.userInfo?["workspaceId"] as? UUID,
+                  notifId == self.workspaceId else { return }
+            self.launchAgentAction()
         }
     }
 
