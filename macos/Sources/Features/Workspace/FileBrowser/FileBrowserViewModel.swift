@@ -460,6 +460,11 @@ final class FileBrowserViewModel: ObservableObject {
         isPreviewFullscreen.toggle()
     }
 
+    /// URLs corresponding to current selection (computed for SwiftUI use)
+    var selectedURLs: [URL] {
+        selectedNodeIds.compactMap { findNodeURL(id: $0) }
+    }
+
     /// Find the URL for a given node ID
     func findNodeURL(id: UUID) -> URL? {
         findNodeInTree(id: id, nodes: rootNodes)?.url

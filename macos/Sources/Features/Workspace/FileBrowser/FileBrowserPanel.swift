@@ -312,90 +312,7 @@ struct FileBrowserPanel: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.visibleNodes, id: \.node.id) { entry in
-                        FileNodeRow(
-                            node: entry.node,
-                            depth: entry.depth,
-                            gitStatus: viewModel.gitStatus(for: entry.node.url),
-                            isSelected: viewModel.selectedNodeIds.contains(entry.node.id),
-                            isMultiSelected: viewModel.selectedNodeIds.count > 1,
-                            selectedCount: viewModel.selectedNodeIds.count,
-                            selectedURLs: viewModel.selectedNodeIds.compactMap { viewModel.findNodeURL(id: $0) },
-                            onToggleExpand: {
-                                viewModel.toggleExpand(nodeId: entry.node.id)
-                            },
-                            onSingleClick: {
-                                let flags = NSEvent.modifierFlags
-                                if flags.contains(.command) {
-                                    viewModel.toggleSelection(id: entry.node.id)
-                                } else if flags.contains(.shift) {
-                                    viewModel.extendSelection(to: entry.node.id)
-                                } else {
-                                    viewModel.selectNode(id: entry.node.id)
-                                    if entry.node.isDirectory {
-                                        viewModel.toggleExpand(nodeId: entry.node.id)
-                                    }
-                                }
-                                isFocused = true
-                            },
-                            onDoubleClick: {
-                                if !entry.node.isDirectory {
-                                    viewModel.openInDefaultApp(entry.node.url)
-                                }
-                            },
-                            onOpenInTerminal: {
-                                onOpenInTerminal?(entry.node.url)
-                            },
-                            onCopyPath: {
-                                viewModel.copyPath(entry.node.url)
-                            },
-                            onNewFile: {
-                                let dir = entry.node.isDirectory
-                                    ? entry.node.url
-                                    : entry.node.url.deletingLastPathComponent()
-                                viewModel.createFile(inDirectory: dir, name: "untitled")
-                            },
-                            onNewDirectory: {
-                                let dir = entry.node.isDirectory
-                                    ? entry.node.url
-                                    : entry.node.url.deletingLastPathComponent()
-                                viewModel.createDirectory(inDirectory: dir, name: "untitled")
-                            },
-                            onDelete: {
-                                if viewModel.selectedNodeIds.count > 1 {
-                                    showBatchDeleteAlert = true
-                                } else {
-                                    // 确保右键点击的行被选中，再执行删除
-                                    viewModel.selectNode(id: entry.node.id)
-                                    viewModel.delete(url: entry.node.url)
-                                    viewModel.clearSelection()
-                                }
-                            },
-                            onStartRename: {
-                                renameText = entry.node.name
-                                viewModel.renamingURL = entry.node.url
-                            },
-                            onMoveSelected: { presentMovePanel() },
-                            isRenaming: viewModel.renamingURL == entry.node.url,
-                            renameText: viewModel.renamingURL == entry.node.url
-                                ? Binding(get: { renameText }, set: { renameText = $0 })
-                                : nil,
-                            onCommitRename: { newName in
-                                viewModel.rename(url: entry.node.url, to: newName)
-                            },
-                            onCancelRename: {
-                                viewModel.renamingURL = nil
-                            }
-                        )
-                        .id(entry.node.id)
-                        .dropDestination(for: URL.self) { droppedURLs, _ in
-                            guard entry.node.isDirectory else { return false }
-                            _ = viewModel.move(urls: droppedURLs, to: entry.node.url)
-                            return true
-                        } isTargeted: { _ in
-                            // 已知限制：SwiftUI dropDestination 的系统高亮对所有行都会触发。
-                            // 项目暂无 .if View 扩展来条件性附加修饰符，
-                            // 实际 drop 操作已通过 performDrop 返回 false 阻止文件行接受 drop。
-                        }
+                        nodeRowView(for: entry)
                     }
                 }
             }
@@ -404,6 +321,95 @@ struct FileBrowserPanel: View {
                     proxy.scrollTo(id)
                 }
             }
+        }
+    }
+
+    // 提取为独立方法以辅助 Swift 类型检查器完成类型推断
+    private func nodeRowView(for entry: (node: FileNode, depth: Int)) -> some View {
+        let renamingBinding: Binding<String>? = viewModel.renamingURL == entry.node.url
+            ? Binding(get: { renameText }, set: { renameText = $0 })
+            : nil
+        return FileNodeRow(
+            node: entry.node,
+            depth: entry.depth,
+            gitStatus: viewModel.gitStatus(for: entry.node.url),
+            isSelected: viewModel.selectedNodeIds.contains(entry.node.id),
+            onToggleExpand: {
+                viewModel.toggleExpand(nodeId: entry.node.id)
+            },
+            onSingleClick: {
+                let flags = NSEvent.modifierFlags
+                if flags.contains(.command) {
+                    viewModel.toggleSelection(id: entry.node.id)
+                } else if flags.contains(.shift) {
+                    viewModel.extendSelection(to: entry.node.id)
+                } else {
+                    viewModel.selectNode(id: entry.node.id)
+                    if entry.node.isDirectory {
+                        viewModel.toggleExpand(nodeId: entry.node.id)
+                    }
+                }
+                isFocused = true
+            },
+            onDoubleClick: {
+                if !entry.node.isDirectory {
+                    viewModel.openInDefaultApp(entry.node.url)
+                }
+            },
+            onOpenInTerminal: {
+                onOpenInTerminal?(entry.node.url)
+            },
+            onCopyPath: {
+                viewModel.copyPath(entry.node.url)
+            },
+            onNewFile: {
+                let dir = entry.node.isDirectory
+                    ? entry.node.url
+                    : entry.node.url.deletingLastPathComponent()
+                viewModel.createFile(inDirectory: dir, name: "untitled")
+            },
+            onNewDirectory: {
+                let dir = entry.node.isDirectory
+                    ? entry.node.url
+                    : entry.node.url.deletingLastPathComponent()
+                viewModel.createDirectory(inDirectory: dir, name: "untitled")
+            },
+            onDelete: {
+                if viewModel.selectedNodeIds.count > 1 {
+                    showBatchDeleteAlert = true
+                } else {
+                    // 确保右键点击的行被选中，再执行删除
+                    viewModel.selectNode(id: entry.node.id)
+                    viewModel.delete(url: entry.node.url)
+                    viewModel.clearSelection()
+                }
+            },
+            onStartRename: {
+                renameText = entry.node.name
+                viewModel.renamingURL = entry.node.url
+            },
+            isMultiSelected: viewModel.selectedNodeIds.count > 1,
+            selectedCount: viewModel.selectedNodeIds.count,
+            selectedURLs: viewModel.selectedURLs,
+            onMoveSelected: { presentMovePanel() },
+            isRenaming: viewModel.renamingURL == entry.node.url,
+            renameText: renamingBinding,
+            onCommitRename: { newName in
+                viewModel.rename(url: entry.node.url, to: newName)
+            },
+            onCancelRename: {
+                viewModel.renamingURL = nil
+            }
+        )
+        .id(entry.node.id)
+        .dropDestination(for: URL.self) { droppedURLs, _ in
+            guard entry.node.isDirectory else { return false }
+            _ = viewModel.move(urls: droppedURLs, to: entry.node.url)
+            return true
+        } isTargeted: { _ in
+            // 已知限制：SwiftUI dropDestination 的系统高亮对所有行都会触发。
+            // 项目暂无 .if View 扩展来条件性附加修饰符，
+            // 实际 drop 操作已通过 performDrop 返回 false 阻止文件行接受 drop。
         }
     }
 }
