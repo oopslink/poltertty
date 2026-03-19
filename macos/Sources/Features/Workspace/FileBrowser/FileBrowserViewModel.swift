@@ -14,7 +14,12 @@ final class FileBrowserViewModel: ObservableObject {
     @Published var renamingURL: URL? = nil
 
     // Preview state
-    @Published var selectedNodeId: UUID? = nil
+    @Published var selectedNodeIds: Set<UUID> = []
+    @Published private(set) var lastSelectedId: UUID? = nil   // @Published 保证预览面板 SwiftUI 响应性
+
+    /// 兼容预览面板：返回最后一次明确选中的节点 ID
+    var primarySelectedId: UUID? { lastSelectedId }
+
     @Published var showPreviewPanel: Bool = false
     @Published var isPreviewFullscreen: Bool = false
     @Published var treeWidth: CGFloat = 260
@@ -77,18 +82,27 @@ final class FileBrowserViewModel: ObservableObject {
                 return
             }
 
-            // Preserve selected file URL across reload
-            let selectedURL = self.selectedNodeId.flatMap { self.findNodeURL(id: $0) }
+            // Preserve multi-selection URLs across reload
+            let selectedURLs = self.selectedNodeIds.compactMap { self.findNodeURL(id: $0) }
+            let lastSelectedURL = self.lastSelectedId.flatMap { self.findNodeURL(id: $0) }
 
             let expanded = self.currentExpandedUrls()
             self.rootNodes = self.loadChildren(at: URL(fileURLWithPath: self.rootDir), expandedUrls: expanded)
 
-            // Restore selection by URL
-            if let url = selectedURL, let newNode = self.findNodeByURL(url: url, in: self.rootNodes) {
-                self.selectedNodeId = newNode.id
-            } else if selectedURL != nil {
-                // Selected file was deleted
-                self.selectedNodeId = nil
+            // Restore multi-selection by URL
+            var newIds = Set<UUID>()
+            for url in selectedURLs {
+                if let node = self.findNodeByURL(url: url, in: self.rootNodes) {
+                    newIds.insert(node.id)
+                }
+            }
+            self.selectedNodeIds = newIds
+
+            // Restore lastSelectedId
+            if let url = lastSelectedURL, let node = self.findNodeByURL(url: url, in: self.rootNodes) {
+                self.lastSelectedId = node.id
+            } else {
+                self.lastSelectedId = nil
                 self.showPreviewPanel = false
             }
 
@@ -303,17 +317,116 @@ final class FileBrowserViewModel: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
-    // MARK: - Preview
+    /// 批量删除选中项，返回无法删除的文件名列表（供 UI 层汇总展示）
+    @discardableResult
+    func deleteSelected() -> [String] {
+        let urls = selectedNodeIds.compactMap { findNodeURL(id: $0) }
+        var errors: [String] = []
+        for url in urls {
+            do {
+                try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+            } catch {
+                errors.append(url.lastPathComponent)
+            }
+        }
+        clearSelection()
+        return errors
+    }
+
+    /// 批量移动，前置校验子目录和写权限，返回无法移动的文件名列表
+    @discardableResult
+    func move(urls: [URL], to destination: URL) -> [String] {
+        // 校验：目标不能是被移动目录的子路径
+        for url in urls where url.hasDirectoryPath {
+            if destination.path.hasPrefix(url.path + "/") || destination.path == url.path {
+                return ["目标路径不合法：不能移动到自身子目录"]
+            }
+        }
+        // 校验：目标目录可写
+        guard FileManager.default.isWritableFile(atPath: destination.path) else {
+            return ["目标目录无写入权限"]
+        }
+
+        var errors: [String] = []
+        for url in urls {
+            let target = destination.appendingPathComponent(url.lastPathComponent)
+            do {
+                try FileManager.default.moveItem(at: url, to: target)
+            } catch {
+                errors.append(url.lastPathComponent)
+            }
+        }
+        clearSelection()
+        return errors
+    }
+
+    // MARK: - Selection
 
     func selectNode(id: UUID?) {
-        selectedNodeId = id
-        if let id, let node = findNodeInTree(id: id, nodes: rootNodes), !node.isDirectory {
-            showPreviewPanel = true
+        if let id {
+            selectedNodeIds = [id]
+            lastSelectedId = id
+            let node = findNodeInTree(id: id, nodes: rootNodes)
+            if let node, !node.isDirectory {
+                showPreviewPanel = true
+            } else {
+                showPreviewPanel = false
+                isPreviewFullscreen = false
+            }
         } else {
+            clearSelection()
+        }
+    }
+
+    func toggleSelection(id: UUID) {
+        if selectedNodeIds.contains(id) {
+            selectedNodeIds.remove(id)
+            if lastSelectedId == id {
+                lastSelectedId = nil   // Set 无序，不用 .first 避免不确定性；nil 表示"无主选"
+            }
+        } else {
+            selectedNodeIds.insert(id)
+            lastSelectedId = id
+        }
+        // 多选时关闭预览面板
+        if selectedNodeIds.count != 1 {
             showPreviewPanel = false
             isPreviewFullscreen = false
         }
     }
+
+    func extendSelection(to targetId: UUID) {
+        guard let anchorId = lastSelectedId else {
+            selectNode(id: targetId)
+            return
+        }
+        let nodes = visibleNodes
+        guard let anchorIdx = nodes.firstIndex(where: { $0.node.id == anchorId }),
+              let targetIdx = nodes.firstIndex(where: { $0.node.id == targetId }) else { return }
+        let range = min(anchorIdx, targetIdx)...max(anchorIdx, targetIdx)
+        let rangeIds = Set(nodes[range].map { $0.node.id })
+        selectedNodeIds = rangeIds
+        lastSelectedId = targetId
+        showPreviewPanel = false
+        isPreviewFullscreen = false
+    }
+
+    func clearSelection() {
+        selectedNodeIds = []
+        lastSelectedId = nil
+        showPreviewPanel = false
+        isPreviewFullscreen = false
+    }
+
+    func selectAll() {
+        let nodes = visibleNodes
+        selectedNodeIds = Set(nodes.map { $0.node.id })
+        lastSelectedId = nodes.last?.node.id
+        showPreviewPanel = false
+        isPreviewFullscreen = false
+    }
+
+    // MARK: - Preview
 
     func togglePreviewPanel() {
         showPreviewPanel.toggle()
@@ -359,22 +472,22 @@ final class FileBrowserViewModel: ObservableObject {
     func selectNext() {
         let nodes = visibleNodes
         guard !nodes.isEmpty else { return }
-        if let id = selectedNodeId,
+        if let id = lastSelectedId,
            let idx = nodes.firstIndex(where: { $0.node.id == id }) {
-            selectedNodeId = nodes[min(idx + 1, nodes.count - 1)].node.id
+            selectNode(id: nodes[min(idx + 1, nodes.count - 1)].node.id)
         } else {
-            selectedNodeId = nodes[0].node.id
+            selectNode(id: nodes[0].node.id)
         }
     }
 
     func selectPrevious() {
         let nodes = visibleNodes
         guard !nodes.isEmpty else { return }
-        if let id = selectedNodeId,
+        if let id = lastSelectedId,
            let idx = nodes.firstIndex(where: { $0.node.id == id }) {
-            selectedNodeId = nodes[max(idx - 1, 0)].node.id
+            selectNode(id: nodes[max(idx - 1, 0)].node.id)
         } else {
-            selectedNodeId = nodes[0].node.id
+            selectNode(id: nodes[0].node.id)
         }
     }
 }
