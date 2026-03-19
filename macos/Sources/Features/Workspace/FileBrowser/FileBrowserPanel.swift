@@ -34,6 +34,14 @@ struct FileBrowserPanel: View {
             }
     }
 
+    private var isPreviewVisible: Bool {
+        guard viewModel.showPreviewPanel,
+              let nodeId = viewModel.selectedNodeId,
+              let url = viewModel.findNodeURL(id: nodeId),
+              !url.hasDirectoryPath else { return false }
+        return true
+    }
+
     private var panelContent: some View {
         HStack(spacing: 0) {
             // Left: File tree (always visible)
@@ -46,8 +54,8 @@ struct FileBrowserPanel: View {
                     treeScrollView
                 }
             }
-            .frame(minWidth: 200, maxWidth: viewModel.showPreviewPanel ? viewModel.treeWidth : .infinity)
-            .frame(width: viewModel.showPreviewPanel ? viewModel.treeWidth : nil)
+            .frame(minWidth: 200, maxWidth: isPreviewVisible ? viewModel.treeWidth : .infinity)
+            .frame(width: isPreviewVisible ? viewModel.treeWidth : nil)
 
             // Right: Preview panel (if enabled)
             if viewModel.showPreviewPanel, let nodeId = viewModel.selectedNodeId,
