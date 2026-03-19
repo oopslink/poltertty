@@ -11,6 +11,10 @@ final class AgentMonitorViewModel: ObservableObject {
     /// 统一视图中当前选中的 subagent ID（右列显示哪个 subagent）
     @Published var selectedSubagentId: String? = nil
 
+    // MARK: - External Sessions
+    @Published private(set) var externalSessions: [ExternalSessionRecord] = []
+    private var externalDiscovery: ExternalSessionDiscovery?
+
     /// drawer 宽度：统一视图 800，对比模式按面板数
     var drawerWidth: CGFloat {
         if unifiedSession != nil { return 800 }
@@ -63,7 +67,27 @@ final class AgentMonitorViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // 获取 workspace rootDir 并启动外部 session 监控
+        if let rootDir = WorkspaceManager.shared.workspace(for: workspaceId)?.rootDirExpanded,
+           !rootDir.isEmpty {
+            let discovery = ExternalSessionDiscovery(workspaceRootDir: rootDir)
+            externalDiscovery = discovery
+            discovery.$sessions
+                .receive(on: RunLoop.main)
+                .assign(to: &$externalSessions)
+            discovery.start()
+        }
     }
+
+    // deinit：捕获 discovery 引用并派发到主线程；不直接调用 @MainActor 方法
+    deinit {
+        if let discovery = externalDiscovery {
+            Task { @MainActor in discovery.stop() }
+        }
+    }
+
+    var hasExternalSessions: Bool { !externalSessions.isEmpty }
 
     var sessions: [AgentSession] {
         AgentService.shared.sessionManager.sessions.values
