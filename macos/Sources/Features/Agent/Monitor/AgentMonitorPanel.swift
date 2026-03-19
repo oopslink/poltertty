@@ -19,7 +19,7 @@ struct AgentMonitorPanel: View {
             .background(Color(.windowBackgroundColor))
             Divider()
 
-            if viewModel.sessions.isEmpty {
+            if viewModel.sessions.isEmpty && !viewModel.hasExternalSessions {
                 VStack(spacing: 6) {
                     Spacer()
                     Text("No active agents").font(.system(size: 11)).foregroundStyle(.secondary)
@@ -37,11 +37,31 @@ struct AgentMonitorPanel: View {
                     }
                 }
             }
+            // 外部会话 section（FSEvents 监控独立启动的 AI 工具实例）
+            if viewModel.hasExternalSessions {
+                Divider()
+                externalSessionsSectionView
+            }
             // F5: HISTORY section — 放在 if/else 之外，无论是否有活跃 session 均显示
             historySectionView
         }
         .frame(width: 180)
         .background(Color(.windowBackgroundColor))
+    }
+
+    private var externalSessionsSectionView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("外部会话 (\(viewModel.externalSessions.count))")
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+            ForEach(viewModel.externalSessions) { session in
+                ExternalSessionRow(session: session)
+                Divider()
+            }
+        }
     }
 
     private var historySectionView: some View {
@@ -105,5 +125,74 @@ struct AgentMonitorPanel: View {
         if secs < 3600  { return "\(secs / 60)m" }
         if secs < 86400 { return "\(secs / 3600)h" }
         return "\(secs / 86400)d"
+    }
+}
+
+// MARK: - ExternalSessionRow
+
+private struct ExternalSessionRow: View {
+    let session: ExternalSessionRecord
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                // Badge
+                Text(session.toolType.badge)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(badgeColor)
+                    .opacity(session.isAlive ? 1.0 : 0.4)
+
+                // cwd 最后一段
+                Text(cwdName)
+                    .font(.system(size: 11))
+                    .lineLimit(1)
+
+                Spacer()
+
+                // 存活指示
+                Circle()
+                    .fill(session.isAlive ? Color.green : Color.gray)
+                    .frame(width: 5, height: 5)
+
+                // pid（仅 Claude Code）
+                if let pid = session.pid {
+                    Text("\(pid)")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            // 最后一条消息
+            if let msg = session.lastMessage {
+                Text(rolePrefix(msg.role) + msg.text)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            // 启动时间
+            Text(session.startedAt, style: .time)
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .opacity(session.isAlive ? 1.0 : 0.6)
+    }
+
+    private var cwdName: String {
+        URL(fileURLWithPath: session.cwd).lastPathComponent
+    }
+
+    private var badgeColor: Color {
+        switch session.toolType {
+        case .claudeCode: return .orange
+        case .openCode:   return .blue
+        case .geminiCli:  return .green
+        }
+    }
+
+    private func rolePrefix(_ role: ExternalSessionRecord.LastMessage.Role) -> String {
+        role == .user ? "你：" : "助手："
     }
 }
