@@ -9,6 +9,7 @@ struct WorkspaceSidebar: View {
     let onCreate: () -> Void
     let onCreateTemporary: () -> Void
     let onConvert: (WorkspaceModel) -> Void
+    let onLaunchAgent: () -> Void
 
     @Binding var isCollapsed: Bool
     @State private var isCreating = false
@@ -112,17 +113,31 @@ struct WorkspaceSidebar: View {
 
             Divider()
 
-            // Add button: single click = new workspace, double click = new temporary
-            Image(systemName: "plus")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .frame(width: 28, height: 28)
-                .background(Color.primary.opacity(0.06))
-                .cornerRadius(6)
-                .onTapGesture(count: 2) { onCreateTemporary() }
-                .onTapGesture(count: 1) { isCreating = true }
-                .help("Click: New Workspace\nDouble-click: New Temporary")
-                .padding(.vertical, 8)
+            VStack(spacing: 6) {
+                // Agent launch button
+                Button(action: onLaunchAgent) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .frame(width: 28, height: 28)
+                        .background(Color.primary.opacity(0.06))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .help("Launch Agent")
+
+                // Add button: single click = new workspace, double click = new temporary
+                Image(systemName: "plus")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .frame(width: 28, height: 28)
+                    .background(Color.primary.opacity(0.06))
+                    .cornerRadius(6)
+                    .onTapGesture(count: 2) { onCreateTemporary() }
+                    .onTapGesture(count: 1) { isCreating = true }
+                    .help("Click: New Workspace\nDouble-click: New Temporary")
+            }
+            .padding(.vertical, 8)
         }
     }
 
@@ -137,6 +152,13 @@ struct WorkspaceSidebar: View {
                     .foregroundColor(.secondary)
                     .tracking(1)
                 Spacer()
+                Button(action: onLaunchAgent) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Launch Agent")
                 Button(action: {
                     isCollapsed = true
                     UserDefaults.standard.set(true, forKey: "poltertty.sidebarCollapsed")

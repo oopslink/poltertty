@@ -170,6 +170,13 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                   let text = note.userInfo?["text"] as? String else { return }
             self?.writeToSurface(text: text, surfaceId: surfaceId)
         }
+        NotificationCenter.default.addObserver(
+            forName: .launchAgentFromSidebar,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.launchAgentAction()
+        }
     }
 
     required init?(coder: NSCoder) {
