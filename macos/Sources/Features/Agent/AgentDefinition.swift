@@ -14,19 +14,21 @@ struct AgentDefinition: Identifiable, Codable {
     var name: String
     var command: String
     var icon: String
+    /// 图标背景色，十六进制字符串（如 "#D97757"）。JSON 中缺省时使用灰色。
+    var iconColor: String?
     var hookCapability: HookCapability
 
     static let claudeCode = AgentDefinition(
         id: "claude-code", name: "Claude Code",
-        command: "claude", icon: "◆", hookCapability: .full
+        command: "claude", icon: "◆", iconColor: "#CC785C", hookCapability: .full
     )
     static let geminiCLI = AgentDefinition(
         id: "gemini-cli", name: "Gemini CLI",
-        command: "gemini", icon: "✦", hookCapability: .commandOnly
+        command: "gemini", icon: "✦", iconColor: "#4285F4", hookCapability: .commandOnly
     )
     static let openCode = AgentDefinition(
         id: "opencode", name: "OpenCode",
-        command: "opencode", icon: "⬡", hookCapability: .none
+        command: "opencode", icon: "⬡", iconColor: "#7C3AED", hookCapability: .none
     )
 }
 

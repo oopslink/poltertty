@@ -10,6 +10,7 @@ extension Notification.Name {
     static let toggleFileBrowser = Notification.Name("poltertty.toggleFileBrowser")
     static let fileBrowserOpenInTerminal = Notification.Name("poltertty.fileBrowserOpenInTerminal")
     static let toggleAgentMonitor = Notification.Name("poltertty.toggleAgentMonitor")
+    static let launchAgentFromSidebar = Notification.Name("poltertty.launchAgentFromSidebar")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -152,6 +153,9 @@ struct PolterttyRootView<TerminalContent: View>: View {
                                 convertTargetId = workspace.id
                                 convertName = workspace.name
                                 showConvertAlert = true
+                            },
+                            onLaunchAgent: {
+                                NotificationCenter.default.post(name: .launchAgentFromSidebar, object: nil)
                             },
                             isCollapsed: $sidebarCollapsed
                         )

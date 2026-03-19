@@ -170,6 +170,13 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                   let text = note.userInfo?["text"] as? String else { return }
             self?.writeToSurface(text: text, surfaceId: surfaceId)
         }
+        NotificationCenter.default.addObserver(
+            forName: .launchAgentFromSidebar,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.launchAgentAction()
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -2090,13 +2097,13 @@ extension TerminalController {
         let menu = AgentLaunchMenu(
             workspaceId: workspaceId,
             cwd: cwd,
-            onLaunch: { [weak self, weak popover] definition, location, respawnMode in
+            onLaunch: { [weak self, weak popover] definition, location, permissionMode in
                 popover?.close()
                 guard let self else { return }
                 AgentLauncher(terminalController: self).launch(
                     definition: definition,
                     location: location,
-                    respawnMode: respawnMode,
+                    permissionMode: permissionMode,
                     workspaceId: workspaceId,
                     cwd: cwd
                 )

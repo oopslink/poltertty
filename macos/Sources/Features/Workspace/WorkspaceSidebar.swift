@@ -9,6 +9,7 @@ struct WorkspaceSidebar: View {
     let onCreate: () -> Void
     let onCreateTemporary: () -> Void
     let onConvert: (WorkspaceModel) -> Void
+    let onLaunchAgent: () -> Void
 
     @Binding var isCollapsed: Bool
     @State private var isCreating = false
@@ -57,16 +58,35 @@ struct WorkspaceSidebar: View {
 
     private var collapsedContent: some View {
         VStack(spacing: 0) {
-            // Toggle button (expand)
-            Button(action: {
-                isCollapsed = false
-                UserDefaults.standard.set(false, forKey: "poltertty.sidebarCollapsed")
-            }) {
-                Image(systemName: "sidebar.right")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+            // Toggle button (expand) + Agent button
+            VStack(spacing: 6) {
+                SidebarToggleButton(symbol: "chevron.right") {
+                    isCollapsed = false
+                    UserDefaults.standard.set(false, forKey: "poltertty.sidebarCollapsed")
+                }
+
+                Button(action: onLaunchAgent) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(red: 0.38, green: 0.45, blue: 0.95),
+                                             Color(red: 0.65, green: 0.32, blue: 0.95)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 32, height: 32)
+                            .shadow(color: Color(red: 0.5, green: 0.38, blue: 0.95).opacity(0.55),
+                                    radius: 6, x: 0, y: 2)
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .buttonStyle(.plain)
+                .help("Launch Agent")
             }
-            .buttonStyle(.plain)
             .padding(.vertical, 8)
 
             Divider()
@@ -137,15 +157,24 @@ struct WorkspaceSidebar: View {
                     .foregroundColor(.secondary)
                     .tracking(1)
                 Spacer()
-                Button(action: {
-                    isCollapsed = true
-                    UserDefaults.standard.set(true, forKey: "poltertty.sidebarCollapsed")
-                }) {
-                    Image(systemName: "sidebar.left")
+                Button(action: onLaunchAgent) {
+                    Image(systemName: "sparkles")
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(red: 0.45, green: 0.55, blue: 1.0),
+                                         Color(red: 0.75, green: 0.40, blue: 1.0)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                 }
                 .buttonStyle(.plain)
+                .help("Launch Agent")
+                SidebarToggleButton(symbol: "chevron.left") {
+                    isCollapsed = true
+                    UserDefaults.standard.set(true, forKey: "poltertty.sidebarCollapsed")
+                }
                 Button(action: { isCreating = true }) {
                     Image(systemName: "plus")
                         .font(.system(size: 11))
@@ -424,5 +453,27 @@ struct ExpandedWorkspaceItem: View {
             Button("Delete Workspace", role: .destructive) { onDelete() }
         }
         .onTapGesture(count: 2) {}  // prevent double-tap from passing through to blank area handler
+    }
+}
+
+// MARK: - Sidebar Toggle Button (< / >)
+
+private struct SidebarToggleButton: View {
+    let symbol: String
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(isHovering ? Color.primary : Color.secondary)
+                .frame(width: 24, height: 24)
+                .background(isHovering ? Color.primary.opacity(0.1) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .animation(.easeInOut(duration: 0.15), value: isHovering)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
     }
 }
