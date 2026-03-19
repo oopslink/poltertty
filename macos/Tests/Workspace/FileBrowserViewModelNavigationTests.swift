@@ -18,9 +18,12 @@ struct FileBrowserViewModelNavigationTests {
 
     @Test func testSelectNextMovesSelectionDown() async throws {
         let dir = try makeTempDir()
-        defer { try? FileManager.default.removeItem(at: dir) }
-
         let vm = FileBrowserViewModel(rootDir: dir.path)
+        defer {
+            vm.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+
         try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
 
         let nodes = vm.visibleNodes
@@ -36,9 +39,12 @@ struct FileBrowserViewModelNavigationTests {
 
     @Test func testSelectPreviousMovesSelectionUp() async throws {
         let dir = try makeTempDir()
-        defer { try? FileManager.default.removeItem(at: dir) }
-
         let vm = FileBrowserViewModel(rootDir: dir.path)
+        defer {
+            vm.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+
         try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
 
         let nodes = vm.visibleNodes
@@ -54,9 +60,12 @@ struct FileBrowserViewModelNavigationTests {
 
     @Test func testSelectNextClampsAtBottom() async throws {
         let dir = try makeTempDir()
-        defer { try? FileManager.default.removeItem(at: dir) }
-
         let vm = FileBrowserViewModel(rootDir: dir.path)
+        defer {
+            vm.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+
         try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
 
         let nodes = vm.visibleNodes
@@ -72,9 +81,12 @@ struct FileBrowserViewModelNavigationTests {
 
     @Test func testSelectPreviousClampsAtTop() async throws {
         let dir = try makeTempDir()
-        defer { try? FileManager.default.removeItem(at: dir) }
-
         let vm = FileBrowserViewModel(rootDir: dir.path)
+        defer {
+            vm.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+
         try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
 
         let nodes = vm.visibleNodes
@@ -90,9 +102,12 @@ struct FileBrowserViewModelNavigationTests {
 
     @Test func testSelectNextWithNoSelectionSelectsFirst() async throws {
         let dir = try makeTempDir()
-        defer { try? FileManager.default.removeItem(at: dir) }
-
         let vm = FileBrowserViewModel(rootDir: dir.path)
+        defer {
+            vm.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+
         try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
 
         let nodes = vm.visibleNodes
@@ -108,9 +123,12 @@ struct FileBrowserViewModelNavigationTests {
 
     @Test func testSelectPreviousWithNoSelectionSelectsFirst() async throws {
         let dir = try makeTempDir()
-        defer { try? FileManager.default.removeItem(at: dir) }
-
         let vm = FileBrowserViewModel(rootDir: dir.path)
+        defer {
+            vm.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+
         try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
 
         let nodes = vm.visibleNodes
