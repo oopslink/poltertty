@@ -20,6 +20,7 @@ struct FileNodeRow: View {
     var isRenaming: Bool = false
     var renameText: Binding<String>? = nil
     var onCommitRename: ((String) -> Void)? = nil
+    var onCancelRename: (() -> Void)? = nil
 
     @State private var isHovering = false
 
@@ -51,14 +52,12 @@ struct FileNodeRow: View {
 
             // Name or rename TextField
             if isRenaming, let binding = renameText {
-                TextField("", text: binding)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                    .onSubmit {
-                        if !binding.wrappedValue.isEmpty {
-                            onCommitRename?(binding.wrappedValue)
-                        }
-                    }
+                RenameTextField(
+                    text: binding,
+                    onCommit: { name in onCommitRename?(name) },
+                    onCancel: { onCancelRename?() }
+                )
+                .frame(height: 16)
             } else {
                 Text(node.name)
                     .font(.system(size: 12))
@@ -110,6 +109,74 @@ struct FileNodeRow: View {
                 Color.primary.opacity(0.06)
             } else {
                 Color.clear
+            }
+        }
+    }
+}
+
+// MARK: - Rename TextField (AppKit-level for reliable focus)
+
+private final class AutoFocusTextField: NSTextField {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window else {
+                return
+            }
+            let ok = window.makeFirstResponder(self)
+            self.selectText(nil)
+        }
+    }
+}
+
+private struct RenameTextField: NSViewRepresentable {
+    @Binding var text: String
+    var onCommit: (String) -> Void
+    var onCancel: () -> Void
+
+    func makeNSView(context: Context) -> AutoFocusTextField {
+        let field = AutoFocusTextField()
+        field.isBordered = false
+        field.backgroundColor = .clear
+        field.font = .systemFont(ofSize: 12)
+        field.focusRingType = .none
+        field.lineBreakMode = .byTruncatingMiddle
+        field.maximumNumberOfLines = 1
+        field.delegate = context.coordinator
+        field.stringValue = text
+        return field
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func updateNSView(_ nsView: AutoFocusTextField, context: Context) {
+        context.coordinator.parent = self
+        if nsView.currentEditor() == nil, nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: RenameTextField
+
+        init(_ parent: RenameTextField) { self.parent = parent }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            switch selector {
+            case #selector(NSResponder.insertNewline(_:)):
+                if !parent.text.isEmpty { parent.onCommit(parent.text) }
+                return true
+            case #selector(NSResponder.cancelOperation(_:)):
+                parent.onCancel()
+                return true
+            default:
+                return false
             }
         }
     }
