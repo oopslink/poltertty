@@ -73,9 +73,16 @@ struct WorkspaceSidebar: View {
                 Button(action: onLaunchAgent) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(red: 0.45, green: 0.55, blue: 1.0),
+                                         Color(red: 0.75, green: 0.40, blue: 1.0)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .frame(width: 28, height: 28)
-                        .background(Color.primary.opacity(0.06))
+                        .background(Color(red: 0.45, green: 0.55, blue: 1.0).opacity(0.12))
                         .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
@@ -154,7 +161,14 @@ struct WorkspaceSidebar: View {
                 Button(action: onLaunchAgent) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(red: 0.45, green: 0.55, blue: 1.0),
+                                         Color(red: 0.75, green: 0.40, blue: 1.0)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                 }
                 .buttonStyle(.plain)
                 .help("Launch Agent")
