@@ -25,6 +25,8 @@ enum ClaudeSessionFileParser {
 }
 
 enum ClaudeJsonlParser {
+    private static let isoFormatter = ISO8601DateFormatter()
+
     /// 从 .jsonl 文本中提取最后一条 user/assistant 消息
     static func parseLastMessage(from content: String) -> ExternalSessionRecord.LastMessage? {
         let lines = content.components(separatedBy: "\n")
@@ -46,7 +48,7 @@ enum ClaudeJsonlParser {
 
             let timestamp: Date
             if let tsStr = obj["timestamp"] as? String {
-                timestamp = ISO8601DateFormatter().date(from: tsStr) ?? Date()
+                timestamp = isoFormatter.date(from: tsStr) ?? Date()
             } else {
                 timestamp = Date()
             }
@@ -71,9 +73,8 @@ final class ClaudeSessionProvider: ExternalAgentProvider {
     let toolType: ExternalToolType = .claudeCode
     private let workspaceDir: String
     private let sessionsDir: String
-    private var dirFd: Int32 = -1
     private var dirSource: DispatchSourceFileSystemObject?
-    private var jsonlSources: [String: (source: DispatchSourceFileSystemObject, fd: Int32)] = [:]
+    private var jsonlSources: [String: DispatchSourceFileSystemObject] = [:]
     private var records: [String: ExternalSessionRecord] = [:]
     private var onChange: (@MainActor () -> Void)?
 
@@ -89,10 +90,9 @@ final class ClaudeSessionProvider: ExternalAgentProvider {
     }
 
     func stopWatching() {
-        dirSource?.cancel()
+        dirSource?.cancel()   // cancelHandler closes the fd
         dirSource = nil
-        if dirFd >= 0 { close(dirFd); dirFd = -1 }
-        jsonlSources.values.forEach { $0.source.cancel() }
+        jsonlSources.values.forEach { $0.cancel() }  // each cancelHandler closes its fd
         jsonlSources.removeAll()
         records.removeAll()
     }
@@ -106,7 +106,6 @@ final class ClaudeSessionProvider: ExternalAgentProvider {
     private func watchDir() {
         let fd = open(sessionsDir, O_EVTONLY)
         guard fd >= 0 else { return }
-        dirFd = fd
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd, eventMask: .write, queue: .global(qos: .utility)
         )
@@ -144,7 +143,7 @@ final class ClaudeSessionProvider: ExternalAgentProvider {
             } else {
                 records[entry.sessionId]?.isAlive = alive
                 if !alive {
-                    jsonlSources[entry.sessionId]?.source.cancel()
+                    jsonlSources[entry.sessionId]?.cancel()
                     jsonlSources.removeValue(forKey: entry.sessionId)
                 }
             }
@@ -152,7 +151,7 @@ final class ClaudeSessionProvider: ExternalAgentProvider {
 
         // 移除已消失的 session
         for sid in records.keys where !found.contains(sid) {
-            jsonlSources[sid]?.source.cancel()
+            jsonlSources[sid]?.cancel()
             jsonlSources.removeValue(forKey: sid)
             records.removeValue(forKey: sid)
         }
@@ -177,7 +176,7 @@ final class ClaudeSessionProvider: ExternalAgentProvider {
         }
         source.setCancelHandler { [fd] in close(fd) }
         source.resume()
-        jsonlSources[sessionId] = (source: source, fd: fd)
+        jsonlSources[sessionId] = source
     }
 
     private func parseJsonl(for sessionId: String, cwd: String) -> ExternalSessionRecord.LastMessage? {
