@@ -166,7 +166,7 @@ private final class AutoFocusTextField: NSTextField {
             guard let self, let window = self.window else {
                 return
             }
-            let ok = window.makeFirstResponder(self)
+            _ = window.makeFirstResponder(self)
             self.selectText(nil)
         }
     }
