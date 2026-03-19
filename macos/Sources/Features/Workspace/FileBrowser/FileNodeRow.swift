@@ -17,6 +17,11 @@ struct FileNodeRow: View {
     let onDelete: () -> Void
     let onStartRename: () -> Void
 
+    let isMultiSelected: Bool           // 是否有多个节点被选中（影响右键菜单）
+    let selectedCount: Int              // 当前选中数量
+    let selectedURLs: [URL]            // 所有选中节点的 URL（用于拖拽载荷）
+    let onMoveSelected: (() -> Void)?   // 触发"移动到…"面板
+
     var isRenaming: Bool = false
     var renameText: Binding<String>? = nil
     var onCommitRename: ((String) -> Void)? = nil
@@ -84,20 +89,57 @@ struct FileNodeRow: View {
         .padding(.horizontal, 3)
         .padding(.vertical, 0.5)
         .contentShape(Rectangle())
+        .onDrag {
+            // 多选拖拽：载荷为所有选中 URL；单选/未选：只拖当前行
+            let urls: [URL] = (isMultiSelected && selectedURLs.contains(node.url))
+                ? selectedURLs
+                : [node.url]
+            let provider = NSItemProvider()
+            for url in urls {
+                provider.registerFileRepresentation(
+                    forTypeIdentifier: "public.file-url",
+                    fileOptions: [],
+                    visibility: .all
+                ) { completion in
+                    completion(url, false, nil)
+                    return nil
+                }
+            }
+            return provider
+        } preview: {
+            if isMultiSelected && selectedCount > 1 {
+                Label("\(selectedCount) 个项目", systemImage: "doc.on.doc")
+                    .padding(8)
+                    .background(Color(nsColor: .windowBackgroundColor))
+                    .cornerRadius(6)
+            } else {
+                Label(node.name, systemImage: node.isDirectory ? "folder" : "doc")
+                    .padding(8)
+                    .background(Color(nsColor: .windowBackgroundColor))
+                    .cornerRadius(6)
+            }
+        }
         .onHover { hovering in
             isHovering = hovering
         }
         .gesture(TapGesture(count: 2).onEnded { onDoubleClick() })
         .simultaneousGesture(TapGesture(count: 1).onEnded { onSingleClick() })
         .contextMenu {
-            Button("Open in Terminal") { onOpenInTerminal() }
-            Button("Copy Path") { onCopyPath() }
-            Divider()
-            Button("New File") { onNewFile() }
-            Button("New Directory") { onNewDirectory() }
-            Divider()
-            Button("Rename") { onStartRename() }
-            Button("Delete", role: .destructive) { onDelete() }
+            if isMultiSelected {
+                // 多选菜单
+                Button("删除 \(selectedCount) 个项目…", role: .destructive) { onDelete() }
+                Button("移动到…") { onMoveSelected?() }
+            } else {
+                // 单选菜单（保持原有）
+                Button("Open in Terminal") { onOpenInTerminal() }
+                Button("Copy Path") { onCopyPath() }
+                Divider()
+                Button("New File") { onNewFile() }
+                Button("New Directory") { onNewDirectory() }
+                Divider()
+                Button("Rename") { onStartRename() }
+                Button("Delete", role: .destructive) { onDelete() }
+            }
         }
     }
 
