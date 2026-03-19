@@ -111,3 +111,23 @@ struct ClaudeSessionFileTests {
         }
     }
 }
+
+// MARK: - OpenCode isAlive 时间窗口
+
+struct OpenCodeAliveTests {
+
+    @Test func isAliveIfUpdatedRecently() {
+        let recent = Date().addingTimeInterval(-60)
+        #expect(OpenCodeSessionProvider.isAliveByTime(lastUpdated: recent) == true)
+    }
+
+    @Test func isDeadIfUpdatedLongAgo() {
+        let old = Date().addingTimeInterval(-400)
+        #expect(OpenCodeSessionProvider.isAliveByTime(lastUpdated: old) == false)
+    }
+
+    @Test func isDeadAtBoundary() {
+        let boundary = Date().addingTimeInterval(-301)
+        #expect(OpenCodeSessionProvider.isAliveByTime(lastUpdated: boundary) == false)
+    }
+}
