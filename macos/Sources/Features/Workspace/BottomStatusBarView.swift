@@ -9,19 +9,17 @@ struct BottomStatusBarView: View {
 
     var body: some View {
         let status = monitor.status
-        if !status.isGitRepo {
-            EmptyView()
-        } else {
-            VStack(spacing: 0) {
-                Divider()
-                HStack(spacing: 6) {
-                    // 左：当前目录路径
-                    Label(abbreviatedPwd, systemImage: "folder")
-                        .lineLimit(1)
-                        .truncationMode(.head)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    // 右：git 状态
+        VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: 6) {
+                // 左：当前目录路径
+                Label(abbreviatedPwd, systemImage: "folder")
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .foregroundColor(.secondary)
+                Spacer()
+                // 右：git 状态（非 git 仓库时不显示）
+                if status.isGitRepo {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.branch")
                             .foregroundColor(.secondary)
@@ -37,12 +35,12 @@ struct BottomStatusBarView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 8)
-                .frame(height: 22)
-                .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
             }
-            .font(.system(size: 11))
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
         }
+        .font(.system(size: 11))
     }
 
     private var abbreviatedPwd: String {

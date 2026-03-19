@@ -311,6 +311,7 @@ struct FileBrowserPanel: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 0) {
+                    rootHeaderRow
                     ForEach(viewModel.visibleNodes, id: \.node.id) { entry in
                         nodeRowView(for: entry)
                     }
@@ -321,6 +322,38 @@ struct FileBrowserPanel: View {
                     proxy.scrollTo(id)
                 }
             }
+        }
+    }
+
+    // MARK: - Root Header Row
+
+    @State private var rootDropTargeted = false
+
+    private var rootHeaderRow: some View {
+        let rootURL = URL(fileURLWithPath: viewModel.rootDir)
+        let rootName = rootURL.lastPathComponent
+        return HStack(spacing: 4) {
+            Image(systemName: "folder.fill")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+            Text(rootName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+        }
+        .padding(.horizontal, 9)
+        .frame(height: 22)
+        .background(rootDropTargeted ? Color.accentColor.opacity(0.15) : Color.clear)
+        .dropDestination(for: URL.self) { droppedURLs, _ in
+            let selectedURLs = viewModel.selectedNodeIds.compactMap { viewModel.findNodeURL(id: $0) }
+            let isDraggingSelected = droppedURLs.first.map { selectedURLs.contains($0) } ?? false
+            let urlsToMove = (isDraggingSelected && selectedURLs.count > 1) ? selectedURLs : droppedURLs
+            _ = viewModel.move(urls: urlsToMove, to: rootURL)
+            return true
+        } isTargeted: { targeted in
+            rootDropTargeted = targeted
         }
     }
 
@@ -404,12 +437,13 @@ struct FileBrowserPanel: View {
         .id(entry.node.id)
         .dropDestination(for: URL.self) { droppedURLs, _ in
             guard entry.node.isDirectory else { return false }
-            _ = viewModel.move(urls: droppedURLs, to: entry.node.url)
+            // 若拖拽的 URL 属于当前多选集，则移动全部选中项，否则仅移动拖拽项。
+            // 这样绕过了 NSItemProvider 单类型标识符只保留最后一个 URL 的限制。
+            let selectedURLs = viewModel.selectedNodeIds.compactMap { viewModel.findNodeURL(id: $0) }
+            let isDraggingSelected = droppedURLs.first.map { selectedURLs.contains($0) } ?? false
+            let urlsToMove = (isDraggingSelected && selectedURLs.count > 1) ? selectedURLs : droppedURLs
+            _ = viewModel.move(urls: urlsToMove, to: entry.node.url)
             return true
-        } isTargeted: { _ in
-            // 已知限制：SwiftUI dropDestination 的系统高亮对所有行都会触发。
-            // 项目暂无 .if View 扩展来条件性附加修饰符，
-            // 实际 drop 操作已通过 performDrop 返回 false 阻止文件行接受 drop。
-        }
+        } isTargeted: { _ in }
     }
 }

@@ -90,26 +90,10 @@ struct FileNodeRow: View {
         .padding(.vertical, 0.5)
         .contentShape(Rectangle())
         .onDrag {
-            // 多选拖拽：载荷为所有选中 URL；单选/未选：只拖当前行
-            let urls: [URL] = (isMultiSelected && selectedURLs.contains(node.url))
-                ? selectedURLs
-                : [node.url]
-            // 技术限制：NSItemProvider 同一类型标识符只保留最后一个注册处理器，
-            // 多次调用 registerFileRepresentation 仅最后一个 URL 有效。
-            // SwiftUI .onDrag 不支持返回多个 NSItemProvider，真正的多文件拖拽
-            // 需要使用 AppKit NSDraggingSource，为已知限制。
-            let provider = NSItemProvider()
-            for url in urls {
-                provider.registerFileRepresentation(
-                    forTypeIdentifier: "public.file-url",
-                    fileOptions: [],
-                    visibility: .all
-                ) { completion in
-                    completion(url, false, nil)
-                    return nil
-                }
-            }
-            return provider
+            // 始终传当前行 URL 作为拖拽载荷。
+            // 多选时 dropDestination 会检查此 URL 是否属于选中集，
+            // 若是则在 drop 侧移动全部选中项，无需在此传递多个 URL。
+            NSItemProvider(contentsOf: node.url) ?? NSItemProvider()
         } preview: {
             if isMultiSelected && selectedCount > 1 {
                 Label("\(selectedCount) 个项目", systemImage: "doc.on.doc")
@@ -150,7 +134,7 @@ struct FileNodeRow: View {
     private var rowBackground: some View {
         Group {
             if isSelected {
-                Color.accentColor.opacity(0.15)
+                Color.accentColor.opacity(0.28)
             } else if isHovering {
                 Color.primary.opacity(0.06)
             } else {
