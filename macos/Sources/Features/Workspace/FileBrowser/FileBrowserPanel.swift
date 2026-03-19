@@ -189,10 +189,12 @@ struct FileBrowserPanel: View {
         guard !viewModel.selectedNodeIds.isEmpty else { return .ignored }
         if viewModel.selectedNodeIds.count > 1 {
             showBatchDeleteAlert = true
-        } else if let id = viewModel.lastSelectedId,
-                  let entry = viewModel.visibleNodes.first(where: { $0.node.id == id }) {
-            viewModel.delete(url: entry.node.url)
-            viewModel.clearSelection()
+        } else {
+            let errors = viewModel.deleteSelected()
+            if !errors.isEmpty {
+                moveErrorMessage = "以下项目无法删除：\(errors.joined(separator: "、"))"
+                showMoveError = true
+            }
         }
         return .handled
     }
@@ -322,7 +324,7 @@ struct FileBrowserPanel: View {
                                 viewModel.toggleExpand(nodeId: entry.node.id)
                             },
                             onSingleClick: {
-                                let flags = NSApp.currentEvent?.modifierFlags ?? []
+                                let flags = NSEvent.modifierFlags
                                 if flags.contains(.command) {
                                     viewModel.toggleSelection(id: entry.node.id)
                                 } else if flags.contains(.shift) {
@@ -362,10 +364,10 @@ struct FileBrowserPanel: View {
                                 if viewModel.selectedNodeIds.count > 1 {
                                     showBatchDeleteAlert = true
                                 } else {
+                                    // 确保右键点击的行被选中，再执行删除
+                                    viewModel.selectNode(id: entry.node.id)
                                     viewModel.delete(url: entry.node.url)
-                                    if viewModel.lastSelectedId == entry.node.id {
-                                        viewModel.clearSelection()
-                                    }
+                                    viewModel.clearSelection()
                                 }
                             },
                             onStartRename: {
@@ -389,7 +391,11 @@ struct FileBrowserPanel: View {
                             guard entry.node.isDirectory else { return false }
                             _ = viewModel.move(urls: droppedURLs, to: entry.node.url)
                             return true
-                        } isTargeted: { _ in }
+                        } isTargeted: { _ in
+                            // 已知限制：SwiftUI dropDestination 的系统高亮对所有行都会触发。
+                            // 项目暂无 .if View 扩展来条件性附加修饰符，
+                            // 实际 drop 操作已通过 performDrop 返回 false 阻止文件行接受 drop。
+                        }
                     }
                 }
             }
