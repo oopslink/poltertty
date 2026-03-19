@@ -60,15 +60,10 @@ struct WorkspaceSidebar: View {
         VStack(spacing: 0) {
             // Toggle button (expand) + Agent button
             VStack(spacing: 6) {
-                Button(action: {
+                SidebarToggleButton(symbol: "chevron.right") {
                     isCollapsed = false
                     UserDefaults.standard.set(false, forKey: "poltertty.sidebarCollapsed")
-                }) {
-                    Image(systemName: "sidebar.right")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
                 }
-                .buttonStyle(.plain)
 
                 Button(action: onLaunchAgent) {
                     ZStack {
@@ -176,15 +171,10 @@ struct WorkspaceSidebar: View {
                 }
                 .buttonStyle(.plain)
                 .help("Launch Agent")
-                Button(action: {
+                SidebarToggleButton(symbol: "chevron.left") {
                     isCollapsed = true
                     UserDefaults.standard.set(true, forKey: "poltertty.sidebarCollapsed")
-                }) {
-                    Image(systemName: "sidebar.left")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
                 }
-                .buttonStyle(.plain)
                 Button(action: { isCreating = true }) {
                     Image(systemName: "plus")
                         .font(.system(size: 11))
@@ -463,5 +453,27 @@ struct ExpandedWorkspaceItem: View {
             Button("Delete Workspace", role: .destructive) { onDelete() }
         }
         .onTapGesture(count: 2) {}  // prevent double-tap from passing through to blank area handler
+    }
+}
+
+// MARK: - Sidebar Toggle Button (< / >)
+
+private struct SidebarToggleButton: View {
+    let symbol: String
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(isHovering ? Color.primary : Color.secondary)
+                .frame(width: 24, height: 24)
+                .background(isHovering ? Color.primary.opacity(0.1) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .animation(.easeInOut(duration: 0.15), value: isHovering)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
     }
 }
