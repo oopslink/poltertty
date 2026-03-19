@@ -9,6 +9,9 @@ struct FileBrowserPanel: View {
     @State private var renameText: String = ""
     @FocusState private var isFocused: Bool
     @State private var treeDividerHovered = false
+    @State private var showBatchDeleteAlert = false
+    @State private var showMoveError = false
+    @State private var moveErrorMessage = ""
 
     var body: some View {
         panelContent
@@ -27,10 +30,28 @@ struct FileBrowserPanel: View {
             .backport.onKeyPress(KeyEquivalent.upArrow)   { handleUpArrow(modifiers: $0) }
             .backport.onKeyPress(KeyEquivalent.downArrow) { handleDownArrow(modifiers: $0) }
             .backport.onKeyPress(KeyEquivalent.return)    { handleReturnKey(modifiers: $0) }
+            .backport.onKeyPress("a") { handleAKey(modifiers: $0) }
             .onChange(of: viewModel.filterText) { text in
                 if text.isEmpty {
                     viewModel.deactivateRecursiveFilter()
                 }
+            }
+            .alert("删除 \(viewModel.selectedNodeIds.count) 个项目？", isPresented: $showBatchDeleteAlert) {
+                Button("取消", role: .cancel) {}
+                Button("移到废纸篓", role: .destructive) {
+                    let errors = viewModel.deleteSelected()
+                    if !errors.isEmpty {
+                        moveErrorMessage = "以下项目无法删除：\(errors.joined(separator: "、"))"
+                        showMoveError = true
+                    }
+                }
+            } message: {
+                Text("此操作将移至废纸篓，可恢复。")
+            }
+            .alert("操作失败", isPresented: $showMoveError) {
+                Button("好") {}
+            } message: {
+                Text(moveErrorMessage)
             }
     }
 
@@ -107,6 +128,31 @@ struct FileBrowserPanel: View {
         )
     }
 
+    // MARK: - Move Panel
+
+    private func presentMovePanel() {
+        let urls = viewModel.selectedNodeIds.compactMap { viewModel.findNodeURL(id: $0) }
+        guard !urls.isEmpty else { return }
+
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "移动到此处"
+        panel.message = "选择目标目录"
+
+        panel.begin { response in
+            guard response == .OK, let destination = panel.url else { return }
+            let errors = viewModel.move(urls: urls, to: destination)
+            if !errors.isEmpty {
+                DispatchQueue.main.async {
+                    moveErrorMessage = errors.joined(separator: "\n")
+                    showMoveError = true
+                }
+            }
+        }
+    }
+
     // MARK: - Key Handlers
 
     private func handleDotKey(modifiers: EventModifiers) -> BackportKeyPressResult {
@@ -140,10 +186,14 @@ struct FileBrowserPanel: View {
 
     private func handleDeleteKey(modifiers: EventModifiers) -> BackportKeyPressResult {
         guard isFocused, modifiers.contains(.command) else { return .ignored }
-        guard let nodeId = viewModel.lastSelectedId,
-              let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
-        viewModel.delete(url: entry.node.url)
-        viewModel.clearSelection()
+        guard !viewModel.selectedNodeIds.isEmpty else { return .ignored }
+        if viewModel.selectedNodeIds.count > 1 {
+            showBatchDeleteAlert = true
+        } else if let id = viewModel.lastSelectedId,
+                  let entry = viewModel.visibleNodes.first(where: { $0.node.id == id }) {
+            viewModel.delete(url: entry.node.url)
+            viewModel.clearSelection()
+        }
         return .handled
     }
 
@@ -198,19 +248,42 @@ struct FileBrowserPanel: View {
         return .handled
     }
 
+    private func handleAKey(modifiers: EventModifiers) -> BackportKeyPressResult {
+        guard isFocused, modifiers.contains(.command) else { return .ignored }
+        viewModel.selectAll()
+        return .handled
+    }
+
     // MARK: - Filter Bar
 
     private var filterBar: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-            TextField("Filter", text: $viewModel.filterText)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12))
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                TextField("Filter", text: $viewModel.filterText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+
+            if viewModel.selectedNodeIds.count > 1 {
+                HStack {
+                    Text("已选 \(viewModel.selectedNodeIds.count) 个项目")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("取消选择") { viewModel.clearSelection() }
+                        .font(.system(size: 10))
+                        .buttonStyle(.plain)
+                        .foregroundColor(.accentColor)
+                }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
+            }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
     }
 
     // MARK: - Empty State
@@ -242,13 +315,23 @@ struct FileBrowserPanel: View {
                             depth: entry.depth,
                             gitStatus: viewModel.gitStatus(for: entry.node.url),
                             isSelected: viewModel.selectedNodeIds.contains(entry.node.id),
+                            isMultiSelected: viewModel.selectedNodeIds.count > 1,
+                            selectedCount: viewModel.selectedNodeIds.count,
+                            selectedURLs: viewModel.selectedNodeIds.compactMap { viewModel.findNodeURL(id: $0) },
                             onToggleExpand: {
                                 viewModel.toggleExpand(nodeId: entry.node.id)
                             },
                             onSingleClick: {
-                                viewModel.selectNode(id: entry.node.id)
-                                if entry.node.isDirectory {
-                                    viewModel.toggleExpand(nodeId: entry.node.id)
+                                let flags = NSApp.currentEvent?.modifierFlags ?? []
+                                if flags.contains(.command) {
+                                    viewModel.toggleSelection(id: entry.node.id)
+                                } else if flags.contains(.shift) {
+                                    viewModel.extendSelection(to: entry.node.id)
+                                } else {
+                                    viewModel.selectNode(id: entry.node.id)
+                                    if entry.node.isDirectory {
+                                        viewModel.toggleExpand(nodeId: entry.node.id)
+                                    }
                                 }
                                 isFocused = true
                             },
@@ -276,16 +359,20 @@ struct FileBrowserPanel: View {
                                 viewModel.createDirectory(inDirectory: dir, name: "untitled")
                             },
                             onDelete: {
-                                viewModel.delete(url: entry.node.url)
-                                if viewModel.selectedNodeIds.contains(entry.node.id) {
-                                    viewModel.clearSelection()
-                                    viewModel.showPreviewPanel = false
+                                if viewModel.selectedNodeIds.count > 1 {
+                                    showBatchDeleteAlert = true
+                                } else {
+                                    viewModel.delete(url: entry.node.url)
+                                    if viewModel.lastSelectedId == entry.node.id {
+                                        viewModel.clearSelection()
+                                    }
                                 }
                             },
                             onStartRename: {
                                 renameText = entry.node.name
                                 viewModel.renamingURL = entry.node.url
                             },
+                            onMoveSelected: { presentMovePanel() },
                             isRenaming: viewModel.renamingURL == entry.node.url,
                             renameText: viewModel.renamingURL == entry.node.url
                                 ? Binding(get: { renameText }, set: { renameText = $0 })
@@ -298,6 +385,11 @@ struct FileBrowserPanel: View {
                             }
                         )
                         .id(entry.node.id)
+                        .dropDestination(for: URL.self) { droppedURLs, _ in
+                            guard entry.node.isDirectory else { return false }
+                            _ = viewModel.move(urls: droppedURLs, to: entry.node.url)
+                            return true
+                        } isTargeted: { _ in }
                     }
                 }
             }
