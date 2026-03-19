@@ -5,7 +5,6 @@ import Foundation
 
 struct FileBrowserViewModelNavigationTests {
 
-    // 创建临时目录：rootDir/a.txt, rootDir/b.txt, rootDir/c.txt
     private func makeTempDir() throws -> URL {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -19,126 +18,84 @@ struct FileBrowserViewModelNavigationTests {
     @Test func testSelectNextMovesSelectionDown() async throws {
         let dir = try makeTempDir()
         let vm = FileBrowserViewModel(rootDir: dir.path)
-        defer {
-            vm.stop()
-            try? FileManager.default.removeItem(at: dir)
-        }
-
-        try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
+        defer { vm.stop(); try? FileManager.default.removeItem(at: dir) }
+        try await Task.sleep(nanoseconds: 200_000_000)
 
         let nodes = vm.visibleNodes
-        guard nodes.count >= 2 else {
-            Issue.record("Expected at least 2 nodes, got \(nodes.count)")
-            return
-        }
+        guard nodes.count >= 2 else { Issue.record("Expected at least 2 nodes"); return }
 
-        vm.selectedNodeId = nodes[0].node.id
+        vm.selectNode(id: nodes[0].node.id)
         vm.selectNext()
-        #expect(vm.selectedNodeId == nodes[1].node.id)
+        #expect(vm.lastSelectedId == nodes[1].node.id)
     }
 
     @Test func testSelectPreviousMovesSelectionUp() async throws {
         let dir = try makeTempDir()
         let vm = FileBrowserViewModel(rootDir: dir.path)
-        defer {
-            vm.stop()
-            try? FileManager.default.removeItem(at: dir)
-        }
-
-        try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
+        defer { vm.stop(); try? FileManager.default.removeItem(at: dir) }
+        try await Task.sleep(nanoseconds: 200_000_000)
 
         let nodes = vm.visibleNodes
-        guard nodes.count >= 2 else {
-            Issue.record("Expected at least 2 nodes, got \(nodes.count)")
-            return
-        }
+        guard nodes.count >= 2 else { Issue.record("Expected at least 2 nodes"); return }
 
-        vm.selectedNodeId = nodes[1].node.id
+        vm.selectNode(id: nodes[1].node.id)
         vm.selectPrevious()
-        #expect(vm.selectedNodeId == nodes[0].node.id)
+        #expect(vm.lastSelectedId == nodes[0].node.id)
     }
 
     @Test func testSelectNextClampsAtBottom() async throws {
         let dir = try makeTempDir()
         let vm = FileBrowserViewModel(rootDir: dir.path)
-        defer {
-            vm.stop()
-            try? FileManager.default.removeItem(at: dir)
-        }
-
-        try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
+        defer { vm.stop(); try? FileManager.default.removeItem(at: dir) }
+        try await Task.sleep(nanoseconds: 200_000_000)
 
         let nodes = vm.visibleNodes
-        guard let last = nodes.last else {
-            Issue.record("Expected at least 1 node, got 0")
-            return
-        }
+        guard let last = nodes.last else { Issue.record("Expected at least 1 node"); return }
 
-        vm.selectedNodeId = last.node.id
+        vm.selectNode(id: last.node.id)
         vm.selectNext()
-        #expect(vm.selectedNodeId == last.node.id)
+        #expect(vm.lastSelectedId == last.node.id)
     }
 
     @Test func testSelectPreviousClampsAtTop() async throws {
         let dir = try makeTempDir()
         let vm = FileBrowserViewModel(rootDir: dir.path)
-        defer {
-            vm.stop()
-            try? FileManager.default.removeItem(at: dir)
-        }
-
-        try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
+        defer { vm.stop(); try? FileManager.default.removeItem(at: dir) }
+        try await Task.sleep(nanoseconds: 200_000_000)
 
         let nodes = vm.visibleNodes
-        guard let first = nodes.first else {
-            Issue.record("Expected at least 1 node, got 0")
-            return
-        }
+        guard let first = nodes.first else { Issue.record("Expected at least 1 node"); return }
 
-        vm.selectedNodeId = first.node.id
+        vm.selectNode(id: first.node.id)
         vm.selectPrevious()
-        #expect(vm.selectedNodeId == first.node.id)
+        #expect(vm.lastSelectedId == first.node.id)
     }
 
     @Test func testSelectNextWithNoSelectionSelectsFirst() async throws {
         let dir = try makeTempDir()
         let vm = FileBrowserViewModel(rootDir: dir.path)
-        defer {
-            vm.stop()
-            try? FileManager.default.removeItem(at: dir)
-        }
-
-        try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
+        defer { vm.stop(); try? FileManager.default.removeItem(at: dir) }
+        try await Task.sleep(nanoseconds: 200_000_000)
 
         let nodes = vm.visibleNodes
-        guard let first = nodes.first else {
-            Issue.record("Expected at least 1 node, got 0")
-            return
-        }
+        guard let first = nodes.first else { Issue.record("Expected at least 1 node"); return }
 
-        vm.selectedNodeId = nil
+        vm.clearSelection()
         vm.selectNext()
-        #expect(vm.selectedNodeId == first.node.id)
+        #expect(vm.lastSelectedId == first.node.id)
     }
 
     @Test func testSelectPreviousWithNoSelectionSelectsFirst() async throws {
         let dir = try makeTempDir()
         let vm = FileBrowserViewModel(rootDir: dir.path)
-        defer {
-            vm.stop()
-            try? FileManager.default.removeItem(at: dir)
-        }
-
-        try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
+        defer { vm.stop(); try? FileManager.default.removeItem(at: dir) }
+        try await Task.sleep(nanoseconds: 200_000_000)
 
         let nodes = vm.visibleNodes
-        guard let first = nodes.first else {
-            Issue.record("Expected at least 1 node, got 0")
-            return
-        }
+        guard let first = nodes.first else { Issue.record("Expected at least 1 node"); return }
 
-        vm.selectedNodeId = nil
+        vm.clearSelection()
         vm.selectPrevious()
-        #expect(vm.selectedNodeId == first.node.id)
+        #expect(vm.lastSelectedId == first.node.id)
     }
 }
