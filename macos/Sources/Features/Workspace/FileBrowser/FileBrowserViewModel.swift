@@ -353,4 +353,28 @@ final class FileBrowserViewModel: ObservableObject {
         }
         return nil
     }
+
+    // MARK: - Keyboard Navigation
+
+    func selectNext() {
+        let nodes = visibleNodes
+        guard !nodes.isEmpty else { return }
+        if let id = selectedNodeId,
+           let idx = nodes.firstIndex(where: { $0.node.id == id }) {
+            selectedNodeId = nodes[min(idx + 1, nodes.count - 1)].node.id
+        } else {
+            selectedNodeId = nodes[0].node.id
+        }
+    }
+
+    func selectPrevious() {
+        let nodes = visibleNodes
+        guard !nodes.isEmpty else { return }
+        if let id = selectedNodeId,
+           let idx = nodes.firstIndex(where: { $0.node.id == id }) {
+            selectedNodeId = nodes[max(idx - 1, 0)].node.id
+        } else {
+            selectedNodeId = nodes[0].node.id
+        }
+    }
 }
