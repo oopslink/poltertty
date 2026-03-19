@@ -24,11 +24,22 @@ struct FileBrowserPanel: View {
             .backport.onKeyPress("f") { handleFKey(modifiers: $0) }
             .backport.onKeyPress("N") { handleUpperNKey(modifiers: $0) }
             .backport.onKeyPress(" ") { handleSpaceKey(modifiers: $0) }
+            .backport.onKeyPress(KeyEquivalent.upArrow)   { handleUpArrow(modifiers: $0) }
+            .backport.onKeyPress(KeyEquivalent.downArrow) { handleDownArrow(modifiers: $0) }
+            .backport.onKeyPress(KeyEquivalent.return)    { handleReturnKey(modifiers: $0) }
             .onChange(of: viewModel.filterText) { text in
                 if text.isEmpty {
                     viewModel.deactivateRecursiveFilter()
                 }
             }
+    }
+
+    private var isPreviewVisible: Bool {
+        guard viewModel.showPreviewPanel,
+              let nodeId = viewModel.selectedNodeId,
+              let url = viewModel.findNodeURL(id: nodeId),
+              !url.hasDirectoryPath else { return false }
+        return true
     }
 
     private var panelContent: some View {
@@ -43,8 +54,8 @@ struct FileBrowserPanel: View {
                     treeScrollView
                 }
             }
-            .frame(minWidth: 200, maxWidth: viewModel.showPreviewPanel ? viewModel.treeWidth : .infinity)
-            .frame(width: viewModel.showPreviewPanel ? viewModel.treeWidth : nil)
+            .frame(minWidth: 200, maxWidth: isPreviewVisible ? viewModel.treeWidth : .infinity)
+            .frame(width: isPreviewVisible ? viewModel.treeWidth : nil)
 
             // Right: Preview panel (if enabled)
             if viewModel.showPreviewPanel, let nodeId = viewModel.selectedNodeId,
@@ -166,6 +177,27 @@ struct FileBrowserPanel: View {
         return .handled
     }
 
+    private func handleUpArrow(modifiers: EventModifiers) -> BackportKeyPressResult {
+        guard isFocused else { return .ignored }
+        viewModel.selectPrevious()
+        return .handled
+    }
+
+    private func handleDownArrow(modifiers: EventModifiers) -> BackportKeyPressResult {
+        guard isFocused else { return .ignored }
+        viewModel.selectNext()
+        return .handled
+    }
+
+    private func handleReturnKey(modifiers: EventModifiers) -> BackportKeyPressResult {
+        guard isFocused,
+              let nodeId = viewModel.selectedNodeId,
+              let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }),
+              entry.node.isDirectory else { return .ignored }
+        viewModel.toggleExpand(nodeId: nodeId)
+        return .handled
+    }
+
     // MARK: - Filter Bar
 
     private var filterBar: some View {
@@ -201,69 +233,77 @@ struct FileBrowserPanel: View {
     // MARK: - Tree Scroll View
 
     private var treeScrollView: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                ForEach(viewModel.visibleNodes, id: \.node.id) { entry in
-                    FileNodeRow(
-                        node: entry.node,
-                        depth: entry.depth,
-                        gitStatus: viewModel.gitStatus(for: entry.node.url),
-                        isSelected: viewModel.selectedNodeId == entry.node.id,
-                        onToggleExpand: {
-                            viewModel.toggleExpand(nodeId: entry.node.id)
-                        },
-                        onSingleClick: {
-                            viewModel.selectNode(id: entry.node.id)
-                            if entry.node.isDirectory {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(viewModel.visibleNodes, id: \.node.id) { entry in
+                        FileNodeRow(
+                            node: entry.node,
+                            depth: entry.depth,
+                            gitStatus: viewModel.gitStatus(for: entry.node.url),
+                            isSelected: viewModel.selectedNodeId == entry.node.id,
+                            onToggleExpand: {
                                 viewModel.toggleExpand(nodeId: entry.node.id)
+                            },
+                            onSingleClick: {
+                                viewModel.selectNode(id: entry.node.id)
+                                if entry.node.isDirectory {
+                                    viewModel.toggleExpand(nodeId: entry.node.id)
+                                }
+                                isFocused = true
+                            },
+                            onDoubleClick: {
+                                if !entry.node.isDirectory {
+                                    viewModel.openInDefaultApp(entry.node.url)
+                                }
+                            },
+                            onOpenInTerminal: {
+                                onOpenInTerminal?(entry.node.url)
+                            },
+                            onCopyPath: {
+                                viewModel.copyPath(entry.node.url)
+                            },
+                            onNewFile: {
+                                let dir = entry.node.isDirectory
+                                    ? entry.node.url
+                                    : entry.node.url.deletingLastPathComponent()
+                                viewModel.createFile(inDirectory: dir, name: "untitled")
+                            },
+                            onNewDirectory: {
+                                let dir = entry.node.isDirectory
+                                    ? entry.node.url
+                                    : entry.node.url.deletingLastPathComponent()
+                                viewModel.createDirectory(inDirectory: dir, name: "untitled")
+                            },
+                            onDelete: {
+                                viewModel.delete(url: entry.node.url)
+                                if viewModel.selectedNodeId == entry.node.id {
+                                    viewModel.selectedNodeId = nil
+                                    viewModel.showPreviewPanel = false
+                                }
+                            },
+                            onStartRename: {
+                                renameText = entry.node.name
+                                viewModel.renamingURL = entry.node.url
+                            },
+                            isRenaming: viewModel.renamingURL == entry.node.url,
+                            renameText: viewModel.renamingURL == entry.node.url
+                                ? Binding(get: { renameText }, set: { renameText = $0 })
+                                : nil,
+                            onCommitRename: { newName in
+                                viewModel.rename(url: entry.node.url, to: newName)
+                            },
+                            onCancelRename: {
+                                viewModel.renamingURL = nil
                             }
-                            isFocused = true
-                        },
-                        onDoubleClick: {
-                            if !entry.node.isDirectory {
-                                viewModel.openInDefaultApp(entry.node.url)
-                            }
-                        },
-                        onOpenInTerminal: {
-                            onOpenInTerminal?(entry.node.url)
-                        },
-                        onCopyPath: {
-                            viewModel.copyPath(entry.node.url)
-                        },
-                        onNewFile: {
-                            let dir = entry.node.isDirectory
-                                ? entry.node.url
-                                : entry.node.url.deletingLastPathComponent()
-                            viewModel.createFile(inDirectory: dir, name: "untitled")
-                        },
-                        onNewDirectory: {
-                            let dir = entry.node.isDirectory
-                                ? entry.node.url
-                                : entry.node.url.deletingLastPathComponent()
-                            viewModel.createDirectory(inDirectory: dir, name: "untitled")
-                        },
-                        onDelete: {
-                            viewModel.delete(url: entry.node.url)
-                            if viewModel.selectedNodeId == entry.node.id {
-                                viewModel.selectedNodeId = nil
-                                viewModel.showPreviewPanel = false
-                            }
-                        },
-                        onStartRename: {
-                            renameText = entry.node.name
-                            viewModel.renamingURL = entry.node.url
-                        },
-                        isRenaming: viewModel.renamingURL == entry.node.url,
-                        renameText: viewModel.renamingURL == entry.node.url
-                            ? Binding(get: { renameText }, set: { renameText = $0 })
-                            : nil,
-                        onCommitRename: { newName in
-                            viewModel.rename(url: entry.node.url, to: newName)
-                        },
-                        onCancelRename: {
-                            viewModel.renamingURL = nil
-                        }
-                    )
+                        )
+                        .id(entry.node.id)
+                    }
+                }
+            }
+            .onChange(of: viewModel.selectedNodeId) { id in
+                if let id {
+                    proxy.scrollTo(id)
                 }
             }
         }
