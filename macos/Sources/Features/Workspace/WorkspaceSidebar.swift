@@ -58,16 +58,29 @@ struct WorkspaceSidebar: View {
 
     private var collapsedContent: some View {
         VStack(spacing: 0) {
-            // Toggle button (expand)
-            Button(action: {
-                isCollapsed = false
-                UserDefaults.standard.set(false, forKey: "poltertty.sidebarCollapsed")
-            }) {
-                Image(systemName: "sidebar.right")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+            // Toggle button (expand) + Agent button
+            VStack(spacing: 6) {
+                Button(action: {
+                    isCollapsed = false
+                    UserDefaults.standard.set(false, forKey: "poltertty.sidebarCollapsed")
+                }) {
+                    Image(systemName: "sidebar.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onLaunchAgent) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .frame(width: 28, height: 28)
+                        .background(Color.primary.opacity(0.06))
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .help("Launch Agent")
             }
-            .buttonStyle(.plain)
             .padding(.vertical, 8)
 
             Divider()
@@ -113,31 +126,17 @@ struct WorkspaceSidebar: View {
 
             Divider()
 
-            VStack(spacing: 6) {
-                // Agent launch button
-                Button(action: onLaunchAgent) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                        .frame(width: 28, height: 28)
-                        .background(Color.primary.opacity(0.06))
-                        .cornerRadius(6)
-                }
-                .buttonStyle(.plain)
-                .help("Launch Agent")
-
-                // Add button: single click = new workspace, double click = new temporary
-                Image(systemName: "plus")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                    .frame(width: 28, height: 28)
-                    .background(Color.primary.opacity(0.06))
-                    .cornerRadius(6)
-                    .onTapGesture(count: 2) { onCreateTemporary() }
-                    .onTapGesture(count: 1) { isCreating = true }
-                    .help("Click: New Workspace\nDouble-click: New Temporary")
-            }
-            .padding(.vertical, 8)
+            // Add button: single click = new workspace, double click = new temporary
+            Image(systemName: "plus")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .frame(width: 28, height: 28)
+                .background(Color.primary.opacity(0.06))
+                .cornerRadius(6)
+                .onTapGesture(count: 2) { onCreateTemporary() }
+                .onTapGesture(count: 1) { isCreating = true }
+                .help("Click: New Workspace\nDouble-click: New Temporary")
+                .padding(.vertical, 8)
         }
     }
 
