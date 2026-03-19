@@ -36,7 +36,7 @@ struct FileBrowserPanel: View {
 
     private var isPreviewVisible: Bool {
         guard viewModel.showPreviewPanel,
-              let nodeId = viewModel.selectedNodeId,
+              let nodeId = viewModel.lastSelectedId,
               let url = viewModel.findNodeURL(id: nodeId),
               !url.hasDirectoryPath else { return false }
         return true
@@ -58,7 +58,7 @@ struct FileBrowserPanel: View {
             .frame(width: isPreviewVisible ? viewModel.treeWidth : nil)
 
             // Right: Preview panel (if enabled)
-            if viewModel.showPreviewPanel, let nodeId = viewModel.selectedNodeId,
+            if viewModel.showPreviewPanel, let nodeId = viewModel.lastSelectedId,
                let url = viewModel.findNodeURL(id: nodeId),
                !url.hasDirectoryPath {
                 draggableDivider
@@ -116,14 +116,14 @@ struct FileBrowserPanel: View {
     }
 
     private func handleTKey(modifiers: EventModifiers) -> BackportKeyPressResult {
-        guard isFocused, let nodeId = viewModel.selectedNodeId,
+        guard isFocused, let nodeId = viewModel.lastSelectedId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
         onOpenInTerminal?(entry.node.url)
         return .handled
     }
 
     private func handleRKey(modifiers: EventModifiers) -> BackportKeyPressResult {
-        guard isFocused, let nodeId = viewModel.selectedNodeId,
+        guard isFocused, let nodeId = viewModel.lastSelectedId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
         renameText = entry.node.name
         viewModel.renamingURL = entry.node.url
@@ -131,7 +131,7 @@ struct FileBrowserPanel: View {
     }
 
     private func handleNKey(modifiers: EventModifiers) -> BackportKeyPressResult {
-        guard isFocused, let nodeId = viewModel.selectedNodeId,
+        guard isFocused, let nodeId = viewModel.lastSelectedId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
         let dir = entry.node.isDirectory ? entry.node.url : entry.node.url.deletingLastPathComponent()
         viewModel.createFile(inDirectory: dir, name: "untitled")
@@ -140,16 +140,16 @@ struct FileBrowserPanel: View {
 
     private func handleDeleteKey(modifiers: EventModifiers) -> BackportKeyPressResult {
         guard isFocused, modifiers.contains(.command) else { return .ignored }
-        guard let nodeId = viewModel.selectedNodeId,
+        guard let nodeId = viewModel.lastSelectedId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
         viewModel.delete(url: entry.node.url)
-        viewModel.selectedNodeId = nil
+        viewModel.clearSelection()
         return .handled
     }
 
     private func handleCKey(modifiers: EventModifiers) -> BackportKeyPressResult {
         guard isFocused, modifiers.contains(.command), modifiers.contains(.shift) else { return .ignored }
-        guard let nodeId = viewModel.selectedNodeId,
+        guard let nodeId = viewModel.lastSelectedId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
         viewModel.copyPath(entry.node.url)
         return .handled
@@ -163,7 +163,7 @@ struct FileBrowserPanel: View {
 
     private func handleUpperNKey(modifiers: EventModifiers) -> BackportKeyPressResult {
         guard isFocused, modifiers.contains(.shift) else { return .ignored }
-        guard let nodeId = viewModel.selectedNodeId,
+        guard let nodeId = viewModel.lastSelectedId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
         let dir = entry.node.isDirectory ? entry.node.url : entry.node.url.deletingLastPathComponent()
         viewModel.createDirectory(inDirectory: dir, name: "untitled")
@@ -171,7 +171,7 @@ struct FileBrowserPanel: View {
     }
 
     private func handleSpaceKey(modifiers: EventModifiers) -> BackportKeyPressResult {
-        guard isFocused, viewModel.selectedNodeId != nil else { return .ignored }
+        guard isFocused, viewModel.lastSelectedId != nil else { return .ignored }
         // Toggle preview panel with space key
         viewModel.togglePreviewPanel()
         return .handled
@@ -191,7 +191,7 @@ struct FileBrowserPanel: View {
 
     private func handleReturnKey(modifiers: EventModifiers) -> BackportKeyPressResult {
         guard isFocused,
-              let nodeId = viewModel.selectedNodeId,
+              let nodeId = viewModel.lastSelectedId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }),
               entry.node.isDirectory else { return .ignored }
         viewModel.toggleExpand(nodeId: nodeId)
@@ -241,7 +241,7 @@ struct FileBrowserPanel: View {
                             node: entry.node,
                             depth: entry.depth,
                             gitStatus: viewModel.gitStatus(for: entry.node.url),
-                            isSelected: viewModel.selectedNodeId == entry.node.id,
+                            isSelected: viewModel.selectedNodeIds.contains(entry.node.id),
                             onToggleExpand: {
                                 viewModel.toggleExpand(nodeId: entry.node.id)
                             },
@@ -277,8 +277,8 @@ struct FileBrowserPanel: View {
                             },
                             onDelete: {
                                 viewModel.delete(url: entry.node.url)
-                                if viewModel.selectedNodeId == entry.node.id {
-                                    viewModel.selectedNodeId = nil
+                                if viewModel.selectedNodeIds.contains(entry.node.id) {
+                                    viewModel.clearSelection()
                                     viewModel.showPreviewPanel = false
                                 }
                             },
@@ -301,7 +301,7 @@ struct FileBrowserPanel: View {
                     }
                 }
             }
-            .onChange(of: viewModel.selectedNodeId) { id in
+            .onChange(of: viewModel.lastSelectedId) { id in
                 if let id {
                     proxy.scrollTo(id)
                 }
