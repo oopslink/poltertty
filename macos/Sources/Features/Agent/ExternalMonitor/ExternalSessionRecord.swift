@@ -1,7 +1,7 @@
 // macos/Sources/Features/Agent/ExternalMonitor/ExternalSessionRecord.swift
 import Foundation
 
-enum ExternalToolType: String {
+enum ExternalToolType: String, Sendable {
     case claudeCode = "claude-code"
     case openCode   = "opencode"
     case geminiCli  = "gemini-cli"
@@ -15,7 +15,7 @@ enum ExternalToolType: String {
     }
 }
 
-struct ExternalSessionRecord: Identifiable {
+struct ExternalSessionRecord: Identifiable, Sendable {
     let id: String
     let toolType: ExternalToolType
     let pid: Int?
@@ -24,8 +24,8 @@ struct ExternalSessionRecord: Identifiable {
     var isAlive: Bool
     var lastMessage: LastMessage?
 
-    struct LastMessage {
-        enum Role { case user, assistant }
+    struct LastMessage: Sendable {
+        enum Role: Sendable { case user, assistant }
         let role: Role
         let text: String
         let timestamp: Date
