@@ -216,10 +216,9 @@ struct FileBrowserViewModelNavigationTests {
         vm.selectAll()
         #expect(vm.selectedNodeIds.count > 1)
 
-        vm.selectNode(id: nodes[0].node.id)
+        // 直接调用 selectNext()，验证方向键本身会清空多选
         vm.selectNext()
-        // 方向键后应清空多选，只剩一个
+        // 方向键后应清空多选，只剩一个（从 lastSelectedId 位置移动一步）
         #expect(vm.selectedNodeIds.count == 1)
-        #expect(vm.lastSelectedId == nodes[1].node.id)
     }
 }

@@ -357,19 +357,20 @@ final class FileBrowserViewModel: ObservableObject {
         }
 
         var errors: [String] = []
+        var failedURLs = Set<URL>()
         for url in urls {
             let target = destination.appendingPathComponent(url.lastPathComponent)
             do {
                 try FileManager.default.moveItem(at: url, to: target)
             } catch {
                 errors.append(url.lastPathComponent)
+                failedURLs.insert(url)
             }
         }
-        // 仅清除成功移动项的选中状态，失败项保留高亮
-        let successURLs = Set(urls.filter { !errors.contains($0.lastPathComponent) })
+        // 仅清除成功移动项的选中状态，失败项保留高亮（用 URL 直接判断，避免同名文件误判）
         selectedNodeIds = selectedNodeIds.filter { id in
             guard let url = findNodeURL(id: id) else { return false }
-            return !successURLs.contains(url)
+            return failedURLs.contains(url)
         }
         if selectedNodeIds.isEmpty {
             lastSelectedId = nil

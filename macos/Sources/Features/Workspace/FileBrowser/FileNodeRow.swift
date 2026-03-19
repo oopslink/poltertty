@@ -94,6 +94,10 @@ struct FileNodeRow: View {
             let urls: [URL] = (isMultiSelected && selectedURLs.contains(node.url))
                 ? selectedURLs
                 : [node.url]
+            // 技术限制：NSItemProvider 同一类型标识符只保留最后一个注册处理器，
+            // 多次调用 registerFileRepresentation 仅最后一个 URL 有效。
+            // SwiftUI .onDrag 不支持返回多个 NSItemProvider，真正的多文件拖拽
+            // 需要使用 AppKit NSDraggingSource，为已知限制。
             let provider = NSItemProvider()
             for url in urls {
                 provider.registerFileRepresentation(
