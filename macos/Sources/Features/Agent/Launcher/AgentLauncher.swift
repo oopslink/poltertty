@@ -22,14 +22,14 @@ enum AgentLaunchLocation: CaseIterable, Equatable, Hashable {
 /// Claude Code 权限模式（仅对 hookCapability == .full 的 agent 有效）
 enum ClaudePermissionMode: CaseIterable {
     case `default`      // 标准模式，遇到危险操作弹确认
-    case allowBypass    // 允许 Claude 自行申请跳过确认
-    case skipAll        // 跳过所有权限确认（--dangerously-skip-permissions）
+    case acceptEdits    // 自动接受文件编辑，其他操作仍弹确认
+    case bypass         // 跳过所有权限确认（--permission-mode bypassPermissions）
 
     var displayName: String {
         switch self {
         case .default:     return "Default"
-        case .allowBypass: return "Allow Bypass"
-        case .skipAll:     return "Skip All"
+        case .acceptEdits: return "Accept Edits"
+        case .bypass:      return "Bypass"
         }
     }
 
@@ -37,8 +37,8 @@ enum ClaudePermissionMode: CaseIterable {
     var flag: String? {
         switch self {
         case .default:     return nil
-        case .allowBypass: return "--permission-mode allow-bypass-permissions"
-        case .skipAll:     return "--dangerously-skip-permissions"
+        case .acceptEdits: return "--permission-mode acceptEdits"
+        case .bypass:      return "--permission-mode bypassPermissions"
         }
     }
 }
