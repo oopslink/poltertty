@@ -129,7 +129,7 @@ private struct AgentRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(agent.icon).font(.system(size: 16)).frame(width: 28)
+            AgentIconBadge(agent: agent)
             VStack(alignment: .leading, spacing: 1) {
                 Text(agent.name).font(.system(size: 13))
                 Text(agent.command).font(.system(size: 11)).foregroundStyle(.secondary)
