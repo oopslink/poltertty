@@ -20,25 +20,30 @@ enum AgentLaunchLocation: CaseIterable, Equatable, Hashable {
 }
 
 /// Claude Code 权限模式（仅对 hookCapability == .full 的 agent 有效）
-enum ClaudePermissionMode: CaseIterable {
-    case `default`      // 标准模式，遇到危险操作弹确认
-    case acceptEdits    // 自动接受文件编辑，其他操作仍弹确认
-    case bypass         // 跳过所有权限确认（--permission-mode bypassPermissions）
+enum ClaudePermissionMode: String, CaseIterable {
+    case `default`          // 标准模式，遇到危险操作弹确认
+    case acceptEdits        // 自动接受文件编辑，其余仍弹确认
+    case dontAsk            // 不询问权限，但不完全绕过
+    case plan               // 规划模式，只分析不执行
+    case auto               // 自动模式
+    case bypassPermissions  // 跳过所有权限确认
 
     var displayName: String {
         switch self {
-        case .default:     return "Default"
-        case .acceptEdits: return "Accept Edits"
-        case .bypass:      return "Bypass"
+        case .default:          return "Default"
+        case .acceptEdits:      return "Accept Edits"
+        case .dontAsk:          return "Don't Ask"
+        case .plan:             return "Plan"
+        case .auto:             return "Auto"
+        case .bypassPermissions: return "Bypass"
         }
     }
 
     /// 注入到 claude 命令的 flag，nil 表示不需要额外 flag
     var flag: String? {
         switch self {
-        case .default:     return nil
-        case .acceptEdits: return "--permission-mode acceptEdits"
-        case .bypass:      return "--permission-mode bypassPermissions"
+        case .default: return nil
+        default:       return "--permission-mode \(rawValue)"
         }
     }
 }

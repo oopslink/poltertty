@@ -129,9 +129,12 @@ struct AgentLaunchMenu: View {
 
     private func permissionModeColor(_ mode: ClaudePermissionMode) -> Color {
         switch mode {
-        case .default:     return .accentColor
-        case .acceptEdits: return .orange
-        case .bypass:      return .red
+        case .default:          return .accentColor
+        case .acceptEdits:      return .accentColor
+        case .dontAsk:          return .accentColor
+        case .plan:             return .accentColor
+        case .auto:             return .orange
+        case .bypassPermissions: return .red
         }
     }
 }
