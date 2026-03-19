@@ -14,6 +14,8 @@ struct WorkspaceSidebar: View {
     @Binding var isCollapsed: Bool
     @State private var isCreating = false
     @State private var editingWorkspace: WorkspaceModel?
+    @State private var showDeleteAlert = false
+    @State private var pendingDeleteWorkspace: WorkspaceModel?
     @Namespace private var sidebarAnimation
 
     var body: some View {
@@ -35,6 +37,22 @@ struct WorkspaceSidebar: View {
                 },
                 onCancel: { isCreating = false }
             )
+        }
+        .alert(
+            String(localized: "workspace.delete.title \(pendingDeleteWorkspace?.name ?? "")"),
+            isPresented: $showDeleteAlert
+        ) {
+            Button(String(localized: "workspace.delete.cancel"), role: .cancel) {
+                pendingDeleteWorkspace = nil
+            }
+            Button(String(localized: "workspace.delete.confirm"), role: .destructive) {
+                if let ws = pendingDeleteWorkspace {
+                    manager.delete(id: ws.id)
+                }
+                pendingDeleteWorkspace = nil
+            }
+        } message: {
+            Text(String(localized: "workspace.delete.message"))
         }
         .sheet(item: $editingWorkspace) { workspace in
             WorkspaceCreateForm(
@@ -102,7 +120,7 @@ struct WorkspaceSidebar: View {
                                 isOpen: manager.windowForWorkspace(workspace.id) != nil,
                                 onTap: { onSwitch(workspace.id) },
                                 onClose: { onClose(workspace.id) },
-                                onDelete: { manager.delete(id: workspace.id) },
+                                onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
                                 onEdit: { editingWorkspace = workspace }
                             )
                         }
@@ -117,7 +135,7 @@ struct WorkspaceSidebar: View {
                                     isOpen: manager.windowForWorkspace(workspace.id) != nil,
                                     onTap: { onSwitch(workspace.id) },
                                     onClose: { onClose(workspace.id) },
-                                    onDelete: { manager.delete(id: workspace.id) },
+                                    onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
                                     onEdit: { editingWorkspace = workspace }
                                 )
                             }
@@ -200,7 +218,7 @@ struct WorkspaceSidebar: View {
                                 animationNamespace: sidebarAnimation,
                                 onTap: { onSwitch(workspace.id) },
                                 onClose: { onClose(workspace.id) },
-                                onDelete: { manager.delete(id: workspace.id) },
+                                onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
                                 onConvert: { onConvert(workspace) },
                                 onEdit: { editingWorkspace = workspace }
                             )
@@ -226,7 +244,7 @@ struct WorkspaceSidebar: View {
                                     animationNamespace: sidebarAnimation,
                                     onTap: { onSwitch(workspace.id) },
                                     onClose: { onClose(workspace.id) },
-                                    onDelete: { manager.delete(id: workspace.id) },
+                                    onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
                                     onConvert: { onConvert(workspace) },
                                     onEdit: { editingWorkspace = workspace }
                                 )
