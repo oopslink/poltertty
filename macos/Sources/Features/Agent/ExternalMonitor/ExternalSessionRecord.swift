@@ -25,7 +25,7 @@ struct ExternalSessionRecord: Identifiable, Sendable {
     var lastMessage: LastMessage?
 
     struct LastMessage: Sendable {
-        enum Role: Sendable { case user, assistant }
+        enum Role: Sendable, Equatable { case user, assistant }
         let role: Role
         let text: String
         let timestamp: Date
