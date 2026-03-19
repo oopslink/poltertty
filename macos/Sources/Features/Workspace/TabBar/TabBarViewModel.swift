@@ -111,4 +111,16 @@ final class TabBarViewModel: ObservableObject {
         guard let activeTabId else { return nil }
         return tabs.firstIndex(where: { $0.id == activeTabId })
     }
+
+    // MARK: - Agent 状态查询
+
+    func agentState(for surfaceId: UUID) -> AgentState? {
+        AgentService.shared.sessionManager.session(for: surfaceId)?.state
+    }
+
+    func agentCostDisplay(for surfaceId: UUID) -> String? {
+        guard let cost = AgentService.shared.sessionManager.session(for: surfaceId)?.tokenUsage.cost,
+              cost > 0 else { return nil }
+        return String(format: "$%.2f", NSDecimalNumber(decimal: cost).doubleValue)
+    }
 }

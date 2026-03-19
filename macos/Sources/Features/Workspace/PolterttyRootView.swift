@@ -9,6 +9,7 @@ extension Notification.Name {
     static let workspaceSidebarNavigateDown = Notification.Name("poltertty.workspaceSidebarNavigateDown")
     static let toggleFileBrowser = Notification.Name("poltertty.toggleFileBrowser")
     static let fileBrowserOpenInTerminal = Notification.Name("poltertty.fileBrowserOpenInTerminal")
+    static let toggleAgentMonitor = Notification.Name("poltertty.toggleAgentMonitor")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -39,6 +40,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var convertName = ""
 
     @ObservedObject private var fileBrowserVM: FileBrowserViewModel
+    @ObservedObject private var agentMonitorVM: AgentMonitorViewModel
     @ObservedObject var tabBarViewModel: TabBarViewModel
     let workspaceAccentColor: Color
     let statusMonitor: GitStatusMonitor
@@ -91,6 +93,16 @@ struct PolterttyRootView<TerminalContent: View>: View {
         } else {
             self._fileBrowserVM = ObservedObject(
                 wrappedValue: FileBrowserViewModel(rootDir: "")
+            )
+        }
+
+        if let wsId = workspaceId {
+            self._agentMonitorVM = ObservedObject(
+                wrappedValue: AgentMonitorViewModel(workspaceId: wsId)
+            )
+        } else {
+            self._agentMonitorVM = ObservedObject(
+                wrappedValue: AgentMonitorViewModel(workspaceId: UUID())
             )
         }
     }
@@ -198,6 +210,22 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         // File browser not visible, show terminal
                         terminalAreaView
                     }
+
+                    // Agent Monitor Panel
+                    if agentMonitorVM.isVisible {
+                        Divider()
+                        AgentMonitorPanel(viewModel: agentMonitorVM)
+                    }
+                }
+                .overlay(alignment: .trailing) {
+                    HStack(spacing: 0) {
+                        AgentDrawer(viewModel: agentMonitorVM)
+                        // 占位 180px + 1px divider，使 Drawer 浮于终端上方而不遮盖侧边栏
+                        if agentMonitorVM.isVisible {
+                            Spacer().frame(width: 181)
+                        }
+                    }
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: agentMonitorVM.selectedItems.isEmpty)
                 }
                 .onChange(of: focusedPwd) { newPwd in
                     // single-parameter closure, compatible with macOS 13+
@@ -234,6 +262,9 @@ struct PolterttyRootView<TerminalContent: View>: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .workspaceSidebarNavigateDown)) { _ in
             navigateWorkspace(direction: 1)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleAgentMonitor)) { _ in
+            agentMonitorVM.toggle()
         }
         .sheet(isPresented: $showConvertAlert) {
             convertToFormalSheet

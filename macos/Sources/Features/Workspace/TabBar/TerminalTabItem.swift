@@ -8,6 +8,7 @@ struct TerminalTabItem: View {
     let onClose: () -> Void
     let onRename: (String) -> Void
     let onCloseOthers: () -> Void
+    var agentState: AgentState? = nil
 
     @State private var isHovered = false
     @State private var isRenaming = false
@@ -52,6 +53,9 @@ struct TerminalTabItem: View {
                         .simultaneousGesture(
                             TapGesture(count: 1).onEnded { onSelect() }
                         )
+                    if let state = agentState {
+                        AgentStateDot(state: state)
+                    }
                 }
 
                 if isHovered && !isRenaming && !isLastTab {
@@ -110,5 +114,39 @@ struct TerminalTabItem: View {
         isRenaming = false
         renameFocused = false
         // 不调用 onRename，保持原标题
+    }
+}
+
+struct AgentStateDot: View {
+    let state: AgentState
+    @State private var pulse = false
+
+    var color: Color {
+        switch state {
+        case .launching: return .blue
+        case .working:   return .green
+        case .idle:      return .yellow
+        case .error:     return .red
+        case .done:      return .secondary
+        }
+    }
+
+    var isWorking: Bool {
+        if case .working = state { return true }
+        return false
+    }
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: 6, height: 6)
+            .opacity(isWorking ? (pulse ? 1.0 : 0.35) : 1.0)
+            .animation(
+                isWorking
+                    ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
+                    : .default,
+                value: pulse
+            )
+            .onAppear { pulse = true }
     }
 }

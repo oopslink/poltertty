@@ -361,6 +361,10 @@ class AppDelegate: NSObject,
         // custom tab bar previous/next tab navigation. The @IBAction methods
         // exist on TerminalController but have no menu item wired in the XIB.
         setupTabNavigationMenuItems()
+
+        Task { @MainActor in
+            AgentService.shared.start()
+        }
     }
 
     func applicationDidHide(_ notification: Notification) {
@@ -452,6 +456,7 @@ class AppDelegate: NSObject,
 
     func applicationWillTerminate(_ notification: Notification) {
         isTerminating = true
+        AgentService.shared.shutdown()
         // Save all active workspace snapshots
         let manager = WorkspaceManager.shared
         // Destroy all temporary workspaces BEFORE saving snapshots
@@ -1109,13 +1114,30 @@ class AppDelegate: NSObject,
         toggleFileBrowser.keyEquivalentModifierMask = .command
         workspaceMenu.addItem(toggleFileBrowser)
 
-        let menuItem = NSMenuItem(title: "Workspace", action: nil, keyEquivalent: "")
-        menuItem.submenu = workspaceMenu
+        let workspaceMenuItem = NSMenuItem(title: "Workspace", action: nil, keyEquivalent: "")
+        workspaceMenuItem.submenu = workspaceMenu
 
-        // Insert before "Window" menu
+        // Agent 菜单（顶层，与 Workspace 同级）
+        let agentMenu = NSMenu(title: "Agent")
+
+        let launchAgent = NSMenuItem(title: "Launch Agent", action: #selector(TerminalController.launchAgentAction), keyEquivalent: "a")
+        launchAgent.keyEquivalentModifierMask = [.command, .shift]
+        agentMenu.addItem(launchAgent)
+
+        agentMenu.addItem(.separator())
+
+        let toggleAgentMonitor = NSMenuItem(title: "Toggle Agent Monitor", action: #selector(toggleAgentMonitor(_:)), keyEquivalent: "m")
+        toggleAgentMonitor.keyEquivalentModifierMask = [.command, .shift]
+        agentMenu.addItem(toggleAgentMonitor)
+
+        let agentMenuItem = NSMenuItem(title: "Agent", action: nil, keyEquivalent: "")
+        agentMenuItem.submenu = agentMenu
+
+        // 依次插入 Workspace、Agent（都在 Window 之前）
         if let mainMenu = NSApp.mainMenu,
            let windowMenuIndex = mainMenu.items.firstIndex(where: { $0.title == "Window" }) {
-            mainMenu.insertItem(menuItem, at: windowMenuIndex)
+            mainMenu.insertItem(workspaceMenuItem, at: windowMenuIndex)
+            mainMenu.insertItem(agentMenuItem, at: windowMenuIndex + 1)
         }
     }
 
@@ -1128,6 +1150,10 @@ class AppDelegate: NSObject,
               let controller = window.windowController as? TerminalController,
               let wsId = controller.workspaceId else { return }
         WorkspaceManager.shared.fileBrowserViewModel(for: wsId).isVisible.toggle()
+    }
+
+    @objc func toggleAgentMonitor(_ sender: Any?) {
+        NotificationCenter.default.post(name: .toggleAgentMonitor, object: nil)
     }
 
     @IBAction func newTab(_ sender: Any?) {

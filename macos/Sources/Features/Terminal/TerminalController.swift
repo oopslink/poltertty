@@ -161,6 +161,15 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             name: .fileBrowserOpenInTerminal,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            forName: .agentWriteToSurface,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let surfaceId = note.userInfo?["surfaceId"] as? UUID,
+                  let text = note.userInfo?["text"] as? String else { return }
+            self?.writeToSurface(text: text, surfaceId: surfaceId)
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -190,6 +199,13 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // If our surface tree is now nil then we close our window.
         if to.isEmpty {
             self.window?.close()
+        }
+
+        // 清理已关闭 surface 的 agent session
+        let fromIds = Set(from.map { $0.id })
+        let toIds = Set(to.map { $0.id })
+        for removedId in fromIds.subtracting(toIds) {
+            AgentService.shared.sessionManager.remove(surfaceId: removedId)
         }
     }
 
@@ -2044,6 +2060,52 @@ extension TerminalController {
             return .contentIntrinsicSize
         } else {
             return nil
+        }
+    }
+}
+
+// MARK: - Agent Support
+
+extension TerminalController {
+    /// 向指定 surfaceId 的 surface 写入文本（用于启动命令和 respawn）
+    ///
+    /// surfaceId 对应 SurfaceView.id（不是 TabBarViewModel 字典 key）。
+    func writeToSurface(text: String, surfaceId: UUID) {
+        // 在当前 surfaceTree 中查找匹配的 SurfaceView
+        guard let targetView = surfaceTree.first(where: { $0.id == surfaceId }) else { return }
+        guard let surfaceModel = targetView.surfaceModel else { return }
+        surfaceModel.sendText(text)
+    }
+
+    /// 启动 Agent 菜单（Cmd+Shift+A 触发）
+    @objc func launchAgentAction() {
+        guard let workspaceId = self.workspaceId,
+              let workspace = WorkspaceManager.shared.workspace(for: workspaceId) else { return }
+        showAgentLaunchMenu(workspaceId: workspaceId, cwd: workspace.rootDirExpanded)
+    }
+
+    func showAgentLaunchMenu(workspaceId: UUID, cwd: String) {
+        let popover = NSPopover()
+        popover.behavior = .transient
+        let menu = AgentLaunchMenu(
+            workspaceId: workspaceId,
+            cwd: cwd,
+            onLaunch: { [weak self, weak popover] definition, location, respawnMode in
+                popover?.close()
+                guard let self else { return }
+                AgentLauncher(terminalController: self).launch(
+                    definition: definition,
+                    location: location,
+                    respawnMode: respawnMode,
+                    workspaceId: workspaceId,
+                    cwd: cwd
+                )
+            },
+            onCancel: { [weak popover] in popover?.close() }
+        )
+        popover.contentViewController = NSHostingController(rootView: menu)
+        if let view = self.window?.contentView {
+            popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
         }
     }
 }
