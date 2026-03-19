@@ -11,7 +11,7 @@ final class FileBrowserViewModel: ObservableObject {
     @Published var showHiddenFiles: Bool = false
     @Published var isVisible: Bool
     @Published var panelWidth: CGFloat
-    @Published var renamingNodeId: UUID? = nil
+    @Published var renamingURL: URL? = nil
 
     // Preview state
     @Published var selectedNodeId: UUID? = nil
@@ -68,6 +68,8 @@ final class FileBrowserViewModel: ObservableObject {
     // MARK: - Reload
 
     func reload() {
+        // Don't reload while rename is in progress — would recreate nodes and interrupt input
+        guard renamingURL == nil else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             guard !self.rootDir.isEmpty, FileManager.default.fileExists(atPath: self.rootDir) else {
@@ -284,7 +286,8 @@ final class FileBrowserViewModel: ObservableObject {
     func rename(url: URL, to newName: String) {
         let target = url.deletingLastPathComponent().appendingPathComponent(newName)
         try? FileManager.default.moveItem(at: url, to: target)
-        renamingNodeId = nil
+        renamingURL = nil
+        reload()
     }
 
     func delete(url: URL) {

@@ -115,7 +115,7 @@ struct FileBrowserPanel: View {
         guard isFocused, let nodeId = viewModel.selectedNodeId,
               let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
         renameText = entry.node.name
-        viewModel.renamingNodeId = nodeId
+        viewModel.renamingURL = entry.node.url
         return .handled
     }
 
@@ -251,14 +251,17 @@ struct FileBrowserPanel: View {
                         },
                         onStartRename: {
                             renameText = entry.node.name
-                            viewModel.renamingNodeId = entry.node.id
+                            viewModel.renamingURL = entry.node.url
                         },
-                        isRenaming: viewModel.renamingNodeId == entry.node.id,
-                        renameText: viewModel.renamingNodeId == entry.node.id
+                        isRenaming: viewModel.renamingURL == entry.node.url,
+                        renameText: viewModel.renamingURL == entry.node.url
                             ? Binding(get: { renameText }, set: { renameText = $0 })
                             : nil,
                         onCommitRename: { newName in
                             viewModel.rename(url: entry.node.url, to: newName)
+                        },
+                        onCancelRename: {
+                            viewModel.renamingURL = nil
                         }
                     )
                 }
