@@ -2090,13 +2090,13 @@ extension TerminalController {
         let menu = AgentLaunchMenu(
             workspaceId: workspaceId,
             cwd: cwd,
-            onLaunch: { [weak self, weak popover] definition, location, respawnMode in
+            onLaunch: { [weak self, weak popover] definition, location, permissionMode in
                 popover?.close()
                 guard let self else { return }
                 AgentLauncher(terminalController: self).launch(
                     definition: definition,
                     location: location,
-                    respawnMode: respawnMode,
+                    permissionMode: permissionMode,
                     workspaceId: workspaceId,
                     cwd: cwd
                 )

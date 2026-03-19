@@ -6,12 +6,12 @@ struct AgentLaunchMenu: View {
     @State private var step: Step = .selectAgent
     @State private var selectedAgent: AgentDefinition?
     @State private var location: AgentLaunchLocation = .newTab
-    @State private var respawnMode: RespawnMode = .manual
+    @State private var permissionMode: ClaudePermissionMode = .default
     @State private var searchText = ""
 
     let workspaceId: UUID
     let cwd: String
-    let onLaunch: (AgentDefinition, AgentLaunchLocation, RespawnMode) -> Void
+    let onLaunch: (AgentDefinition, AgentLaunchLocation, ClaudePermissionMode) -> Void
     let onCancel: () -> Void
 
     enum Step { case selectAgent, selectLocation }
@@ -27,7 +27,7 @@ struct AgentLaunchMenu: View {
     var body: some View {
         VStack(spacing: 0) {
             switch step {
-            case .selectAgent:   agentSelection
+            case .selectAgent:    agentSelection
             case .selectLocation: locationSelection
             }
         }
@@ -61,8 +61,9 @@ struct AgentLaunchMenu: View {
 
     private func pick(_ agent: AgentDefinition) {
         selectedAgent = agent
+        permissionMode = .default
         if registry.definitions.count == 1 {
-            onLaunch(agent, location, respawnMode)
+            onLaunch(agent, location, permissionMode)
         } else {
             step = .selectLocation
         }
@@ -95,30 +96,42 @@ struct AgentLaunchMenu: View {
                 }
             }
             .padding(.vertical, 4)
-            Divider()
-            HStack(spacing: 4) {
-                Text("Respawn:").font(.system(size: 11)).foregroundStyle(.secondary)
-                Spacer()
-                ForEach(RespawnMode.allCases, id: \.self) { mode in
-                    Text(mode.displayName).font(.system(size: 11))
-                        .padding(.horizontal, 7).padding(.vertical, 3)
-                        .background(respawnMode == mode ? Color.accentColor.opacity(0.2) : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                        .onTapGesture { respawnMode = mode }
+            // Permission 选择器：仅对支持 hooks 的 agent 显示
+            if selectedAgent?.hookCapability == .full {
+                Divider()
+                HStack(spacing: 4) {
+                    Text("Permission:").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Spacer()
+                    ForEach(ClaudePermissionMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).font(.system(size: 11))
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(permissionMode == mode ? permissionModeColor(mode).opacity(0.2) : Color.clear)
+                            .foregroundStyle(permissionMode == mode ? permissionModeColor(mode) : .secondary)
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                            .onTapGesture { permissionMode = mode }
+                    }
                 }
+                .padding(.horizontal, 12).padding(.vertical, 8)
             }
-            .padding(.horizontal, 12).padding(.vertical, 8)
             Divider()
             HStack {
                 Button("Cancel") { onCancel() }.keyboardShortcut(.escape, modifiers: [])
                 Spacer()
                 Button("Launch") {
-                    if let a = selectedAgent { onLaunch(a, location, respawnMode) }
+                    if let a = selectedAgent { onLaunch(a, location, permissionMode) }
                 }
                 .keyboardShortcut(.return, modifiers: [])
                 .buttonStyle(.borderedProminent)
             }
             .padding(12)
+        }
+    }
+
+    private func permissionModeColor(_ mode: ClaudePermissionMode) -> Color {
+        switch mode {
+        case .default:     return .accentColor
+        case .allowBypass: return .orange
+        case .skipAll:     return .red
         }
     }
 }

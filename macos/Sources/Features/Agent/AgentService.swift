@@ -17,7 +17,6 @@ final class AgentService {
 
     // 后续 Phase 填充（声明为可选，Phase 2/5/6 取消注释）
     var hookServer: HookServer? = nil
-    var respawnController: RespawnController? = nil
     var tokenTracker: TokenTracker? = nil
 
     private init() {}
@@ -26,7 +25,6 @@ final class AgentService {
         Self.logger.info("AgentService starting")
         hookServer = HookServer(sessionManager: sessionManager)
         hookServer?.start()
-        respawnController = RespawnController(sessionManager: sessionManager)
         tokenTracker = TokenTracker(sessionManager: sessionManager)
         Self.logger.info("AgentService started")
     }
@@ -59,4 +57,11 @@ final class AgentService {
             self?.sessionManager.updateState(.done(exitCode: exitCode), surfaceId: sid)
         }
     }
+}
+
+// MARK: - 通知名
+
+extension Notification.Name {
+    /// 向指定 surface 的 PTY 写入文本
+    static let agentWriteToSurface = Notification.Name("AgentWriteToSurface")
 }

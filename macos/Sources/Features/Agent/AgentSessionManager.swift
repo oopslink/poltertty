@@ -155,9 +155,6 @@ final class AgentSessionManager: ObservableObject {
             guard let sid else { Self.logger.warning("postToolUse: no sessionId"); return }
             Self.logger.info("postToolUse: sid=\(sid) tool=\(payload.toolName ?? "nil") toolUseId=\(payload.toolUseId ?? "nil") agentId=\(payload.agentId ?? "-")")
             updateFromClaudeSession(sid) { $0.state = .working }
-            if let surfaceId = claudeSessionIndex[sid] {
-                AgentService.shared.respawnController?.recordToolUse(surfaceId: surfaceId)
-            }
             if payload.toolName == "Agent" {
                 // Agent tool 完成 → 标记 subagent done，保存输出
                 let toolUseId = payload.toolUseId ?? ""
@@ -187,9 +184,6 @@ final class AgentSessionManager: ObservableObject {
             guard let sid else { return }
             if payload.notificationType == "idle_prompt" {
                 updateFromClaudeSession(sid) { $0.state = .idle }
-                if let surfaceId = claudeSessionIndex[sid] {
-                    AgentService.shared.respawnController?.handleIdle(surfaceId: surfaceId)
-                }
             }
         case .stop:
             guard let sid else { return }

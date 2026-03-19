@@ -28,23 +28,6 @@ enum AgentState: Equatable {
     }
 }
 
-/// Respawn 预设模式（完整配置见 RespawnMode.swift，Phase 5 填充）
-enum RespawnMode: String, CaseIterable, Codable {
-    case soloWork  = "solo-work"
-    case teamLead  = "team-lead"
-    case overnight = "overnight"
-    case manual    = "manual"
-
-    var displayName: String {
-        switch self {
-        case .soloWork:  return "Solo"
-        case .teamLead:  return "Team"
-        case .overnight: return "Night"
-        case .manual:    return "Manual"
-        }
-    }
-}
-
 /// Subagent 内部的单次工具调用记录
 struct ToolCallRecord: Identifiable {
     let id: String       // toolUseId
@@ -81,7 +64,6 @@ struct AgentSession: Identifiable {
     var shellPid: Int32 = 0
     var startedAt: Date = Date()
     var lastEventAt: Date = Date()
-    var respawnMode: RespawnMode = .manual
     var tokenUsage: TokenUsage = TokenUsage()
     var subagents: [String: SubagentInfo] = [:]
 }

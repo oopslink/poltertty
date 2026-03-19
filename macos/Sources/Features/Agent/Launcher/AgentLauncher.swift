@@ -4,13 +4,9 @@ import GhosttyKit
 
 /// Agent 启动位置
 enum AgentLaunchLocation: CaseIterable, Equatable, Hashable {
-    /// 在当前活跃 pane 启动
     case currentPane
-    /// 新建 tab 后启动
     case newTab
-    /// 向右 split 后启动
     case splitRight
-    /// 向下 split 后启动
     case splitBottom
 
     var displayName: String {
@@ -19,6 +15,30 @@ enum AgentLaunchLocation: CaseIterable, Equatable, Hashable {
         case .newTab:      return "New Tab"
         case .splitRight:  return "Split Right"
         case .splitBottom: return "Split Bottom"
+        }
+    }
+}
+
+/// Claude Code 权限模式（仅对 hookCapability == .full 的 agent 有效）
+enum ClaudePermissionMode: CaseIterable {
+    case `default`      // 标准模式，遇到危险操作弹确认
+    case allowBypass    // 允许 Claude 自行申请跳过确认
+    case skipAll        // 跳过所有权限确认（--dangerously-skip-permissions）
+
+    var displayName: String {
+        switch self {
+        case .default:     return "Default"
+        case .allowBypass: return "Allow Bypass"
+        case .skipAll:     return "Skip All"
+        }
+    }
+
+    /// 注入到 claude 命令的 flag，nil 表示不需要额外 flag
+    var flag: String? {
+        switch self {
+        case .default:     return nil
+        case .allowBypass: return "--permission-mode allow-bypass-permissions"
+        case .skipAll:     return "--dangerously-skip-permissions"
         }
     }
 }
@@ -32,17 +52,10 @@ final class AgentLauncher {
         self.terminalController = terminalController
     }
 
-    /// 在指定位置启动 Agent
-    ///
-    /// 步骤：
-    /// 1. 根据 location 确定目标 SurfaceView（currentPane / 新 tab / split）
-    /// 2. 向 AgentSessionManager 注册 AgentSession
-    /// 3. 如果 hookCapability == .full，注入 hooks
-    /// 4. 向 PTY 写入启动命令
     func launch(
         definition: AgentDefinition,
         location: AgentLaunchLocation,
-        respawnMode: RespawnMode,
+        permissionMode: ClaudePermissionMode,
         workspaceId: UUID,
         cwd: String
     ) {
@@ -60,23 +73,16 @@ final class AgentLauncher {
 
         case .splitRight:
             guard let focused = tc.focusedSurface else { return }
-            surfaceView = tc.newSplit(
-                at: focused,
-                direction: .right
-            )
+            surfaceView = tc.newSplit(at: focused, direction: .right)
 
         case .splitBottom:
             guard let focused = tc.focusedSurface else { return }
-            surfaceView = tc.newSplit(
-                at: focused,
-                direction: .down
-            )
+            surfaceView = tc.newSplit(at: focused, direction: .down)
         }
 
         guard let targetSurface = surfaceView else { return }
 
-        // 2. 注册 AgentSession（解析 symlink，保证与 Claude Code hook payload 的 cwd 一致）
-        // macOS 上 /Users 是 /private/Users 的符号链接，Claude Code 在 hook 中报告的是解析后的路径
+        // 2. 注册 AgentSession
         let expandedCwd = (cwd as NSString).expandingTildeInPath
         let normalizedCwd = URL(fileURLWithPath: expandedCwd).resolvingSymlinksInPath().path
         let session = AgentSession(
@@ -84,8 +90,7 @@ final class AgentLauncher {
             surfaceId: targetSurface.id,
             definition: definition,
             workspaceId: workspaceId,
-            cwd: normalizedCwd,
-            respawnMode: respawnMode
+            cwd: normalizedCwd
         )
         AgentService.shared.sessionManager.register(session)
 
@@ -94,19 +99,27 @@ final class AgentLauncher {
             AgentService.shared.injectHooks(for: normalizedCwd)
         }
 
-        // 4. 写入启动命令（cd + 命令），使用异步延迟确保 surface 已就绪
-        let command = buildLaunchCommand(definition: definition, cwd: normalizedCwd)
+        // 4. 写入启动命令
+        let command = buildLaunchCommand(
+            definition: definition,
+            cwd: normalizedCwd,
+            permissionMode: definition.hookCapability == .full ? permissionMode : .default
+        )
         guard let surfaceModel = targetSurface.surfaceModel else { return }
-        // 对于新 tab/split，surface 初始化需要一个 run-loop 才能完全就绪
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             surfaceModel.sendText(command)
         }
     }
 
-    // MARK: - Private Helpers
+    // MARK: - Private
 
-    private func buildLaunchCommand(definition: AgentDefinition, cwd: String) -> String {
+    private func buildLaunchCommand(
+        definition: AgentDefinition,
+        cwd: String,
+        permissionMode: ClaudePermissionMode
+    ) -> String {
         let escapedCwd = Ghostty.Shell.escape(cwd)
-        return "cd \(escapedCwd) && \(definition.command)\n"
+        let flagPart = permissionMode.flag.map { " \($0)" } ?? ""
+        return "cd \(escapedCwd) && \(definition.command)\(flagPart)\n"
     }
 }
