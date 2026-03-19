@@ -117,4 +117,109 @@ struct FileBrowserViewModelNavigationTests {
         vm.selectPrevious()
         #expect(vm.lastSelectedId == first.node.id)
     }
+
+    // MARK: - 批量选择测试
+
+    @Test func testToggleSelectionAddsAndRemoves() async throws {
+        let dir = try makeTempDir()
+        let vm = FileBrowserViewModel(rootDir: dir.path)
+        defer {
+            vm.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
+
+        let nodes = vm.visibleNodes
+        guard nodes.count >= 2 else { Issue.record("Expected at least 2 nodes, got \(nodes.count)"); return }
+
+        let id0 = nodes[0].node.id
+        let id1 = nodes[1].node.id
+
+        vm.selectNode(id: id0)
+        #expect(vm.selectedNodeIds.count == 1)
+
+        vm.toggleSelection(id: id1)
+        #expect(vm.selectedNodeIds.count == 2)
+        #expect(vm.selectedNodeIds.contains(id0))
+        #expect(vm.selectedNodeIds.contains(id1))
+        #expect(vm.lastSelectedId == id1)
+
+        vm.toggleSelection(id: id0)
+        #expect(vm.selectedNodeIds.count == 1)
+        #expect(!vm.selectedNodeIds.contains(id0))
+    }
+
+    @Test func testExtendSelectionSelectsRange() async throws {
+        let dir = try makeTempDir()
+        let vm = FileBrowserViewModel(rootDir: dir.path)
+        defer {
+            vm.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
+
+        let nodes = vm.visibleNodes
+        guard nodes.count >= 3 else { Issue.record("Expected at least 3 nodes, got \(nodes.count)"); return }
+
+        vm.selectNode(id: nodes[0].node.id)
+        vm.extendSelection(to: nodes[2].node.id)
+        #expect(vm.selectedNodeIds.count == 3)
+        #expect(vm.lastSelectedId == nodes[2].node.id)
+    }
+
+    @Test func testSelectAllSelectsAllVisibleNodes() async throws {
+        let dir = try makeTempDir()
+        let vm = FileBrowserViewModel(rootDir: dir.path)
+        defer {
+            vm.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
+
+        let nodes = vm.visibleNodes
+        guard !nodes.isEmpty else { Issue.record("Expected at least 1 node, got 0"); return }
+
+        vm.selectAll()
+        #expect(vm.selectedNodeIds.count == nodes.count)
+    }
+
+    @Test func testClearSelectionClearsAll() async throws {
+        let dir = try makeTempDir()
+        let vm = FileBrowserViewModel(rootDir: dir.path)
+        defer {
+            vm.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
+
+        let nodes = vm.visibleNodes
+        guard !nodes.isEmpty else { Issue.record("Expected at least 1 node, got 0"); return }
+
+        vm.selectAll()
+        vm.clearSelection()
+        #expect(vm.selectedNodeIds.isEmpty)
+        #expect(vm.lastSelectedId == nil)
+    }
+
+    @Test func testSelectNextClearsMultiSelection() async throws {
+        let dir = try makeTempDir()
+        let vm = FileBrowserViewModel(rootDir: dir.path)
+        defer {
+            vm.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)  // wait for async reload
+
+        let nodes = vm.visibleNodes
+        guard nodes.count >= 2 else { Issue.record("Expected at least 2 nodes, got \(nodes.count)"); return }
+
+        vm.selectAll()
+        #expect(vm.selectedNodeIds.count > 1)
+
+        vm.selectNode(id: nodes[0].node.id)
+        vm.selectNext()
+        // 方向键后应清空多选，只剩一个
+        #expect(vm.selectedNodeIds.count == 1)
+        #expect(vm.lastSelectedId == nodes[1].node.id)
+    }
 }
