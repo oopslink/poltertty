@@ -9,6 +9,7 @@ struct SessionDetailView: View {
 
     enum Tab: String, CaseIterable {
         case messages = "Messages"
+        case prompt = "Prompt"
         case trace = "Trace"
     }
 
@@ -79,6 +80,8 @@ struct SessionDetailView: View {
             switch tab {
             case .messages:
                 SubagentMessagesView(session: session, subagent: sub)
+            case .prompt:
+                SubagentPromptContent(session: session, subagent: sub)
             case .trace:
                 SubagentTraceContent(subagent: sub)
             }

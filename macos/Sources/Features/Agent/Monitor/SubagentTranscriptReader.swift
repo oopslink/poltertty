@@ -72,6 +72,30 @@ final class SubagentTranscriptReader {
         return parseLines(lines)
     }
 
+    /// 从 transcript JSONL 提取第一条 user 消息的文本（即发给 subagent 的 prompt）
+    static func readInitialPrompt(session: AgentSession, subagent: SubagentInfo) async -> String? {
+        guard let path = transcriptPath(session: session, subagent: subagent) else { return nil }
+        guard let content = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
+        let lines = content.components(separatedBy: "\n").filter { !$0.isEmpty }
+        for line in lines {
+            guard let data = line.data(using: .utf8),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let message = obj["message"] as? [String: Any],
+                  message["role"] as? String == "user" else { continue }
+            // user 消息的 content 是字符串
+            if let text = message["content"] as? String, !text.isEmpty { return text }
+            // 兼容数组格式
+            if let contentArr = message["content"] as? [[String: Any]] {
+                let text = contentArr
+                    .filter { $0["type"] as? String == "text" }
+                    .compactMap { $0["text"] as? String }
+                    .joined(separator: "\n")
+                if !text.isEmpty { return text }
+            }
+        }
+        return nil
+    }
+
     /// 解析 JSONL 行数组（供测试直接调用）
     static func parseLines(_ lines: [String]) -> SubagentTranscript {
         var turns: [TranscriptTurn] = []
@@ -86,8 +110,14 @@ final class SubagentTranscriptReader {
                   let message = obj["message"] as? [String: Any],
                   let role = message["role"] as? String else { continue }
 
-            let contentArr = message["content"] as? [[String: Any]] ?? []
-            let blocks = contentArr.compactMap { parseBlock($0) }
+            // content 可能是字符串（user 消息）或数组（assistant 消息）
+            let blocks: [TranscriptBlock]
+            if let text = message["content"] as? String {
+                blocks = text.isEmpty ? [] : [.text(text)]
+            } else {
+                let contentArr = message["content"] as? [[String: Any]] ?? []
+                blocks = contentArr.compactMap { parseBlock($0) }
+            }
 
             let usageObj = message["usage"] as? [String: Any]
             let usage = usageObj.map {
