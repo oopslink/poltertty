@@ -23,8 +23,8 @@ final class HookInjector {
         let url = "http://localhost:\(port)/hook?\(markerQuery)"
         modifySettings(at: path) { settings in
             var hooks = settings["hooks"] as? [String: Any] ?? [:]
-            // 只使用标准字段 type + url，不添加额外字段
-            let entry: [String: Any] = ["type": "http", "url": url]
+            // Claude Code hooks schema: 每个事件数组元素需要 hooks 数组包装
+            let entry: [String: Any] = ["hooks": [["type": "http", "url": url]]]
             for event in hookEventNames {
                 var list = hooks[event] as? [[String: Any]] ?? []
                 // 清理：匹配 URL 中的 marker query 或旧的 _poltertty 字段
