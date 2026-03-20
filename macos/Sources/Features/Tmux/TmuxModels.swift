@@ -36,3 +36,17 @@ enum TmuxPanelState: Equatable {
     case loaded([TmuxSession])
     case error(TmuxError)
 }
+
+struct TmuxAttachState: Equatable {
+    let sessionName: String
+    var activeWindowIndex: Int
+    var activeWindowName: String
+    var windows: [WindowInfo]
+
+    struct WindowInfo: Equatable, Identifiable {
+        let index: Int
+        let name: String
+        let active: Bool
+        var id: Int { index }
+    }
+}

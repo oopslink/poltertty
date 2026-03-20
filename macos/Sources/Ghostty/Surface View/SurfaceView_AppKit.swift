@@ -1533,10 +1533,22 @@ extension Ghostty {
             item.setImageIfDesired(systemSymbolName: "pencil.line")
             item = menu.addItem(withTitle: "Change Terminal Title...", action: #selector(changeTitle(_:)), keyEquivalent: "")
 
+            menu.addItem(.separator())
+            item = menu.addItem(withTitle: "Attach to tmux Session...", action: #selector(attachToTmuxSession(_:)), keyEquivalent: "")
+            item.setImageIfDesired(systemSymbolName: "terminal")
+
             return menu
         }
 
         // MARK: Menu Handlers
+
+        @objc func attachToTmuxSession(_ sender: Any?) {
+            NotificationCenter.default.post(
+                name: .showTmuxSessionPicker,
+                object: nil,
+                userInfo: ["attachInCurrentPane": true]
+            )
+        }
 
         @IBAction func copy(_ sender: Any?) {
             guard let surface = self.surface else { return }

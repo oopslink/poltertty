@@ -12,6 +12,9 @@ extension Notification.Name {
     static let toggleAgentMonitor = Notification.Name("poltertty.toggleAgentMonitor")
     static let launchAgentFromSidebar = Notification.Name("poltertty.launchAgentFromSidebar")
     static let toggleTmuxPanel = Notification.Name("poltertty.toggleTmuxPanel")
+    static let showTmuxSessionPicker = Notification.Name("poltertty.showTmuxSessionPicker")
+    static let tmuxAttachNewTab = Notification.Name("poltertty.tmuxAttachNewTab")
+    static let tmuxAttachInCurrentPane = Notification.Name("poltertty.tmuxAttachInCurrentPane")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -39,6 +42,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var showConvertAlert = false
     @State private var fileBrowserDividerHovered = false
     @State private var tmuxDividerHovered = false
+    @State private var showTmuxPicker = false
+    @State private var tmuxPickerAttachInCurrentPane = false
     @State private var convertTargetId: UUID?
     @State private var convertName = ""
 
@@ -292,6 +297,37 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .onReceive(NotificationCenter.default.publisher(for: .toggleTmuxPanel)) { _ in
             tmuxPanelVM.isVisible.toggle()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .showTmuxSessionPicker)) { notification in
+            tmuxPickerAttachInCurrentPane = notification.userInfo?["attachInCurrentPane"] as? Bool ?? false
+            showTmuxPicker = true
+        }
+        .sheet(isPresented: $showTmuxPicker) {
+            TmuxSessionPicker(
+                onOpen: { sessionName in
+                    showTmuxPicker = false
+                    let inCurrentPane = tmuxPickerAttachInCurrentPane
+                    // 延迟发送通知，等 sheet 完全关闭后 window 恢复 keyWindow 状态
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        if inCurrentPane {
+                            // 在当前 pane 中 attach（右键菜单触发）
+                            NotificationCenter.default.post(
+                                name: .tmuxAttachInCurrentPane,
+                                object: nil,
+                                userInfo: ["sessionName": sessionName]
+                            )
+                        } else {
+                            // 新建 tab 并 attach（菜单触发）
+                            NotificationCenter.default.post(
+                                name: .tmuxAttachNewTab,
+                                object: nil,
+                                userInfo: ["sessionName": sessionName]
+                            )
+                        }
+                    }
+                },
+                onCancel: { showTmuxPicker = false }
+            )
+        }
         .sheet(isPresented: $showConvertAlert) {
             convertToFormalSheet
         }
@@ -363,6 +399,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
             // 终端内容：始终使用 terminalView 渲染 surfaceTree（支持 split + tab）
             // tab 切换通过 onSwitchTab 回调更新 controller 的 surfaceTree
             terminalView
+                .environment(\.tabBarViewModel, tabBarViewModel)
 
             // Status bar 在 shell 区域正下方，与 shell 区域对齐
             if showStatusBar {
