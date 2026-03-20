@@ -638,10 +638,17 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             tabBarViewModel.renameTab(activeId, title: "tmux: \(sessionName)")
         }
 
-        // 延迟注入 attach 命令（等待 surface 恢复焦点）
+        // 延迟注入 attach 命令（等待 sheet 完全关闭 + surface 恢复焦点）
         let escapedName = Ghostty.Shell.escape(sessionName)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.injectToActiveSurface("tmux attach-session -t \(escapedName)\r")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self else { return }
+            // 显式恢复 surface 焦点
+            if let surface = self.focusedSurface {
+                self.window?.makeFirstResponder(surface)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.injectToActiveSurface("tmux attach-session -t \(escapedName)\n")
+            }
         }
 
         // 启动 tmux tab monitor
@@ -921,10 +928,16 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             tabBarViewModel.renameTab(activeId, title: "tmux: \(sessionName)")
         }
 
-        // 延迟注入 attach 命令（等待 shell 就绪）
+        // 延迟注入 attach 命令（等待 shell 就绪 + surface 焦点）
         let escapedName = Ghostty.Shell.escape(sessionName)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.injectToActiveSurface("tmux attach-session -t \(escapedName)\r")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self else { return }
+            if let surface = self.focusedSurface {
+                self.window?.makeFirstResponder(surface)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                self?.injectToActiveSurface("tmux attach-session -t \(escapedName)\n")
+            }
         }
 
         // 启动 tmux tab monitor
