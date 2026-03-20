@@ -1136,6 +1136,15 @@ class AppDelegate: NSObject,
         // tmux 顶级菜单
         let tmuxMenu = NSMenu(title: "tmux")
 
+        let newTabTmux = NSMenuItem(
+            title: "New Tab with tmux Session...",
+            action: #selector(AppDelegate.newTabWithTmuxSession(_:)),
+            keyEquivalent: "t"
+        )
+        newTabTmux.keyEquivalentModifierMask = [.command, .option]
+        tmuxMenu.addItem(newTabTmux)
+        tmuxMenu.addItem(.separator())
+
         let tmuxPanelItem = NSMenuItem(
             title: "Toggle tmux Panel",
             action: #selector(AppDelegate.toggleTmuxPanel(_:)),
@@ -1174,6 +1183,13 @@ class AppDelegate: NSObject,
     @objc func toggleTmuxPanel(_ sender: Any?) {
         NotificationCenter.default.post(
             name: .toggleTmuxPanel,
+            object: nil
+        )
+    }
+
+    @objc func newTabWithTmuxSession(_ sender: Any?) {
+        NotificationCenter.default.post(
+            name: .showTmuxSessionPicker,
             object: nil
         )
     }
