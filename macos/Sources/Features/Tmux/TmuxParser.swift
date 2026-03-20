@@ -51,12 +51,15 @@ enum TmuxParser {
                 // pane_id 格式是 "%N"，去掉 % 前缀
                 let rawId = parts[0].hasPrefix("%") ? String(parts[0].dropFirst()) : parts[0]
                 guard let paneId = Int(rawId),
-                      let width = Int(parts[3]),
-                      let height = Int(parts[4]) else { return nil }
+                      let height = Int(parts[parts.count - 1]),
+                      let width = Int(parts[parts.count - 2]) else { return nil }
+                let activeStr = parts[parts.count - 3]
+                // title 是中间字段，可能含 "|"
+                let title = parts[1..<(parts.count - 3)].joined(separator: "|")
                 return TmuxPane(
                     id: paneId,
-                    title: parts[1],
-                    active: parts[2] == "1",
+                    title: title,
+                    active: activeStr == "1",
                     width: width,
                     height: height
                 )

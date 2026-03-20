@@ -104,4 +104,13 @@ struct TmuxParserTests {
         let panes = TmuxParser.parsePanes(input)
         #expect(panes.count == 2)
     }
+
+    @Test func parsePanes_titleWithPipe() {
+        let panes = TmuxParser.parsePanes("%0|my|title|1|220|50")
+        #expect(panes.count == 1)
+        #expect(panes[0].title == "my|title")
+        #expect(panes[0].active == true)
+        #expect(panes[0].width == 220)
+        #expect(panes[0].height == 50)
+    }
 }
