@@ -77,7 +77,7 @@ struct WorkspaceGroupTests {
 
     // MARK: - WorkspaceManager Group CRUD Tests
 
-    @Test func testCreateGroupAddsToList() {
+    @Test func testWorkspaceGroupInitDefaults() {
         // 直接测试 WorkspaceGroup 初始化逻辑
         let group = WorkspaceGroup(name: "TestGroup", orderIndex: 0)
         #expect(group.name == "TestGroup")

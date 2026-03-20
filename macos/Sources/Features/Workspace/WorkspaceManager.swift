@@ -429,7 +429,6 @@ class WorkspaceManager: ObservableObject {
         workspaces[wsIdx].groupId = groupId
         workspaces[wsIdx].groupOrder = insertOrder
         save(workspaces[wsIdx])
-        saveGroups()
     }
 
     /// 接受新的分组 id 顺序，重新计算 orderIndex

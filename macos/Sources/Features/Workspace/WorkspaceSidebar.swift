@@ -239,7 +239,8 @@ struct WorkspaceSidebar: View {
                                 onMoveToGroup: { groupId in
                                     manager.moveWorkspace(id: workspace.id, toGroup: groupId, insertAfter: nil)
                                 },
-                                onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) }
+                                onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) },
+                                availableGroups: manager.groups
                             )
                         }
 
@@ -268,7 +269,8 @@ struct WorkspaceSidebar: View {
                                         onMoveToGroup: { groupId in
                                             manager.moveWorkspace(id: workspace.id, toGroup: groupId, insertAfter: nil)
                                         },
-                                        onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) }
+                                        onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) },
+                                        availableGroups: manager.groups
                                     )
                                     .padding(.leading, 8)
                                 }
@@ -481,6 +483,7 @@ struct ExpandedWorkspaceItem: View {
     let onEdit: () -> Void
     var onMoveToGroup: ((UUID?) -> Void)? = nil   // nil groupId = 移入未分组
     var onNewGroup: (() -> Void)? = nil
+    var availableGroups: [WorkspaceGroup] = []
 
     @State private var isHovering = false
     @State private var isPressed = false
@@ -560,7 +563,7 @@ struct ExpandedWorkspaceItem: View {
                     Button("Ungrouped") { onMoveToGroup?(nil) }
                     Divider()
                 }
-                ForEach(WorkspaceManager.shared.groups) { group in
+                ForEach(availableGroups) { group in
                     if group.id != workspace.groupId {
                         Button(group.name) { onMoveToGroup?(group.id) }
                     }
