@@ -625,8 +625,27 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     @objc private func onTmuxAttachInCurrentPane(_ notification: Notification) {
         guard window?.isKeyWindow == true,
               let sessionName = notification.userInfo?["sessionName"] as? String else { return }
+
+        // 设置当前 tab 的 tmuxState（驱动 TmuxWindowBar overlay）
+        if let activeId = tabBarViewModel.activeTabId,
+           let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId }) {
+            tabBarViewModel.tabs[idx].tmuxState = TmuxAttachState(
+                sessionName: sessionName,
+                activeWindowIndex: 0,
+                activeWindowName: "",
+                windows: []
+            )
+            tabBarViewModel.renameTab(activeId, title: "tmux: \(sessionName)")
+        }
+
+        // 延迟注入 attach 命令（等待 surface 恢复焦点）
         let escapedName = Ghostty.Shell.escape(sessionName)
-        injectToActiveSurface("tmux attach-session -t \(escapedName)\n")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.injectToActiveSurface("tmux attach-session -t \(escapedName)\n")
+        }
+
+        // 启动 tmux tab monitor
+        tabBarViewModel.tmuxMonitor.start()
     }
 
     private func persistFileBrowserState(for workspaceId: UUID) {
