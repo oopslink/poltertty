@@ -12,9 +12,11 @@ struct WorkspaceQuickSwitcher: View {
 
     private var filtered: [WorkspaceModel] {
         if query.isEmpty { return manager.workspaces }
-        return manager.workspaces.filter {
-            $0.name.localizedCaseInsensitiveContains(query) ||
-            $0.tags.contains { $0.localizedCaseInsensitiveContains(query) }
+        return manager.workspaces.filter { ws in
+            let gName = manager.groups.first(where: { $0.id == ws.groupId })?.name ?? ""
+            return ws.name.localizedCaseInsensitiveContains(query) ||
+                   ws.tags.contains { $0.localizedCaseInsensitiveContains(query) } ||
+                   gName.localizedCaseInsensitiveContains(query)
         }
     }
 
@@ -52,6 +54,13 @@ struct WorkspaceQuickSwitcher: View {
                                     .font(.system(size: 10))
                                     .foregroundColor(.secondary)
                                     .lineLimit(1)
+                                if let groupId = workspace.groupId,
+                                   let groupName = manager.groups.first(where: { $0.id == groupId })?.name {
+                                    Text(groupName)
+                                        .font(.system(size: 9))
+                                        .foregroundColor(.secondary.opacity(0.6))
+                                        .lineLimit(1)
+                                }
                             }
 
                             Spacer()
