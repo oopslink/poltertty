@@ -1130,22 +1130,29 @@ class AppDelegate: NSObject,
         toggleAgentMonitor.keyEquivalentModifierMask = [.command, .shift]
         agentMenu.addItem(toggleAgentMonitor)
 
+        let agentMenuItem = NSMenuItem(title: "Agent", action: nil, keyEquivalent: "")
+        agentMenuItem.submenu = agentMenu
+
+        // tmux 顶级菜单
+        let tmuxMenu = NSMenu(title: "tmux")
+
         let tmuxPanelItem = NSMenuItem(
             title: "Toggle tmux Panel",
             action: #selector(AppDelegate.toggleTmuxPanel(_:)),
             keyEquivalent: "x"
         )
         tmuxPanelItem.keyEquivalentModifierMask = [.command, .shift]
-        agentMenu.addItem(tmuxPanelItem)
+        tmuxMenu.addItem(tmuxPanelItem)
 
-        let agentMenuItem = NSMenuItem(title: "Agent", action: nil, keyEquivalent: "")
-        agentMenuItem.submenu = agentMenu
+        let tmuxMenuItem = NSMenuItem(title: "tmux", action: nil, keyEquivalent: "")
+        tmuxMenuItem.submenu = tmuxMenu
 
-        // 依次插入 Workspace、Agent（都在 Window 之前）
+        // 依次插入 Workspace、Agent、tmux（都在 Window 之前）
         if let mainMenu = NSApp.mainMenu,
            let windowMenuIndex = mainMenu.items.firstIndex(where: { $0.title == "Window" }) {
             mainMenu.insertItem(workspaceMenuItem, at: windowMenuIndex)
             mainMenu.insertItem(agentMenuItem, at: windowMenuIndex + 1)
+            mainMenu.insertItem(tmuxMenuItem, at: windowMenuIndex + 2)
         }
     }
 
