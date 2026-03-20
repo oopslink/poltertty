@@ -55,8 +55,9 @@ final class TmuxPanelViewModel: ObservableObject {
     private func scheduleTimer() {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.refresh()
+            guard let self else { return }
+            Task { @MainActor [self] in
+                self.refresh()
             }
         }
     }
@@ -87,6 +88,8 @@ final class TmuxPanelViewModel: ObservableObject {
             }
 
             state = .loaded(sessions)
+        } catch is CancellationError {
+            // Task was cancelled, don't update UI state
         } catch let error as TmuxError {
             state = .error(error)
         } catch {
@@ -134,9 +137,11 @@ final class TmuxPanelViewModel: ObservableObject {
         bannerMessage = message
         bannerTask?.cancel()
         bannerTask = Task {
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
-            if !Task.isCancelled {
+            do {
+                try await Task.sleep(nanoseconds: 4_000_000_000)
                 bannerMessage = nil
+            } catch {
+                // Task was cancelled, do nothing
             }
         }
     }
