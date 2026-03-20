@@ -302,11 +302,14 @@ struct PolterttyRootView<TerminalContent: View>: View {
             TmuxSessionPicker(
                 onOpen: { sessionName in
                     showTmuxPicker = false
-                    NotificationCenter.default.post(
-                        name: .tmuxAttachNewTab,
-                        object: nil,
-                        userInfo: ["sessionName": sessionName]
-                    )
+                    // 延迟发送通知，等 sheet 完全关闭后 window 恢复 keyWindow 状态
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        NotificationCenter.default.post(
+                            name: .tmuxAttachNewTab,
+                            object: nil,
+                            userInfo: ["sessionName": sessionName]
+                        )
+                    }
                 },
                 onCancel: { showTmuxPicker = false }
             )
