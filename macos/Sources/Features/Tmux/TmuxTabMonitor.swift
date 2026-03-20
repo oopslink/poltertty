@@ -23,6 +23,11 @@ final class TmuxTabMonitor {
         poll()
     }
 
+    /// 立即刷新一次（操作后调用，避免等 2s 轮询）
+    func refresh() {
+        poll()
+    }
+
     /// 停止轮询
     func stop() {
         timer?.invalidate()

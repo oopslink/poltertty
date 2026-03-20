@@ -168,6 +168,7 @@ private struct TerminalSplitLeaf: View {
                                 try? await TmuxCommandRunner.runSilent(
                                     args: ["kill-window", "-t", "\(sessionName):\(index)"]
                                 )
+                                await MainActor.run { vm.tmuxMonitor.refresh() }
                             }
                         },
                         onNewWindow: {
@@ -176,6 +177,7 @@ private struct TerminalSplitLeaf: View {
                                 try? await TmuxCommandRunner.runSilent(
                                     args: ["new-window", "-t", sessionName]
                                 )
+                                await MainActor.run { vm.tmuxMonitor.refresh() }
                             }
                         },
                         onDetach: {
