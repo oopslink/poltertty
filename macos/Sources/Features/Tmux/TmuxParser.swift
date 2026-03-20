@@ -35,33 +35,7 @@ enum TmuxParser {
                     sessionName: sessionName,
                     windowIndex: index,
                     name: name,
-                    panes: [],
                     active: activeStr == "1"
-                )
-            }
-    }
-
-    /// 解析 `tmux list-panes -t <s> -F "#{pane_id}|#{pane_title}|#{pane_active}|#{pane_width}|#{pane_height}"` 输出
-    static func parsePanes(_ output: String) -> [TmuxPane] {
-        output.components(separatedBy: "\n")
-            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            .compactMap { line -> TmuxPane? in
-                let parts = line.components(separatedBy: "|")
-                guard parts.count >= 5 else { return nil }
-                // pane_id 格式是 "%N"，去掉 % 前缀
-                let rawId = parts[0].hasPrefix("%") ? String(parts[0].dropFirst()) : parts[0]
-                guard let paneId = Int(rawId),
-                      let height = Int(parts[parts.count - 1]),
-                      let width = Int(parts[parts.count - 2]) else { return nil }
-                let activeStr = parts[parts.count - 3]
-                // title 是中间字段，可能含 "|"
-                let title = parts[1..<(parts.count - 3)].joined(separator: "|")
-                return TmuxPane(
-                    id: paneId,
-                    title: title,
-                    active: activeStr == "1",
-                    width: width,
-                    height: height
                 )
             }
     }

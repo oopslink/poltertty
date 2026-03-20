@@ -1143,15 +1143,6 @@ class AppDelegate: NSObject,
         )
         newTabTmux.keyEquivalentModifierMask = [.command, .option]
         tmuxMenu.addItem(newTabTmux)
-        tmuxMenu.addItem(.separator())
-
-        let tmuxPanelItem = NSMenuItem(
-            title: "Toggle tmux Panel",
-            action: #selector(AppDelegate.toggleTmuxPanel(_:)),
-            keyEquivalent: "x"
-        )
-        tmuxPanelItem.keyEquivalentModifierMask = [.command, .shift]
-        tmuxMenu.addItem(tmuxPanelItem)
 
         let tmuxMenuItem = NSMenuItem(title: "tmux", action: nil, keyEquivalent: "")
         tmuxMenuItem.submenu = tmuxMenu
@@ -1178,13 +1169,6 @@ class AppDelegate: NSObject,
 
     @objc func toggleAgentMonitor(_ sender: Any?) {
         NotificationCenter.default.post(name: .toggleAgentMonitor, object: nil)
-    }
-
-    @objc func toggleTmuxPanel(_ sender: Any?) {
-        NotificationCenter.default.post(
-            name: .toggleTmuxPanel,
-            object: nil
-        )
     }
 
     @objc func newTabWithTmuxSession(_ sender: Any?) {

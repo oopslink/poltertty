@@ -68,49 +68,4 @@ struct TmuxParserTests {
         #expect(windows[0].active == true)
     }
 
-    // MARK: - parsePanes
-
-    @Test func parsePanes_normalOutput() {
-        let input = """
-        %0|nvim|1|220|50
-        %1|zsh|0|220|50
-        """
-        let panes = TmuxParser.parsePanes(input)
-        #expect(panes.count == 2)
-        #expect(panes[0].id == 0)
-        #expect(panes[0].title == "nvim")
-        #expect(panes[0].active == true)
-        #expect(panes[0].width == 220)
-        #expect(panes[0].height == 50)
-        #expect(panes[1].id == 1)
-        #expect(panes[1].active == false)
-    }
-
-    @Test func parsePanes_emptyOutput() {
-        #expect(TmuxParser.parsePanes("").isEmpty)
-    }
-
-    @Test func parsePanes_stripsPercentPrefix() {
-        let panes = TmuxParser.parsePanes("%42|bash|0|80|24")
-        #expect(panes[0].id == 42)
-    }
-
-    @Test func parsePanes_invalidLineSkipped() {
-        let input = """
-        %0|nvim|1|220|50
-        invalid_line
-        %1|zsh|0|80|24
-        """
-        let panes = TmuxParser.parsePanes(input)
-        #expect(panes.count == 2)
-    }
-
-    @Test func parsePanes_titleWithPipe() {
-        let panes = TmuxParser.parsePanes("%0|my|title|1|220|50")
-        #expect(panes.count == 1)
-        #expect(panes[0].title == "my|title")
-        #expect(panes[0].active == true)
-        #expect(panes[0].width == 220)
-        #expect(panes[0].height == 50)
-    }
 }

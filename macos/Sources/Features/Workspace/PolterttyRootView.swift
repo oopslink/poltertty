@@ -11,7 +11,6 @@ extension Notification.Name {
     static let fileBrowserOpenInTerminal = Notification.Name("poltertty.fileBrowserOpenInTerminal")
     static let toggleAgentMonitor = Notification.Name("poltertty.toggleAgentMonitor")
     static let launchAgentFromSidebar = Notification.Name("poltertty.launchAgentFromSidebar")
-    static let toggleTmuxPanel = Notification.Name("poltertty.toggleTmuxPanel")
     static let showTmuxSessionPicker = Notification.Name("poltertty.showTmuxSessionPicker")
     static let tmuxAttachNewTab = Notification.Name("poltertty.tmuxAttachNewTab")
     static let tmuxAttachInCurrentPane = Notification.Name("poltertty.tmuxAttachInCurrentPane")
@@ -41,7 +40,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
     @State private var showConvertAlert = false
     @State private var fileBrowserDividerHovered = false
-    @State private var tmuxDividerHovered = false
     @State private var showTmuxPicker = false
     @State private var tmuxPickerAttachInCurrentPane = false
     @State private var convertTargetId: UUID?
@@ -49,7 +47,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
     @ObservedObject private var fileBrowserVM: FileBrowserViewModel
     @ObservedObject private var agentMonitorVM: AgentMonitorViewModel
-    @ObservedObject private var tmuxPanelVM: TmuxPanelViewModel
     @ObservedObject var tabBarViewModel: TabBarViewModel
     let workspaceAccentColor: Color
     let statusMonitor: GitStatusMonitor
@@ -115,7 +112,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
             )
         }
 
-        self._tmuxPanelVM = ObservedObject(wrappedValue: TmuxPanelViewModel())
     }
 
     private var effectiveSidebarWidth: CGFloat {
@@ -221,21 +217,10 @@ struct PolterttyRootView<TerminalContent: View>: View {
                             )
 
                             fileBrowserDivider
-
-                            if tmuxPanelVM.isVisible {
-                                TmuxPanelView(viewModel: tmuxPanelVM)
-                                    .frame(width: tmuxPanelVM.panelWidth)
-                                tmuxDividerView
-                            }
                             terminalAreaView
                         }
                     } else {
                         // File browser not visible, show terminal
-                        if tmuxPanelVM.isVisible {
-                            TmuxPanelView(viewModel: tmuxPanelVM)
-                                .frame(width: tmuxPanelVM.panelWidth)
-                            tmuxDividerView
-                        }
                         terminalAreaView
                     }
 
@@ -293,9 +278,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleAgentMonitor)) { _ in
             agentMonitorVM.toggle()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleTmuxPanel)) { _ in
-            tmuxPanelVM.isVisible.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: .showTmuxSessionPicker)) { notification in
             tmuxPickerAttachInCurrentPane = notification.userInfo?["attachInCurrentPane"] as? Bool ?? false
@@ -438,30 +420,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         let newWidth = fileBrowserVM.panelWidth + value.translation.width
                         fileBrowserVM.panelWidth = max(160, min(600, newWidth))
                     }
-                }
-        )
-    }
-
-    private var tmuxDividerView: some View {
-        ZStack {
-            Color(nsColor: .separatorColor)
-                .frame(width: 1)
-            if tmuxDividerHovered {
-                DividerGripHandle()
-            }
-        }
-        .frame(width: 16)
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            tmuxDividerHovered = hovering
-            if hovering { NSCursor.resizeLeftRight.push() }
-            else { NSCursor.pop() }
-        }
-        .gesture(
-            DragGesture(minimumDistance: 1)
-                .onChanged { value in
-                    let newWidth = tmuxPanelVM.panelWidth + value.translation.width
-                    tmuxPanelVM.panelWidth = max(160, min(600, newWidth))
                 }
         )
     }
