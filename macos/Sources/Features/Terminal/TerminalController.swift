@@ -608,6 +608,18 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         surface.sendText(text)
     }
 
+    /// Injects text and simulates Enter key press (avoids bracketed paste swallowing newline)
+    func injectCommandToActiveSurface(_ command: String) {
+        guard let focusedSurface, let surface = focusedSurface.surfaceModel else { return }
+        // 先发送命令文本（不含换行）
+        surface.sendText(command)
+        // 再模拟 Enter 键事件
+        let enterEvent = Ghostty.Input.KeyEvent(key: .enter, action: .press, text: "\r")
+        surface.sendKeyEvent(enterEvent)
+        let releaseEvent = Ghostty.Input.KeyEvent(key: .enter, action: .release)
+        surface.sendKeyEvent(releaseEvent)
+    }
+
     @objc private func onFileBrowserOpenInTerminal(_ notification: Notification) {
         guard let wsId = notification.userInfo?["workspaceId"] as? UUID,
               wsId == workspaceId,
@@ -647,7 +659,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 self.window?.makeFirstResponder(surface)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                self?.injectToActiveSurface("tmux attach-session -t \(escapedName)\n")
+                self?.injectCommandToActiveSurface("tmux attach-session -t \(escapedName)")
             }
         }
 
@@ -936,7 +948,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 self.window?.makeFirstResponder(surface)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                self?.injectToActiveSurface("tmux attach-session -t \(escapedName)\n")
+                self?.injectCommandToActiveSurface("tmux attach-session -t \(escapedName)")
             }
         }
 
