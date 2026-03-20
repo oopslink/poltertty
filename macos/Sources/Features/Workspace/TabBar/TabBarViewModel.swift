@@ -27,6 +27,9 @@ final class TabBarViewModel: ObservableObject {
     // @Published 确保 surfaces 变化触发 UI 更新（activeSurface 是计算属性）
     @Published private(set) var surfaces: [UUID: Ghostty.SurfaceView] = [:]
 
+    /// 追踪已 attach tmux session 的 tab 状态
+    lazy var tmuxMonitor: TmuxTabMonitor = TmuxTabMonitor(tabBarViewModel: self)
+
     /// 当前活跃的 SurfaceView
     var activeSurface: Ghostty.SurfaceView? {
         guard let activeTabId,
