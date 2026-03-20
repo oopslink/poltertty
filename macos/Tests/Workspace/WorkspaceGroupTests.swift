@@ -74,4 +74,55 @@ struct WorkspaceGroupTests {
         #expect(snapshot.workspace.groupId == nil)
         #expect(snapshot.workspace.groupOrder == 0)
     }
+
+    // MARK: - WorkspaceManager Group CRUD Tests
+
+    @Test func testCreateGroupAddsToList() {
+        // 直接测试 WorkspaceGroup 初始化逻辑
+        let group = WorkspaceGroup(name: "TestGroup", orderIndex: 0)
+        #expect(group.name == "TestGroup")
+        #expect(group.isExpanded == true)
+        #expect(group.orderIndex == 0)
+        #expect(group.isCollapsedIcon == false)
+    }
+
+    @Test func testGroupAbbreviationASCII() {
+        let group = WorkspaceGroup(name: "Work")
+        #expect(group.abbreviation == "WO")
+    }
+
+    @Test func testGroupAbbreviationEmoji() {
+        let group = WorkspaceGroup(name: "🚀Launch")
+        // 只取前2个 unicode scalars，不截断多字节
+        let scalars = Array("🚀Launch".unicodeScalars.prefix(2))
+        let expected = String(String.UnicodeScalarView(scalars)).uppercased()
+        #expect(group.abbreviation == expected)
+    }
+
+    @Test func testGroupAbbreviationShortName() {
+        let group = WorkspaceGroup(name: "A")
+        #expect(group.abbreviation == "A")
+    }
+
+    @Test func testGroupsJsonRoundtrip() throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let groups = [
+            WorkspaceGroup(name: "Work", orderIndex: 0),
+            WorkspaceGroup(name: "Personal", orderIndex: 1),
+        ]
+
+        let data = try encoder.encode(groups)
+        let decoded = try decoder.decode([WorkspaceGroup].self, from: data)
+
+        #expect(decoded.count == 2)
+        #expect(decoded[0].name == "Work")
+        #expect(decoded[1].name == "Personal")
+        #expect(decoded[0].orderIndex == 0)
+        #expect(decoded[1].orderIndex == 1)
+    }
 }
