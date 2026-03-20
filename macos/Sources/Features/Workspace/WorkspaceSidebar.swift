@@ -1,4 +1,5 @@
 // macos/Sources/Features/Workspace/WorkspaceSidebar.swift
+import AppKit
 import SwiftUI
 
 struct WorkspaceSidebar: View {
@@ -17,6 +18,8 @@ struct WorkspaceSidebar: View {
     @State private var showDeleteAlert = false
     @State private var pendingDeleteWorkspace: WorkspaceModel?
     @Namespace private var sidebarAnimation
+    @State private var showDeleteGroupAlert = false
+    @State private var pendingDeleteGroup: WorkspaceGroup?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -69,6 +72,18 @@ struct WorkspaceSidebar: View {
                 onCancel: { editingWorkspace = nil },
                 editing: workspace
             )
+        }
+        .alert(
+            "Delete Group \"\(pendingDeleteGroup?.name ?? "")\"?",
+            isPresented: $showDeleteGroupAlert
+        ) {
+            Button("Cancel", role: .cancel) { pendingDeleteGroup = nil }
+            Button("Delete", role: .destructive) {
+                if let g = pendingDeleteGroup { manager.deleteGroup(id: g.id) }
+                pendingDeleteGroup = nil
+            }
+        } message: {
+            Text("Workspaces in this group will be moved to ungrouped.")
         }
     }
 
@@ -209,8 +224,8 @@ struct WorkspaceSidebar: View {
             VStack(spacing: 0) {
                 ScrollView {
                     LazyVStack(spacing: 2) {
-                        // Formal workspaces
-                        ForEach(manager.formalWorkspaces) { workspace in
+                        // 未分组 workspace
+                        ForEach(manager.workspacesInGroup(nil)) { workspace in
                             ExpandedWorkspaceItem(
                                 workspace: workspace,
                                 isActive: workspace.id == currentWorkspaceId,
@@ -220,11 +235,47 @@ struct WorkspaceSidebar: View {
                                 onClose: { onClose(workspace.id) },
                                 onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
                                 onConvert: { onConvert(workspace) },
-                                onEdit: { editingWorkspace = workspace }
+                                onEdit: { editingWorkspace = workspace },
+                                onMoveToGroup: { groupId in
+                                    manager.moveWorkspace(id: workspace.id, toGroup: groupId, insertAfter: nil)
+                                },
+                                onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) }
                             )
                         }
 
-                        // Temporary section
+                        // 各个分组
+                        ForEach(manager.groups) { group in
+                            GroupHeaderRow(
+                                group: group,
+                                onToggle: { manager.toggleGroupExpanded(id: group.id) },
+                                onRename: { showRenameGroupAlert(group: group) },
+                                onDelete: { confirmDeleteGroup(group: group) }
+                            )
+                            .padding(.top, 4)
+
+                            if group.isExpanded {
+                                ForEach(manager.workspacesInGroup(group.id)) { workspace in
+                                    ExpandedWorkspaceItem(
+                                        workspace: workspace,
+                                        isActive: workspace.id == currentWorkspaceId,
+                                        isOpen: manager.windowForWorkspace(workspace.id) != nil,
+                                        animationNamespace: sidebarAnimation,
+                                        onTap: { onSwitch(workspace.id) },
+                                        onClose: { onClose(workspace.id) },
+                                        onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
+                                        onConvert: { onConvert(workspace) },
+                                        onEdit: { editingWorkspace = workspace },
+                                        onMoveToGroup: { groupId in
+                                            manager.moveWorkspace(id: workspace.id, toGroup: groupId, insertAfter: nil)
+                                        },
+                                        onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) }
+                                    )
+                                    .padding(.leading, 8)
+                                }
+                            }
+                        }
+
+                        // Temporary section（保持原有逻辑不变）
                         if manager.hasTemporaryWorkspaces {
                             HStack {
                                 Text("Temporary")
@@ -247,6 +298,7 @@ struct WorkspaceSidebar: View {
                                     onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
                                     onConvert: { onConvert(workspace) },
                                     onEdit: { editingWorkspace = workspace }
+                                    // No onMoveToGroup/onNewGroup for Temporary workspaces
                                 )
                             }
                         }
@@ -291,6 +343,48 @@ struct WorkspaceSidebar: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    private func showRenameGroupAlert(group: WorkspaceGroup) {
+        let alert = NSAlert()
+        alert.messageText = "Rename Group"
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        field.stringValue = group.name
+        alert.accessoryView = field
+        guard let window = NSApp.keyWindow else { return }
+        alert.beginSheetModal(for: window) { response in
+            guard response == .alertFirstButtonReturn else { return }
+            let newName = field.stringValue.trimmingCharacters(in: .whitespaces)
+            guard !newName.isEmpty else { return }
+            manager.renameGroup(id: group.id, name: newName)
+        }
+    }
+
+    private func showCreateGroupAlert(movingWorkspace workspace: WorkspaceModel? = nil) {
+        let alert = NSAlert()
+        alert.messageText = "New Group"
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
+        field.placeholderString = "Group name"
+        alert.accessoryView = field
+        guard let window = NSApp.keyWindow else { return }
+        alert.beginSheetModal(for: window) { response in
+            guard response == .alertFirstButtonReturn else { return }
+            let name = field.stringValue.trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty else { return }
+            let group = manager.createGroup(name: name)
+            if let ws = workspace {
+                manager.moveWorkspace(id: ws.id, toGroup: group.id, insertAfter: nil)
+            }
+        }
+    }
+
+    private func confirmDeleteGroup(group: WorkspaceGroup) {
+        pendingDeleteGroup = group
+        showDeleteGroupAlert = true
     }
 }
 
@@ -385,6 +479,8 @@ struct ExpandedWorkspaceItem: View {
     let onDelete: () -> Void
     let onConvert: () -> Void
     let onEdit: () -> Void
+    var onMoveToGroup: ((UUID?) -> Void)? = nil   // nil groupId = 移入未分组
+    var onNewGroup: (() -> Void)? = nil
 
     @State private var isHovering = false
     @State private var isPressed = false
@@ -459,6 +555,19 @@ struct ExpandedWorkspaceItem: View {
         .padding(.horizontal, 6)
         .contextMenu {
             Button("Edit Workspace...") { onEdit() }
+            Menu("Move to Group") {
+                if workspace.groupId != nil {
+                    Button("Ungrouped") { onMoveToGroup?(nil) }
+                    Divider()
+                }
+                ForEach(WorkspaceManager.shared.groups) { group in
+                    if group.id != workspace.groupId {
+                        Button(group.name) { onMoveToGroup?(group.id) }
+                    }
+                }
+                Divider()
+                Button("New Group…") { onNewGroup?() }
+            }
             Divider()
             if workspace.isTemporary {
                 Button("转为正式 Workspace") { onConvert() }
@@ -471,6 +580,58 @@ struct ExpandedWorkspaceItem: View {
             Button("Delete Workspace", role: .destructive) { onDelete() }
         }
         .onTapGesture(count: 2) {}  // prevent double-tap from passing through to blank area handler
+    }
+}
+
+// MARK: - Group Header Row
+
+private struct GroupHeaderRow: View {
+    let group: WorkspaceGroup
+    let onToggle: () -> Void
+    let onRename: () -> Void
+    let onDelete: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: group.isExpanded ? "chevron.down" : "chevron.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(.secondary)
+                .frame(width: 12)
+
+            Text(group.name)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            if isHovering {
+                // 使用 SwiftUI Menu 作为 ··· 按钮，直接连接闭包，无 retain 问题
+                Menu {
+                    Button("Rename Group…") { onRename() }
+                    Divider()
+                    Button("Delete Group", role: .destructive) { onDelete() }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .frame(width: 20, height: 20)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture { onToggle() }
+        .onHover { isHovering = $0 }
+        .contextMenu {
+            Button("Rename Group…") { onRename() }
+            Divider()
+            Button("Delete Group", role: .destructive) { onDelete() }
+        }
     }
 }
 
