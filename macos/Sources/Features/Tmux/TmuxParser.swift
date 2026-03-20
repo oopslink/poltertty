@@ -22,18 +22,21 @@ enum TmuxParser {
         output.components(separatedBy: "\n")
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
             .compactMap { line -> TmuxWindow? in
-                let parts = line.components(separatedBy: "|")
-                guard parts.count >= 3,
-                      let index = Int(parts[0]) else { return nil }
-                let name = parts[1]
-                let active = parts[2] == "1"
+                // 用 firstIndex/lastIndex 分割，window name 可能含 "|"
+                guard let firstSep = line.firstIndex(of: "|"),
+                      let lastSep = line.lastIndex(of: "|"),
+                      firstSep != lastSep else { return nil }
+                let indexStr = String(line[line.startIndex..<firstSep])
+                let name = String(line[line.index(after: firstSep)..<lastSep])
+                let activeStr = String(line[line.index(after: lastSep)...])
+                guard let index = Int(indexStr) else { return nil }
                 return TmuxWindow(
                     id: "\(sessionName):\(index)",
                     sessionName: sessionName,
                     windowIndex: index,
                     name: name,
                     panes: [],
-                    active: active
+                    active: activeStr == "1"
                 )
             }
     }

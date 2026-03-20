@@ -60,6 +60,14 @@ struct TmuxParserTests {
         #expect(w1[0].id != w2[0].id)
     }
 
+    @Test func parseWindows_windowNameWithPipe() {
+        let input = "0|my|project|1"
+        let windows = TmuxParser.parseWindows(input, sessionName: "s")
+        #expect(windows.count == 1)
+        #expect(windows[0].name == "my|project")
+        #expect(windows[0].active == true)
+    }
+
     // MARK: - parsePanes
 
     @Test func parsePanes_normalOutput() {
