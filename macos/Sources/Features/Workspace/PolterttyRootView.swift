@@ -12,6 +12,8 @@ extension Notification.Name {
     static let toggleAgentMonitor = Notification.Name("poltertty.toggleAgentMonitor")
     static let launchAgentFromSidebar = Notification.Name("poltertty.launchAgentFromSidebar")
     static let toggleTmuxPanel = Notification.Name("poltertty.toggleTmuxPanel")
+    static let showTmuxSessionPicker = Notification.Name("poltertty.showTmuxSessionPicker")
+    static let tmuxAttachNewTab = Notification.Name("poltertty.tmuxAttachNewTab")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -39,6 +41,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var showConvertAlert = false
     @State private var fileBrowserDividerHovered = false
     @State private var tmuxDividerHovered = false
+    @State private var showTmuxPicker = false
     @State private var convertTargetId: UUID?
     @State private var convertName = ""
 
@@ -292,6 +295,22 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .onReceive(NotificationCenter.default.publisher(for: .toggleTmuxPanel)) { _ in
             tmuxPanelVM.isVisible.toggle()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .showTmuxSessionPicker)) { _ in
+            showTmuxPicker = true
+        }
+        .sheet(isPresented: $showTmuxPicker) {
+            TmuxSessionPicker(
+                onOpen: { sessionName in
+                    showTmuxPicker = false
+                    NotificationCenter.default.post(
+                        name: .tmuxAttachNewTab,
+                        object: nil,
+                        userInfo: ["sessionName": sessionName]
+                    )
+                },
+                onCancel: { showTmuxPicker = false }
+            )
+        }
         .sheet(isPresented: $showConvertAlert) {
             convertToFormalSheet
         }
@@ -363,6 +382,40 @@ struct PolterttyRootView<TerminalContent: View>: View {
             // 终端内容：始终使用 terminalView 渲染 surfaceTree（支持 split + tab）
             // tab 切换通过 onSwitchTab 回调更新 controller 的 surfaceTree
             terminalView
+                .overlay(alignment: .topTrailing) {
+                    if let activeId = tabBarViewModel.activeTabId,
+                       let tab = tabBarViewModel.tabs.first(where: { $0.id == activeId }),
+                       let tmuxState = tab.tmuxState,
+                       !tmuxState.windows.isEmpty {
+                        TmuxWindowBar(
+                            state: tmuxState,
+                            onSelectWindow: { index in
+                                let sessionName = tmuxState.sessionName
+                                Task {
+                                    try? await TmuxCommandRunner.runSilent(
+                                        args: ["select-window", "-t", "\(sessionName):\(index)"]
+                                    )
+                                }
+                            },
+                            onDetach: {
+                                let sessionName = tmuxState.sessionName
+                                Task {
+                                    try? await TmuxCommandRunner.runSilent(
+                                        args: ["detach-client", "-s", sessionName]
+                                    )
+                                    await MainActor.run {
+                                        if let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId }) {
+                                            tabBarViewModel.tabs[idx].tmuxState = nil
+                                            tabBarViewModel.tmuxMonitor.stopIfIdle()
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                        .padding(8)
+                        .transition(.opacity)
+                    }
+                }
 
             // Status bar 在 shell 区域正下方，与 shell 区域对齐
             if showStatusBar {
