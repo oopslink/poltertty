@@ -24,7 +24,7 @@ struct TmuxPane: Identifiable, Equatable {
     var height: Int
 }
 
-enum TmuxError: Equatable {
+enum TmuxError: Error, Equatable {
     case notInstalled
     case serverNotRunning(stderr: String)
     case timeout
