@@ -230,22 +230,6 @@ struct WorkspaceSidebar: View {
 
     // MARK: - Expanded View — Ungrouped Section
 
-    private func ungroupedDropHandler(providers: [NSItemProvider]) -> Bool {
-        if let provider = providers.first {
-            _ = provider.loadDataRepresentation(
-                forTypeIdentifier: WorkspaceModel.dragType.rawValue
-            ) { data, _ in
-                guard let data = data,
-                      let uuidStr = String(data: data, encoding: .utf8),
-                      let wsId = UUID(uuidString: uuidStr) else { return }
-                DispatchQueue.main.async {
-                    WorkspaceManager.shared.moveWorkspace(id: wsId, toGroup: nil, insertAfter: nil)
-                }
-            }
-        }
-        return true
-    }
-
     private var ungroupedSection: some View {
         let items = manager.workspacesInGroup(nil)
         return VStack(spacing: 2) {
@@ -268,7 +252,11 @@ struct WorkspaceSidebar: View {
                 )
             }
         }
-        .onDrop(of: [WorkspaceModel.utType], isTargeted: nil, perform: ungroupedDropHandler)
+        .dropDestination(for: WorkspaceDragItem.self) { items, _ in
+            guard let item = items.first else { return false }
+            self.manager.moveWorkspace(id: item.workspaceId, toGroup: nil, insertAfter: nil)
+            return true
+        }
     }
 
     private var expandedContent: some View {
@@ -384,6 +372,12 @@ struct WorkspaceSidebar: View {
             }
             .contentShape(Rectangle())
             .onTapGesture(count: 2) { onCreateTemporary() }
+            .contextMenu {
+                Button("New Group…") { showCreateGroupAlert() }
+                Divider()
+                Button("New Workspace…") { isCreating = true }
+                Button("New Temporary") { onCreateTemporary() }
+            }
 
             Divider()
 
@@ -588,74 +582,63 @@ struct ExpandedWorkspaceItem: View {
     }
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 8) {
-                // Info
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        if workspace.isTemporary {
-                            Text("\u{23F1}")
-                                .font(.system(size: 10))
-                        }
-                        Text(workspace.name)
-                            .font(.system(size: 12, weight: isActive ? .semibold : .medium))
-                            .foregroundColor(isActive ? .primary : .secondary)
-                            .lineLimit(1)
-
-                        if isOpen {
-                            Circle()
-                                .fill(Color.green)
-                                .frame(width: 5, height: 5)
-                        }
-                    }
-
-                    if !workspace.description.isEmpty {
-                        Text(workspace.description)
+        HStack(spacing: 8) {
+            // Info
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    if workspace.isTemporary {
+                        Text("\u{23F1}")
                             .font(.system(size: 10))
-                            .foregroundColor(.secondary.opacity(0.8))
-                            .lineLimit(1)
                     }
+                    Text(workspace.name)
+                        .font(.system(size: 12, weight: isActive ? .semibold : .medium))
+                        .foregroundColor(isActive ? .primary : .secondary)
+                        .lineLimit(1)
 
-                    Text(workspace.rootDir)
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.6))
+                    if isOpen {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 5, height: 5)
+                    }
+                }
+
+                if !workspace.description.isEmpty {
+                    Text(workspace.description)
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary.opacity(0.8))
                         .lineLimit(1)
                 }
 
-                Spacer()
+                Text(workspace.rootDir)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary.opacity(0.6))
+                    .lineLimit(1)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                isActive
-                    ? activeBackground
-                    : (isHovering ? Color.primary.opacity(0.04) : .clear)
-            )
-            .cornerRadius(6)
-            .overlay(alignment: .leading) {
-                if isActive {
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(indicatorColor)
-                        .frame(width: 3, height: 36)
-                        .matchedGeometryEffect(id: "activeIndicator", in: animationNamespace)
-                }
+
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            isActive
+                ? activeBackground
+                : (isHovering ? Color.primary.opacity(0.04) : .clear)
+        )
+        .cornerRadius(6)
+        .overlay(alignment: .leading) {
+            if isActive {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(indicatorColor)
+                    .frame(width: 3, height: 36)
+                    .matchedGeometryEffect(id: "activeIndicator", in: animationNamespace)
             }
         }
-        .buttonStyle(.plain)
-        .onDrag {
-            let provider = NSItemProvider()
-            provider.registerDataRepresentation(
-                forTypeIdentifier: WorkspaceModel.dragType.rawValue,
-                visibility: .all
-            ) { completion in
-                completion(self.workspace.id.uuidString.data(using: .utf8), nil)
-                return nil
-            }
-            return provider
-        }
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }
         .scaleEffect(isPressed ? 0.97 : 1.0)
         .onHover { isHovering = $0 }
         .padding(.horizontal, 6)
+        .draggable(WorkspaceDragItem(workspaceId: workspace.id))
         .contextMenu {
             Button("Edit Workspace...") { onEdit() }
             Menu("Move to Group") {
@@ -695,25 +678,7 @@ private struct GroupHeaderRow: View {
     let onDelete: () -> Void
 
     @State private var isHovering = false
-
-    private func workspaceDropHandler(providers: [NSItemProvider]) -> Bool {
-        if let provider = providers.first {
-            _ = provider.loadDataRepresentation(
-                forTypeIdentifier: WorkspaceModel.dragType.rawValue
-            ) { data, _ in
-                guard let data = data,
-                      let uuidStr = String(data: data, encoding: .utf8),
-                      let wsId = UUID(uuidString: uuidStr) else { return }
-                DispatchQueue.main.async {
-                    WorkspaceManager.shared.moveWorkspace(id: wsId, toGroup: self.group.id, insertAfter: nil)
-                    if !self.group.isExpanded {
-                        WorkspaceManager.shared.toggleGroupExpanded(id: self.group.id)
-                    }
-                }
-            }
-        }
-        return true
-    }
+    @State private var isDropTargeted = false
 
     var body: some View {
         HStack(spacing: 4) {
@@ -754,18 +719,18 @@ private struct GroupHeaderRow: View {
             Divider()
             Button("Delete Group", role: .destructive) { onDelete() }
         }
-        .onDrag {
-            let provider = NSItemProvider()
-            provider.registerDataRepresentation(
-                forTypeIdentifier: WorkspaceGroup.dragType.rawValue,
-                visibility: .all
-            ) { completion in
-                completion(self.group.id.uuidString.data(using: .utf8), nil)
-                return nil
+        .background(isDropTargeted ? Color.accentColor.opacity(0.12) : Color.clear)
+        .cornerRadius(4)
+        .dropDestination(for: WorkspaceDragItem.self) { items, _ in
+            guard let item = items.first else { return false }
+            WorkspaceManager.shared.moveWorkspace(id: item.workspaceId, toGroup: group.id, insertAfter: nil)
+            if !group.isExpanded {
+                WorkspaceManager.shared.toggleGroupExpanded(id: group.id)
             }
-            return provider
+            return true
+        } isTargeted: { targeted in
+            isDropTargeted = targeted
         }
-        .onDrop(of: [WorkspaceModel.utType], isTargeted: nil, perform: workspaceDropHandler)
     }
 }
 

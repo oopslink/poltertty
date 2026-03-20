@@ -1,6 +1,7 @@
 // macos/Sources/Features/Workspace/WorkspaceGroup.swift
 import AppKit
 import Foundation
+import SwiftUI
 import UniformTypeIdentifiers
 
 struct WorkspaceGroup: Codable, Identifiable {
@@ -31,14 +32,22 @@ struct WorkspaceGroup: Codable, Identifiable {
 
 // MARK: - Drag Support
 
-extension WorkspaceGroup {
-    static let dragTypeIdentifier = "com.poltertty.workspace-group"
-    static let dragType = NSPasteboard.PasteboardType(dragTypeIdentifier)
-    static let utType = UTType(exportedAs: dragTypeIdentifier)
-}
+/// Lightweight Transferable proxy for dragging a workspace by ID.
+/// Uses ProxyRepresentation → String (UTType.plainText) which is
+/// a system-registered type and works reliably on macOS 13+.
+struct WorkspaceDragItem: Transferable {
+    let workspaceId: UUID
 
-extension WorkspaceModel {
-    static let dragTypeIdentifier = "com.poltertty.workspace"
-    static let dragType = NSPasteboard.PasteboardType(dragTypeIdentifier)
-    static let utType = UTType(exportedAs: dragTypeIdentifier)
+    static var transferRepresentation: some TransferRepresentation {
+        ProxyRepresentation(
+            exporting: { item in item.workspaceId.uuidString },
+            importing: { str -> WorkspaceDragItem in
+                guard let id = UUID(uuidString: str) else {
+                    throw NSError(domain: "WorkspaceDrag", code: 0,
+                                  userInfo: [NSLocalizedDescriptionKey: "Invalid UUID"])
+                }
+                return WorkspaceDragItem(workspaceId: id)
+            }
+        )
+    }
 }
