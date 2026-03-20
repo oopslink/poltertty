@@ -267,6 +267,15 @@ struct FileBrowserPanel: View {
                 TextField("Filter", text: $viewModel.filterText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
+                Button {
+                    viewModel.isVisible = false
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("关闭文件浏览器")
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
