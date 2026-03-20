@@ -14,6 +14,7 @@ extension Notification.Name {
     static let toggleTmuxPanel = Notification.Name("poltertty.toggleTmuxPanel")
     static let showTmuxSessionPicker = Notification.Name("poltertty.showTmuxSessionPicker")
     static let tmuxAttachNewTab = Notification.Name("poltertty.tmuxAttachNewTab")
+    static let tmuxAttachInCurrentPane = Notification.Name("poltertty.tmuxAttachInCurrentPane")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -42,6 +43,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var fileBrowserDividerHovered = false
     @State private var tmuxDividerHovered = false
     @State private var showTmuxPicker = false
+    @State private var tmuxPickerAttachInCurrentPane = false
     @State private var convertTargetId: UUID?
     @State private var convertName = ""
 
@@ -295,20 +297,32 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .onReceive(NotificationCenter.default.publisher(for: .toggleTmuxPanel)) { _ in
             tmuxPanelVM.isVisible.toggle()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .showTmuxSessionPicker)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .showTmuxSessionPicker)) { notification in
+            tmuxPickerAttachInCurrentPane = notification.userInfo?["attachInCurrentPane"] as? Bool ?? false
             showTmuxPicker = true
         }
         .sheet(isPresented: $showTmuxPicker) {
             TmuxSessionPicker(
                 onOpen: { sessionName in
                     showTmuxPicker = false
+                    let inCurrentPane = tmuxPickerAttachInCurrentPane
                     // 延迟发送通知，等 sheet 完全关闭后 window 恢复 keyWindow 状态
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        NotificationCenter.default.post(
-                            name: .tmuxAttachNewTab,
-                            object: nil,
-                            userInfo: ["sessionName": sessionName]
-                        )
+                        if inCurrentPane {
+                            // 在当前 pane 中 attach（右键菜单触发）
+                            NotificationCenter.default.post(
+                                name: .tmuxAttachInCurrentPane,
+                                object: nil,
+                                userInfo: ["sessionName": sessionName]
+                            )
+                        } else {
+                            // 新建 tab 并 attach（菜单触发）
+                            NotificationCenter.default.post(
+                                name: .tmuxAttachNewTab,
+                                object: nil,
+                                userInfo: ["sessionName": sessionName]
+                            )
+                        }
                     }
                 },
                 onCancel: { showTmuxPicker = false }

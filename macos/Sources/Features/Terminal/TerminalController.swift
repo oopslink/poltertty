@@ -186,6 +186,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             name: .tmuxAttachNewTab,
             object: nil
         )
+        center.addObserver(
+            self,
+            selector: #selector(onTmuxAttachInCurrentPane(_:)),
+            name: .tmuxAttachInCurrentPane,
+            object: nil
+        )
     }
 
     required init?(coder: NSCoder) {
@@ -614,6 +620,13 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         guard window?.isKeyWindow == true,
               let sessionName = notification.userInfo?["sessionName"] as? String else { return }
         addNewTabWithTmux(sessionName: sessionName)
+    }
+
+    @objc private func onTmuxAttachInCurrentPane(_ notification: Notification) {
+        guard window?.isKeyWindow == true,
+              let sessionName = notification.userInfo?["sessionName"] as? String else { return }
+        let escapedName = Ghostty.Shell.escape(sessionName)
+        injectToActiveSurface("tmux attach-session -t \(escapedName)\n")
     }
 
     private func persistFileBrowserState(for workspaceId: UUID) {
