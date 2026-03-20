@@ -1164,7 +1164,7 @@ class AppDelegate: NSObject,
         NotificationCenter.default.post(name: .toggleAgentMonitor, object: nil)
     }
 
-    @objc func toggleTmuxPanel(_ sender: Any) {
+    @objc func toggleTmuxPanel(_ sender: Any?) {
         NotificationCenter.default.post(
             name: .toggleTmuxPanel,
             object: nil
