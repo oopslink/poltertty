@@ -1,17 +1,6 @@
 import SwiftUI
 
-// MARK: - Environment key for TabBarViewModel (tmux state access)
-
-private struct TabBarViewModelKey: EnvironmentKey {
-    static let defaultValue: TabBarViewModel? = nil
-}
-
-extension EnvironmentValues {
-    var tabBarViewModel: TabBarViewModel? {
-        get { self[TabBarViewModelKey.self] }
-        set { self[TabBarViewModelKey.self] = newValue }
-    }
-}
+// No custom EnvironmentKey needed — TabBarViewModel injected via .environmentObject()
 
 /// A single operation within the split tree.
 ///
@@ -109,7 +98,7 @@ private struct TerminalSplitLeaf: View {
     let isSplit: Bool
     let action: (TerminalSplitOperation) -> Void
 
-    @Environment(\.tabBarViewModel) private var tabBarVM
+    @EnvironmentObject var tabBarVM: TabBarViewModel
     @State private var dropState: DropState = .idle
     @State private var isSelfDragging: Bool = false
     @State private var isHovering: Bool = false
@@ -149,8 +138,7 @@ private struct TerminalSplitLeaf: View {
                 }
             }
             .overlay(alignment: .topTrailing) {
-                if let vm = tabBarVM,
-                   let tmuxState = vm.tmuxStates[surfaceView.id],
+                if let tmuxState = tabBarVM.tmuxStates[surfaceView.id],
                    !tmuxState.windows.isEmpty {
                     TmuxWindowBar(
                         state: tmuxState,
@@ -168,7 +156,7 @@ private struct TerminalSplitLeaf: View {
                                 try? await TmuxCommandRunner.runSilent(
                                     args: ["kill-window", "-t", "\(sessionName):\(index)"]
                                 )
-                                await MainActor.run { vm.tmuxMonitor.refresh() }
+                                await MainActor.run { tabBarVM.tmuxMonitor.refresh() }
                             }
                         },
                         onNewWindow: {
@@ -177,7 +165,7 @@ private struct TerminalSplitLeaf: View {
                                 try? await TmuxCommandRunner.runSilent(
                                     args: ["new-window", "-t", sessionName]
                                 )
-                                await MainActor.run { vm.tmuxMonitor.refresh() }
+                                await MainActor.run { tabBarVM.tmuxMonitor.refresh() }
                             }
                         },
                         onDetach: {
@@ -187,8 +175,8 @@ private struct TerminalSplitLeaf: View {
                                     args: ["detach-client", "-s", sessionName]
                                 )
                                 await MainActor.run {
-                                    vm.tmuxStates.removeValue(forKey: surfaceView.id)
-                                    vm.tmuxMonitor.stopIfIdle()
+                                    tabBarVM.tmuxStates.removeValue(forKey: surfaceView.id)
+                                    tabBarVM.tmuxMonitor.stopIfIdle()
                                 }
                             }
                         }
