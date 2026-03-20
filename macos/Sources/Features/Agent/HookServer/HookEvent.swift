@@ -49,7 +49,7 @@ struct HookPayload: Decodable {
     let agentId: String?
     let agentName: String?
     let agentType: String?
-    let toolResponse: String?       // PostToolUse 的 tool_response（agent 输出文本）
+    let toolResponse: String?       // PostToolUse 的 tool_response（agent 输出文本，可能为对象）
     var toolInputRaw: String? = nil // 由 HookServer 注入的 tool_input 原始 JSON（不参与 Decodable）
 
     enum CodingKeys: String, CodingKey {
@@ -65,5 +65,22 @@ struct HookPayload: Decodable {
         case agentName       = "agent_name"
         case agentType       = "agent_type"
         case toolResponse    = "tool_response"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hookEventName   = try c.decode(HookEventType.self, forKey: .hookEventName)
+        sessionId       = try? c.decodeIfPresent(String.self, forKey: .sessionId)
+        cwd             = try? c.decodeIfPresent(String.self, forKey: .cwd)
+        notificationType = try? c.decodeIfPresent(String.self, forKey: .notificationType)
+        transcriptPath  = try? c.decodeIfPresent(String.self, forKey: .transcriptPath)
+        toolName        = try? c.decodeIfPresent(String.self, forKey: .toolName)
+        toolUseId       = try? c.decodeIfPresent(String.self, forKey: .toolUseId)
+        toolInput       = try? c.decodeIfPresent(AgentToolInput.self, forKey: .toolInput)
+        agentId         = try? c.decodeIfPresent(String.self, forKey: .agentId)
+        agentName       = try? c.decodeIfPresent(String.self, forKey: .agentName)
+        agentType       = try? c.decodeIfPresent(String.self, forKey: .agentType)
+        // tool_response 可能是字符串或对象，类型不匹配时忽略
+        toolResponse    = try? c.decodeIfPresent(String.self, forKey: .toolResponse)
     }
 }
