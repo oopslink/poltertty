@@ -271,7 +271,8 @@ final class ExternalSessionDiscovery: ObservableObject {
         providers.forEach { $0.stopWatching() }
         refreshTimer?.invalidate()
         refreshTimer = nil
-        sessions = []
+        // 注意：不在此处清空 sessions —— stop() 可能从 deinit 调用，
+        // 而 deinit 不受 @MainActor 保证，写 @Published 会引发 Swift 6 并发违规。
     }
 
     deinit {
