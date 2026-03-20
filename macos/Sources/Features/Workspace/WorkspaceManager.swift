@@ -7,6 +7,7 @@ class WorkspaceManager: ObservableObject {
     static let shared = WorkspaceManager()
 
     @Published var workspaces: [WorkspaceModel] = []
+    @Published var groups: [WorkspaceGroup] = []
     /// Maps workspace ID to its owning NSWindow
     var activeWindows: [UUID: WeakWindow] = [:]
 
@@ -51,6 +52,9 @@ class WorkspaceManager: ObservableObject {
     }
 
     private let storageDir: String
+    private var groupsFilePath: String {
+        (storageDir as NSString).appendingPathComponent("groups.json")
+    }
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
@@ -61,6 +65,8 @@ class WorkspaceManager: ObservableObject {
         decoder.dateDecodingStrategy = .iso8601
         ensureStorageDir()
         loadAll()
+        loadGroups()
+        fixGroupConsistency()
     }
 
     // MARK: - CRUD
@@ -325,6 +331,139 @@ class WorkspaceManager: ObservableObject {
         }
 
         workspaces.sort { $0.createdAt < $1.createdAt }
+    }
+
+    // MARK: - Group Persistence
+
+    private func loadGroups() {
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: groupsFilePath)),
+              let loaded = try? decoder.decode([WorkspaceGroup].self, from: data) else {
+            return
+        }
+        groups = loaded.sorted { $0.orderIndex < $1.orderIndex }
+    }
+
+    private func saveGroups() {
+        if let data = try? encoder.encode(groups) {
+            try? data.write(to: URL(fileURLWithPath: groupsFilePath))
+        }
+    }
+
+    /// 启动时修复一致性：清除指向不存在分组的 groupId，修正 groupOrder
+    private func fixGroupConsistency() {
+        let validGroupIds = Set(groups.map { $0.id })
+
+        // 清除无效 groupId
+        for i in workspaces.indices {
+            if let gid = workspaces[i].groupId, !validGroupIds.contains(gid) {
+                workspaces[i].groupId = nil
+                save(workspaces[i])
+            }
+        }
+
+        // 修正 groupOrder：对 groupOrder 全为 0 的区域按 createdAt 分配连续序号
+        let allGroupIds: [UUID?] = [nil] + groups.map { Optional($0.id) }
+        for gid in allGroupIds {
+            let indices = workspaces.indices.filter { workspaces[$0].groupId == gid }
+            let allZero = indices.allSatisfy { workspaces[$0].groupOrder == 0 }
+            guard allZero && indices.count > 1 else { continue }
+            // 按 createdAt 排序后分配 0,1,2,...
+            let sorted = indices.sorted { workspaces[$0].createdAt < workspaces[$1].createdAt }
+            for (order, idx) in sorted.enumerated() {
+                workspaces[idx].groupOrder = order
+                save(workspaces[idx])
+            }
+        }
+    }
+
+    // MARK: - Group CRUD
+
+    @discardableResult
+    func createGroup(name: String) -> WorkspaceGroup {
+        let group = WorkspaceGroup(name: name, orderIndex: groups.count)
+        groups.append(group)
+        saveGroups()
+        return group
+    }
+
+    func renameGroup(id: UUID, name: String) {
+        guard let idx = groups.firstIndex(where: { $0.id == id }) else { return }
+        groups[idx].name = name
+        groups[idx].updatedAt = Date()
+        saveGroups()
+    }
+
+    func deleteGroup(id: UUID) {
+        // 先将该分组所有 workspace 移出分组
+        for i in workspaces.indices where workspaces[i].groupId == id {
+            workspaces[i].groupId = nil
+            save(workspaces[i])
+        }
+        groups.removeAll { $0.id == id }
+        saveGroups()
+    }
+
+    /// 将 workspace 移入指定分组（nil = 未分组），插入 insertAfter 位置之后（nil = 末尾）
+    func moveWorkspace(id: UUID, toGroup groupId: UUID?, insertAfter afterId: UUID?) {
+        guard let wsIdx = workspaces.firstIndex(where: { $0.id == id }) else { return }
+
+        // 计算目标区域当前最大 order
+        let targetWorkspaces = workspaces.filter { $0.groupId == groupId && $0.id != id }
+
+        let insertOrder: Int
+        if let afterId = afterId,
+           let afterWs = targetWorkspaces.first(where: { $0.id == afterId }) {
+            insertOrder = afterWs.groupOrder + 1
+        } else {
+            insertOrder = (targetWorkspaces.map { $0.groupOrder }.max() ?? -1) + 1
+        }
+
+        // 将目标区域中 order >= insertOrder 的项后移
+        for i in workspaces.indices where workspaces[i].groupId == groupId && workspaces[i].id != id {
+            if workspaces[i].groupOrder >= insertOrder {
+                workspaces[i].groupOrder += 1
+                save(workspaces[i])
+            }
+        }
+
+        workspaces[wsIdx].groupId = groupId
+        workspaces[wsIdx].groupOrder = insertOrder
+        save(workspaces[wsIdx])
+    }
+
+    /// 接受新的分组 id 顺序，重新计算 orderIndex
+    func reorderGroups(_ orderedIds: [UUID]) {
+        for (newIndex, gid) in orderedIds.enumerated() {
+            if let idx = groups.firstIndex(where: { $0.id == gid }) {
+                groups[idx].orderIndex = newIndex
+                groups[idx].updatedAt = Date()
+            }
+        }
+        groups.sort { $0.orderIndex < $1.orderIndex }
+        saveGroups()
+    }
+
+    /// 切换分组在 expanded sidebar 中的展开/折叠状态
+    func toggleGroupExpanded(id: UUID) {
+        guard let idx = groups.firstIndex(where: { $0.id == id }) else { return }
+        groups[idx].isExpanded.toggle()
+        groups[idx].updatedAt = Date()
+        saveGroups()
+    }
+
+    /// 切换分组在 collapsed sidebar 中的收起/展开状态
+    func toggleGroupCollapsedIcon(id: UUID) {
+        guard let idx = groups.firstIndex(where: { $0.id == id }) else { return }
+        groups[idx].isCollapsedIcon.toggle()
+        groups[idx].updatedAt = Date()
+        saveGroups()
+    }
+
+    /// 获取某个分组内的 workspace（按 groupOrder 排序）
+    func workspacesInGroup(_ groupId: UUID?) -> [WorkspaceModel] {
+        workspaces
+            .filter { !$0.isTemporary && $0.groupId == groupId }
+            .sorted { $0.groupOrder < $1.groupOrder }
     }
 
     private func migrateLegacySnapshot(_ snapshot: WorkspaceSnapshot, legacyPath: String) {

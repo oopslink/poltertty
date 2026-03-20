@@ -17,6 +17,26 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
     var isTemporary: Bool
     var fileBrowserVisible: Bool = false
     var fileBrowserWidth: CGFloat = 260
+    var groupId: UUID?    // nil = 未分组
+    var groupOrder: Int   // workspace 在所属区域内的排列顺序
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case colorHex
+        case icon
+        case rootDir
+        case description
+        case tags
+        case createdAt
+        case updatedAt
+        case lastActiveAt
+        case isTemporary
+        case fileBrowserVisible
+        case fileBrowserWidth
+        case groupId
+        case groupOrder
+    }
 
     init(name: String, rootDir: String, colorHex: String = "#FF6B6B", icon: String? = nil, isTemporary: Bool = false) {
         self.id = UUID()
@@ -30,6 +50,8 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
         self.updatedAt = Date()
         self.lastActiveAt = Date()
         self.isTemporary = isTemporary
+        self.groupId = nil
+        self.groupOrder = 0
     }
 
     init(from decoder: Decoder) throws {
@@ -47,6 +69,8 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
         isTemporary = try container.decodeIfPresent(Bool.self, forKey: .isTemporary) ?? false
         fileBrowserVisible = try container.decodeIfPresent(Bool.self, forKey: .fileBrowserVisible) ?? false
         fileBrowserWidth   = try container.decodeIfPresent(CGFloat.self, forKey: .fileBrowserWidth) ?? 260
+        groupId    = try container.decodeIfPresent(UUID.self, forKey: .groupId)
+        groupOrder = try container.decodeIfPresent(Int.self, forKey: .groupOrder) ?? 0
     }
 
     var color: Color {
