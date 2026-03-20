@@ -641,7 +641,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // 延迟注入 attach 命令（等待 surface 恢复焦点）
         let escapedName = Ghostty.Shell.escape(sessionName)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.injectToActiveSurface("tmux attach-session -t \(escapedName)\n")
+            self?.injectToActiveSurface("tmux attach-session -t \(escapedName)\r")
         }
 
         // 启动 tmux tab monitor
@@ -924,7 +924,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // 延迟注入 attach 命令（等待 shell 就绪）
         let escapedName = Ghostty.Shell.escape(sessionName)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.injectToActiveSurface("tmux attach-session -t \(escapedName)\n")
+            self?.injectToActiveSurface("tmux attach-session -t \(escapedName)\r")
         }
 
         // 启动 tmux tab monitor
