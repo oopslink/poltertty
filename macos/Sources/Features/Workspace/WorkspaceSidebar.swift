@@ -179,7 +179,48 @@ struct WorkspaceSidebar: View {
         }
     }
 
-    // MARK: - Expanded View
+    // MARK: - Expanded View — Ungrouped Section
+
+    private func ungroupedDropHandler(providers: [NSItemProvider]) -> Bool {
+        if let provider = providers.first {
+            _ = provider.loadDataRepresentation(
+                forTypeIdentifier: WorkspaceModel.dragType.rawValue
+            ) { data, _ in
+                guard let data = data,
+                      let uuidStr = String(data: data, encoding: .utf8),
+                      let wsId = UUID(uuidString: uuidStr) else { return }
+                DispatchQueue.main.async {
+                    WorkspaceManager.shared.moveWorkspace(id: wsId, toGroup: nil, insertAfter: nil)
+                }
+            }
+        }
+        return true
+    }
+
+    private var ungroupedSection: some View {
+        let items = manager.workspacesInGroup(nil)
+        return VStack(spacing: 2) {
+            ForEach(items) { workspace in
+                ExpandedWorkspaceItem(
+                    workspace: workspace,
+                    isActive: workspace.id == currentWorkspaceId,
+                    isOpen: manager.windowForWorkspace(workspace.id) != nil,
+                    animationNamespace: sidebarAnimation,
+                    onTap: { onSwitch(workspace.id) },
+                    onClose: { onClose(workspace.id) },
+                    onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
+                    onConvert: { onConvert(workspace) },
+                    onEdit: { editingWorkspace = workspace },
+                    onMoveToGroup: { groupId in
+                        manager.moveWorkspace(id: workspace.id, toGroup: groupId, insertAfter: nil)
+                    },
+                    onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) },
+                    availableGroups: manager.groups
+                )
+            }
+        }
+        .onDrop(of: [WorkspaceModel.utType], isTargeted: nil, perform: ungroupedDropHandler)
+    }
 
     private var expandedContent: some View {
         VStack(spacing: 0) {
@@ -225,24 +266,7 @@ struct WorkspaceSidebar: View {
                 ScrollView {
                     LazyVStack(spacing: 2) {
                         // 未分组 workspace
-                        ForEach(manager.workspacesInGroup(nil)) { workspace in
-                            ExpandedWorkspaceItem(
-                                workspace: workspace,
-                                isActive: workspace.id == currentWorkspaceId,
-                                isOpen: manager.windowForWorkspace(workspace.id) != nil,
-                                animationNamespace: sidebarAnimation,
-                                onTap: { onSwitch(workspace.id) },
-                                onClose: { onClose(workspace.id) },
-                                onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
-                                onConvert: { onConvert(workspace) },
-                                onEdit: { editingWorkspace = workspace },
-                                onMoveToGroup: { groupId in
-                                    manager.moveWorkspace(id: workspace.id, toGroup: groupId, insertAfter: nil)
-                                },
-                                onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) },
-                                availableGroups: manager.groups
-                            )
-                        }
+                        ungroupedSection
 
                         // 各个分组
                         ForEach(manager.groups) { group in
@@ -553,6 +577,17 @@ struct ExpandedWorkspaceItem: View {
             }
         }
         .buttonStyle(.plain)
+        .onDrag {
+            let provider = NSItemProvider()
+            provider.registerDataRepresentation(
+                forTypeIdentifier: WorkspaceModel.dragType.rawValue,
+                visibility: .all
+            ) { completion in
+                completion(self.workspace.id.uuidString.data(using: .utf8), nil)
+                return nil
+            }
+            return provider
+        }
         .scaleEffect(isPressed ? 0.97 : 1.0)
         .onHover { isHovering = $0 }
         .padding(.horizontal, 6)
@@ -596,6 +631,25 @@ private struct GroupHeaderRow: View {
 
     @State private var isHovering = false
 
+    private func workspaceDropHandler(providers: [NSItemProvider]) -> Bool {
+        if let provider = providers.first {
+            _ = provider.loadDataRepresentation(
+                forTypeIdentifier: WorkspaceModel.dragType.rawValue
+            ) { data, _ in
+                guard let data = data,
+                      let uuidStr = String(data: data, encoding: .utf8),
+                      let wsId = UUID(uuidString: uuidStr) else { return }
+                DispatchQueue.main.async {
+                    WorkspaceManager.shared.moveWorkspace(id: wsId, toGroup: self.group.id, insertAfter: nil)
+                    if !self.group.isExpanded {
+                        WorkspaceManager.shared.toggleGroupExpanded(id: self.group.id)
+                    }
+                }
+            }
+        }
+        return true
+    }
+
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: group.isExpanded ? "chevron.down" : "chevron.right")
@@ -635,6 +689,18 @@ private struct GroupHeaderRow: View {
             Divider()
             Button("Delete Group", role: .destructive) { onDelete() }
         }
+        .onDrag {
+            let provider = NSItemProvider()
+            provider.registerDataRepresentation(
+                forTypeIdentifier: WorkspaceGroup.dragType.rawValue,
+                visibility: .all
+            ) { completion in
+                completion(self.group.id.uuidString.data(using: .utf8), nil)
+                return nil
+            }
+            return provider
+        }
+        .onDrop(of: [WorkspaceModel.utType], isTargeted: nil, perform: workspaceDropHandler)
     }
 }
 

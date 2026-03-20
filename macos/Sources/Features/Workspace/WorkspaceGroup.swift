@@ -1,5 +1,7 @@
 // macos/Sources/Features/Workspace/WorkspaceGroup.swift
+import AppKit
 import Foundation
+import UniformTypeIdentifiers
 
 struct WorkspaceGroup: Codable, Identifiable {
     let id: UUID
@@ -25,4 +27,18 @@ struct WorkspaceGroup: Codable, Identifiable {
         let scalars = Array(name.unicodeScalars.prefix(2))
         return String(String.UnicodeScalarView(scalars)).uppercased()
     }
+}
+
+// MARK: - Drag Support
+
+extension WorkspaceGroup {
+    static let dragTypeIdentifier = "com.poltertty.workspace-group"
+    static let dragType = NSPasteboard.PasteboardType(dragTypeIdentifier)
+    static let utType = UTType(exportedAs: dragTypeIdentifier)
+}
+
+extension WorkspaceModel {
+    static let dragTypeIdentifier = "com.poltertty.workspace"
+    static let dragType = NSPasteboard.PasteboardType(dragTypeIdentifier)
+    static let utType = UTType(exportedAs: dragTypeIdentifier)
 }
