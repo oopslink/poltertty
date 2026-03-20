@@ -638,16 +638,14 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         guard window?.isKeyWindow == true,
               let sessionName = notification.userInfo?["sessionName"] as? String else { return }
 
-        // 设置当前 tab 的 tmuxState（驱动 TmuxWindowBar overlay）
-        if let activeId = tabBarViewModel.activeTabId,
-           let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId }) {
-            tabBarViewModel.tabs[idx].tmuxState = TmuxAttachState(
+        // 设置当前 surface 的 tmuxState（驱动 TmuxWindowBar overlay）
+        if let surfaceId = focusedSurface?.id {
+            tabBarViewModel.tmuxStates[surfaceId] = TmuxAttachState(
                 sessionName: sessionName,
                 activeWindowIndex: 0,
                 activeWindowName: "",
                 windows: []
             )
-            tabBarViewModel.renameTab(activeId, title: "tmux: \(sessionName)")
         }
 
         // 延迟注入 attach 命令（等待 sheet 完全关闭 + surface 恢复焦点）
@@ -871,12 +869,15 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         _ node: SplitTree<Ghostty.SurfaceView>.Node,
         withConfirmation: Bool = true
     ) {
-        // 如果关闭的是 root（即整个 tab），检查 tmux 状态
-        if surfaceTree.root == node,
-           let activeId = tabBarViewModel.activeTabId,
-           let tab = tabBarViewModel.tabs.first(where: { $0.id == activeId }),
-           tab.tmuxState != nil {
-            closePolterttyTab(activeId)
+        // 检查关闭的 surface 是否有 tmux session
+        if case .leaf(let surfaceView) = node,
+           let state = tabBarViewModel.tmuxStates[surfaceView.id] {
+            showTmuxCloseConfirmation(tabId: UUID(), sessionName: state.sessionName) {
+                // detach/kill 后清除状态再执行原关闭逻辑
+                self.tabBarViewModel.tmuxStates.removeValue(forKey: surfaceView.id)
+                self.tabBarViewModel.tmuxMonitor.stopIfIdle()
+                super.closeSurface(node, withConfirmation: false)
+            }
             return
         }
 
@@ -927,17 +928,14 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     func addNewTabWithTmux(sessionName: String) {
         addNewTab()
 
-        // 设置新 tab 的初始 tmuxState
-        if let activeId = tabBarViewModel.activeTabId,
-           let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId }) {
-            tabBarViewModel.tabs[idx].tmuxState = TmuxAttachState(
+        // 设置新 surface 的 tmuxState
+        if let surfaceId = focusedSurface?.id {
+            tabBarViewModel.tmuxStates[surfaceId] = TmuxAttachState(
                 sessionName: sessionName,
                 activeWindowIndex: 0,
                 activeWindowName: "",
                 windows: []
             )
-            // 锁定 tab 标题为 session name
-            tabBarViewModel.renameTab(activeId, title: "tmux: \(sessionName)")
         }
 
         // 延迟注入 attach 命令（等待 shell 就绪 + surface 焦点）
@@ -984,27 +982,44 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// Close a tab in the custom poltertty tab bar
     @MainActor
     func closePolterttyTab(_ id: UUID) {
-        guard tabBarViewModel.tabs.count > 1 else {
-            // 单 tab 时走 window 关闭流程
-            if let state = tabBarViewModel.tabs.first?.tmuxState {
-                showTmuxCloseConfirmation(tabId: id, sessionName: state.sessionName) {
+        // 检查该 tab 中是否有任何 surface attach 了 tmux
+        if let tmux = firstTmuxSurfaceInTab(id) {
+            showTmuxCloseConfirmation(tabId: id, sessionName: tmux.sessionName) {
+                self.tabBarViewModel.tmuxStates.removeValue(forKey: tmux.surfaceId)
+                self.tabBarViewModel.tmuxMonitor.stopIfIdle()
+                if self.tabBarViewModel.tabs.count > 1 {
+                    self.tabBarViewModel.closeTab(id)
+                } else {
                     self.window?.close()
                 }
-                return
             }
+            return
+        }
+        guard tabBarViewModel.tabs.count > 1 else {
             window?.close()
             return
         }
-        // 检查是否是 tmux tab
-        if let tab = tabBarViewModel.tabs.first(where: { $0.id == id }),
-           let state = tab.tmuxState {
-            showTmuxCloseConfirmation(tabId: id, sessionName: state.sessionName) {
-                self.tabBarViewModel.closeTab(id)
-                self.tabBarViewModel.tmuxMonitor.stopIfIdle()
-            }
-            return
-        }
         tabBarViewModel.closeTab(id)
+    }
+
+    /// 查找指定 tab 中第一个有 tmux session 的 surface
+    private func firstTmuxSurfaceInTab(_ tabId: UUID) -> (surfaceId: UUID, sessionName: String)? {
+        // 获取该 tab 对应的 surface tree
+        let tree: SplitTree<Ghostty.SurfaceView>
+        if tabId == tabBarViewModel.activeTabId {
+            tree = surfaceTree
+        } else if let saved = tabSurfaceTrees[tabId] {
+            tree = saved
+        } else {
+            return nil
+        }
+        // 遍历 tree 中的所有 surface
+        for surface in tree {
+            if let state = tabBarViewModel.tmuxStates[surface.id] {
+                return (surface.id, state.sessionName)
+            }
+        }
+        return nil
     }
 
     /// 显示 tmux tab 关闭确认对话框
@@ -1044,12 +1059,10 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
     }
 
-    /// 检查是否有任何 tab 包含 tmux session（用于 window 级关闭拦截）
-    private func anyTmuxTab() -> (tabId: UUID, sessionName: String)? {
-        for tab in tabBarViewModel.tabs {
-            if let state = tab.tmuxState {
-                return (tab.id, state.sessionName)
-            }
+    /// 检查是否有任何 surface 包含 tmux session（用于 window 级关闭拦截）
+    private func anyTmuxSurface() -> (surfaceId: UUID, sessionName: String)? {
+        if let first = tabBarViewModel.tmuxStates.first {
+            return (first.key, first.value.sessionName)
         }
         return nil
     }
@@ -1639,12 +1652,11 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     lazy private(set) var tabGroupCloseCoordinator = TabGroupCloseCoordinator()
 
     override func windowShouldClose(_ sender: NSWindow) -> Bool {
-        // 检查是否有 tmux tab 需要确认
-        if let tmux = anyTmuxTab() {
-            showTmuxCloseConfirmation(tabId: tmux.tabId, sessionName: tmux.sessionName) {
-                if let idx = self.tabBarViewModel.tabs.firstIndex(where: { $0.id == tmux.tabId }) {
-                    self.tabBarViewModel.tabs[idx].tmuxState = nil
-                }
+        // 检查是否有 tmux surface 需要确认
+        if let tmux = anyTmuxSurface() {
+            showTmuxCloseConfirmation(tabId: UUID(), sessionName: tmux.sessionName) {
+                self.tabBarViewModel.tmuxStates.removeValue(forKey: tmux.surfaceId)
+                self.tabBarViewModel.tmuxMonitor.stopIfIdle()
                 self.window?.performClose(nil)
             }
             return false

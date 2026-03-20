@@ -1,5 +1,18 @@
 import SwiftUI
 
+// MARK: - Environment key for TabBarViewModel (tmux state access)
+
+private struct TabBarViewModelKey: EnvironmentKey {
+    static let defaultValue: TabBarViewModel? = nil
+}
+
+extension EnvironmentValues {
+    var tabBarViewModel: TabBarViewModel? {
+        get { self[TabBarViewModelKey.self] }
+        set { self[TabBarViewModelKey.self] = newValue }
+    }
+}
+
 /// A single operation within the split tree.
 ///
 /// Rather than binding the split tree (which is immutable), any mutable operations are
@@ -96,6 +109,7 @@ private struct TerminalSplitLeaf: View {
     let isSplit: Bool
     let action: (TerminalSplitOperation) -> Void
 
+    @Environment(\.tabBarViewModel) private var tabBarVM
     @State private var dropState: DropState = .idle
     @State private var isSelfDragging: Bool = false
     @State private var isHovering: Bool = false
@@ -132,6 +146,38 @@ private struct TerminalSplitLeaf: View {
                     }
                     .padding(6)
                     .transition(.opacity.animation(.easeInOut(duration: 0.15)))
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if let vm = tabBarVM,
+                   let tmuxState = vm.tmuxStates[surfaceView.id],
+                   !tmuxState.windows.isEmpty {
+                    TmuxWindowBar(
+                        state: tmuxState,
+                        onSelectWindow: { index in
+                            let sessionName = tmuxState.sessionName
+                            Task {
+                                try? await TmuxCommandRunner.runSilent(
+                                    args: ["select-window", "-t", "\(sessionName):\(index)"]
+                                )
+                            }
+                        },
+                        onDetach: {
+                            let sessionName = tmuxState.sessionName
+                            Task {
+                                try? await TmuxCommandRunner.runSilent(
+                                    args: ["detach-client", "-s", sessionName]
+                                )
+                                await MainActor.run {
+                                    vm.tmuxStates.removeValue(forKey: surfaceView.id)
+                                    vm.tmuxMonitor.stopIfIdle()
+                                }
+                            }
+                        }
+                    )
+                    .padding(.top, isSplit ? 24 : 8)
+                    .padding(.trailing, 8)
+                    .transition(.opacity)
                 }
             }
             .onHover { hovering in

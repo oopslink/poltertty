@@ -399,40 +399,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
             // 终端内容：始终使用 terminalView 渲染 surfaceTree（支持 split + tab）
             // tab 切换通过 onSwitchTab 回调更新 controller 的 surfaceTree
             terminalView
-                .overlay(alignment: .topTrailing) {
-                    if let activeId = tabBarViewModel.activeTabId,
-                       let tab = tabBarViewModel.tabs.first(where: { $0.id == activeId }),
-                       let tmuxState = tab.tmuxState,
-                       !tmuxState.windows.isEmpty {
-                        TmuxWindowBar(
-                            state: tmuxState,
-                            onSelectWindow: { index in
-                                let sessionName = tmuxState.sessionName
-                                Task {
-                                    try? await TmuxCommandRunner.runSilent(
-                                        args: ["select-window", "-t", "\(sessionName):\(index)"]
-                                    )
-                                }
-                            },
-                            onDetach: {
-                                let sessionName = tmuxState.sessionName
-                                Task {
-                                    try? await TmuxCommandRunner.runSilent(
-                                        args: ["detach-client", "-s", sessionName]
-                                    )
-                                    await MainActor.run {
-                                        if let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == activeId }) {
-                                            tabBarViewModel.tabs[idx].tmuxState = nil
-                                            tabBarViewModel.tmuxMonitor.stopIfIdle()
-                                        }
-                                    }
-                                }
-                            }
-                        )
-                        .padding(8)
-                        .transition(.opacity)
-                    }
-                }
+                .environment(\.tabBarViewModel, tabBarViewModel)
 
             // Status bar 在 shell 区域正下方，与 shell 区域对齐
             if showStatusBar {

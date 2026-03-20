@@ -8,8 +8,6 @@ struct TabItem: Identifiable {
     var titleLocked: Bool   // true = 用户手动设置，忽略 PTY 变化
     var isActive: Bool
     let surfaceId: UUID     // 对应 surfaces 字典的 key（非强引用）
-    var tmuxState: TmuxAttachState?  // nil = 普通 tab，非 nil = 已 attach tmux session
-
     init(title: String, surfaceId: UUID) {
         self.id = UUID()
         self.title = title
@@ -27,7 +25,10 @@ final class TabBarViewModel: ObservableObject {
     // @Published 确保 surfaces 变化触发 UI 更新（activeSurface 是计算属性）
     @Published private(set) var surfaces: [UUID: Ghostty.SurfaceView] = [:]
 
-    /// 追踪已 attach tmux session 的 tab 状态
+    /// Per-surface tmux attach 状态（key = SurfaceView.id）
+    @Published var tmuxStates: [UUID: TmuxAttachState] = [:]
+
+    /// 追踪已 attach tmux session 的 surface 状态
     lazy var tmuxMonitor: TmuxTabMonitor = TmuxTabMonitor(tabBarViewModel: self)
 
     /// 当前活跃的 SurfaceView
