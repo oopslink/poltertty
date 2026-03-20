@@ -12,15 +12,6 @@ struct TmuxPanelView: View {
                     .foregroundColor(.secondary)
                 Spacer()
                 Button {
-                    Task { await viewModel.newSession(name: "new") }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 11))
-                }
-                .buttonStyle(.plain)
-                .help("New Session")
-
-                Button {
                     viewModel.refresh()
                 } label: {
                     Image(systemName: "arrow.clockwise")
@@ -28,6 +19,15 @@ struct TmuxPanelView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Refresh")
+
+                Button {
+                    Task { await viewModel.newSession(name: "new") }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .help("New Session")
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
@@ -108,7 +108,7 @@ struct TmuxPanelView: View {
             if stderr.isEmpty {
                 Text("No tmux server running.\nRun `tmux` in a terminal to start one.")
             } else {
-                Text("No tmux server running.")
+                Text("No tmux server running.\n\(stderr)")
             }
         case .timeout:
             Text("tmux timed out.\nRetrying automatically...")
