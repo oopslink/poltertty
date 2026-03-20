@@ -1,0 +1,68 @@
+// macos/Sources/Features/Tmux/TmuxParser.swift
+import Foundation
+
+enum TmuxParser {
+
+    /// 解析 `tmux list-sessions -F "#{session_name}|#{session_attached}"` 输出
+    static func parseSessions(_ output: String) -> [TmuxSession] {
+        output.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .compactMap { line -> TmuxSession? in
+                // 用 lastIndex(of:) 从末尾分割，session name 可能含 "|"
+                guard let sep = line.lastIndex(of: "|") else { return nil }
+                let name = String(line[line.startIndex..<sep])
+                let attachedStr = String(line[line.index(after: sep)...])
+                guard !name.isEmpty else { return nil }
+                return TmuxSession(id: name, windows: [], attached: attachedStr == "1")
+            }
+    }
+
+    /// 解析 `tmux list-windows -t <s> -F "#{window_index}|#{window_name}|#{window_active}"` 输出
+    static func parseWindows(_ output: String, sessionName: String) -> [TmuxWindow] {
+        output.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .compactMap { line -> TmuxWindow? in
+                // 用 firstIndex/lastIndex 分割，window name 可能含 "|"
+                guard let firstSep = line.firstIndex(of: "|"),
+                      let lastSep = line.lastIndex(of: "|"),
+                      firstSep != lastSep else { return nil }
+                let indexStr = String(line[line.startIndex..<firstSep])
+                let name = String(line[line.index(after: firstSep)..<lastSep])
+                let activeStr = String(line[line.index(after: lastSep)...])
+                guard let index = Int(indexStr) else { return nil }
+                return TmuxWindow(
+                    id: "\(sessionName):\(index)",
+                    sessionName: sessionName,
+                    windowIndex: index,
+                    name: name,
+                    panes: [],
+                    active: activeStr == "1"
+                )
+            }
+    }
+
+    /// 解析 `tmux list-panes -t <s> -F "#{pane_id}|#{pane_title}|#{pane_active}|#{pane_width}|#{pane_height}"` 输出
+    static func parsePanes(_ output: String) -> [TmuxPane] {
+        output.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .compactMap { line -> TmuxPane? in
+                let parts = line.components(separatedBy: "|")
+                guard parts.count >= 5 else { return nil }
+                // pane_id 格式是 "%N"，去掉 % 前缀
+                let rawId = parts[0].hasPrefix("%") ? String(parts[0].dropFirst()) : parts[0]
+                guard let paneId = Int(rawId),
+                      let height = Int(parts[parts.count - 1]),
+                      let width = Int(parts[parts.count - 2]) else { return nil }
+                let activeStr = parts[parts.count - 3]
+                // title 是中间字段，可能含 "|"
+                let title = parts[1..<(parts.count - 3)].joined(separator: "|")
+                return TmuxPane(
+                    id: paneId,
+                    title: title,
+                    active: activeStr == "1",
+                    width: width,
+                    height: height
+                )
+            }
+    }
+}
