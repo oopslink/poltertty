@@ -38,8 +38,7 @@
 | `macos/Sources/Features/Workspace/TabBar/TabBarViewModel.swift` | `TabItem` 增加 `tmuxState` 属性 |
 | `macos/Sources/Features/Terminal/TerminalController.swift` | `addNewTabWithTmux()` + 关闭拦截 |
 | `macos/Sources/Features/Workspace/PolterttyRootView.swift` | overlay 集成 + sheet + 通知 |
-| `macos/Sources/App/macOS/AppDelegate.swift` | tmux 菜单新增 "New Tab with tmux Session..." |
-| `macos/Sources/App/macOS/MainMenu.xib` | File 菜单新增 menuItem（可选，也可纯代码） |
+| `macos/Sources/App/macOS/AppDelegate.swift` | tmux 顶级菜单新增 "New Tab with tmux Session..."（与 Toggle tmux Panel 同级，比放在 File 菜单更符合功能分组） |
 
 ---
 
@@ -117,16 +116,11 @@ final class TmuxTabMonitor {
         self.tabBarViewModel = tabBarViewModel
     }
 
-    deinit {
-        timer?.invalidate()
-    }
-
     /// 启动轮询（幂等，重复调用不会创建多个 timer）
     func start() {
         guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor in self.poll() }
+            Task { @MainActor [weak self] in self?.poll() }
         }
         // 立即执行一次
         poll()
@@ -238,9 +232,9 @@ import Foundation
 
 @MainActor
 final class TmuxSessionPickerViewModel: ObservableObject {
-    enum Mode: String, CaseIterable {
-        case attachExisting = "attach"
-        case createNew = "create"
+    enum Mode {
+        case attachExisting
+        case createNew
     }
 
     @Published var mode: Mode = .attachExisting
@@ -594,28 +588,57 @@ private func showTmuxCloseConfirmation(tabId: UUID, sessionName: String, onClose
 }
 ```
 
-- [ ] **Step 4: 修改 closeTab IBAction 添加 tmux 拦截**
+- [ ] **Step 4: 添加统一的 tmux tab 检查辅助方法**
 
-找到 `@IBAction func closeTab(_ sender: Any?)` 方法（约 line 1628），在 `guard surfaceTree.contains(where: { $0.needsConfirmQuit })` 之前添加 tmux 检查：
+在 `showTmuxCloseConfirmation` 之后添加：
 
 ```swift
-// 检查当前 active tab 是否是 tmux tab
-if let activeId = tabBarViewModel.activeTabId,
-   let tab = tabBarViewModel.tabs.first(where: { $0.id == activeId }),
-   let state = tab.tmuxState {
-    showTmuxCloseConfirmation(tabId: activeId, sessionName: state.sessionName) {
-        if self.tabBarViewModel.tabs.count > 1 {
-            self.tabBarViewModel.closeTab(activeId)
-            self.tabBarViewModel.tmuxMonitor.stopIfIdle()
-        } else {
-            self.closeWindowImmediately()
+/// 检查是否有任何 tab 包含 tmux session（用于 window 级关闭拦截）
+private func anyTmuxTab() -> (tabId: UUID, sessionName: String)? {
+    for tab in tabBarViewModel.tabs {
+        if let state = tab.tmuxState {
+            return (tab.id, state.sessionName)
         }
     }
+    return nil
+}
+```
+
+- [ ] **Step 5: 修改 closeSurface 添加 tmux 拦截**
+
+找到 `override func closeSurface` 方法（约 line 819），在方法开头 `if surfaceTree.root != node` 之前添加：
+
+```swift
+// 如果关闭的是 root（即整个 tab），检查 tmux 状态
+if surfaceTree.root == node,
+   let activeId = tabBarViewModel.activeTabId,
+   let tab = tabBarViewModel.tabs.first(where: { $0.id == activeId }),
+   let state = tab.tmuxState {
+    closePolterttyTab(activeId)  // 复用已有的 tmux 拦截逻辑
     return
 }
 ```
 
-- [ ] **Step 5: 构建验证**
+- [ ] **Step 6: 修改 windowShouldClose 添加 tmux 拦截**
+
+找到 `override func windowShouldClose(_ sender: NSWindow) -> Bool` 方法（约 line 1484），在 `tabGroupCloseCoordinator.windowShouldClose` 调用之前添加：
+
+```swift
+// 检查是否有 tmux tab 需要确认
+if let tmux = anyTmuxTab() {
+    showTmuxCloseConfirmation(tabId: tmux.tabId, sessionName: tmux.sessionName) {
+        // detach/kill 完成后，清除 tmuxState 再走正常关闭流程
+        if let idx = self.tabBarViewModel.tabs.firstIndex(where: { $0.id == tmux.tabId }) {
+            self.tabBarViewModel.tabs[idx].tmuxState = nil
+        }
+        // 重新触发关闭（此时不再有 tmux tab）
+        self.window?.performClose(nil)
+    }
+    return false
+}
+```
+
+- [ ] **Step 7: 构建验证**
 
 ```bash
 cd /Users/oopslink/works/codes/oopslink/poltertty && make dev 2>&1 | tail -5
@@ -623,11 +646,11 @@ cd /Users/oopslink/works/codes/oopslink/poltertty && make dev 2>&1 | tail -5
 
 预期：`BUILD SUCCEEDED`
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add macos/Sources/Features/Terminal/TerminalController.swift
-git commit -m "feat(tmux): add addNewTabWithTmux and tmux tab close confirmation"
+git commit -m "feat(tmux): add addNewTabWithTmux and tmux tab close confirmation on all paths"
 ```
 
 ---
