@@ -60,8 +60,10 @@ enum TmuxCommandRunner {
                     if lower.contains("no server running") || lower.contains("no sessions") {
                         continuation.resume(throwing: TmuxError.serverNotRunning(stderr: errStr))
                     } else {
-                        // 其他非零退出：当作 notInstalled（找不到 tmux）或 serverNotRunning
-                        continuation.resume(throwing: TmuxError.notInstalled)
+                        // Non-zero exit with unrecognized stderr — treat as serverNotRunning
+                        // with the actual stderr for diagnostics. This covers cases like
+                        // kill-pane on an already-gone target.
+                        continuation.resume(throwing: TmuxError.serverNotRunning(stderr: errStr))
                     }
                 }
             }

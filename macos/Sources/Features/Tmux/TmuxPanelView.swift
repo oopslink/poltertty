@@ -21,7 +21,10 @@ struct TmuxPanelView: View {
                 .help("Refresh")
 
                 Button {
-                    Task { await viewModel.newSession(name: "new") }
+                    Task {
+                        let name = "session-\(Int(Date().timeIntervalSince1970))"
+                        await viewModel.newSession(name: name)
+                    }
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 11))
@@ -64,7 +67,10 @@ struct TmuxPanelView: View {
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                     Button("New Session") {
-                        Task { await viewModel.newSession(name: "main") }
+                        Task {
+                            let name = "session-\(Int(Date().timeIntervalSince1970))"
+                            await viewModel.newSession(name: name)
+                        }
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
