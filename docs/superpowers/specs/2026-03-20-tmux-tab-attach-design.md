@@ -13,6 +13,10 @@ struct TmuxAttachState: Equatable {
     var activeWindowName: String
     var windows: [WindowInfo]
 
+    /// 轻量 window 信息，仅用于 overlay 显示。
+    /// 不复用 TmuxWindow 是因为后者包含 panes 数组和 sessionName 冗余字段，
+    /// 且 TmuxWindow 的 id 是 "sessionName:windowIndex" 复合格式，
+    /// 而 WindowInfo 只需 index 作为 id。
     struct WindowInfo: Equatable, Identifiable {
         let index: Int
         let name: String
@@ -24,7 +28,7 @@ struct TmuxAttachState: Equatable {
 
 ### TabItem 扩展（TabBarViewModel.swift）
 
-`TabBarViewModel.TabItem` 新增属性：
+`TabItem`（顶层结构体，定义在 TabBarViewModel.swift 中）新增属性：
 
 ```swift
 var tmuxState: TmuxAttachState?  // nil = 普通 tab
@@ -36,7 +40,7 @@ var tmuxState: TmuxAttachState?  // nil = 普通 tab
 
 - **位置**：MainMenu.xib 的 File 菜单中，`New Tab` 之后
 - **标题**：`New Tab with tmux Session...`
-- **快捷键**：`Cmd+Shift+T`
+- **快捷键**：`Cmd+Option+T`（`Cmd+Shift+T` 已被 New Temporary Workspace 占用）
 - **AppDelegate outlet**：`menuNewTabTmux`
 - **Action**：`newTabWithTmuxSession(_:)`
 
@@ -55,7 +59,7 @@ SwiftUI Sheet 对话框，包含：
 
 - **RadioButton 切换**：Attach to existing / Create new
 - **Existing session list**：`List` 单选，显示 session name + attached 状态绿点
-  - 数据来源：`TmuxCommandRunner.run(args: ["list-sessions", "-F", "..."])`
+  - 数据来源：复用 `TmuxCommandRunner` + `TmuxParser.parseSessions()`（与 TmuxPanelViewModel 使用相同的解析逻辑，避免重复）
 - **New session**：TextField 输入 session name（可空，tmux 自动命名）
 - **按钮**：Cancel / Open
 
@@ -67,11 +71,12 @@ final class TmuxSessionPickerViewModel: ObservableObject {
     enum Mode { case attachExisting, createNew }
 
     @Published var mode: Mode = .attachExisting
-    @Published var sessions: [TmuxSession] = []
+    @Published var sessions: [TmuxSession] = []  // 复用现有 TmuxSession 模型
     @Published var selectedSession: String? = nil
     @Published var newSessionName: String = ""
     @Published var isLoading: Bool = true
 
+    /// 使用 TmuxCommandRunner + TmuxParser（与 TmuxPanelViewModel 共享解析逻辑）
     func loadSessions() async { ... }
     func canOpen() -> Bool { ... }
 }
@@ -79,11 +84,14 @@ final class TmuxSessionPickerViewModel: ObservableObject {
 
 ### Open 执行逻辑
 
-1. 如果是新建：执行 `tmux new-session -d -s <name>`（name 为空时省略 `-s`）
+1. 如果是新建：执行 `tmux new-session -d -s <name>`（name 为空时省略 `-s`，用 `TmuxCommandRunner.runSilent`）
 2. 调用 `TerminalController.addNewTabWithTmux(sessionName:)`
    - 调用 `addNewTab()` 创建新 tab
-   - 设置新 tab 的 `tmuxState`
-   - 向新 tab 的 surface 注入 `tmux attach-session -t <sessionName>\n`
+   - 通过 `tabBarViewModel.activeTabId` 获取新创建 tab 的引用
+   - 设置新 tab 的 `tmuxState`（初始值，windows 列表由 TmuxTabMonitor 首次轮询填充）
+   - 使用 `Ghostty.Shell.escape(sessionName)` 转义 session name
+   - 向新 tab 的 surface 注入 `tmux attach-session -t <escapedName>\n`
+   - 注意：新 tab 的 shell 可能尚未就绪，使用 `DispatchQueue.main.asyncAfter(deadline: .now() + 0.3)` 延迟注入
    - 启动 `TmuxTabMonitor` 追踪
 
 ## 3. TmuxWindowBar（Window 切换 Overlay）
@@ -111,16 +119,19 @@ final class TmuxSessionPickerViewModel: ObservableObject {
   - Active window：高亮背景（accent color，半透明）
   - Inactive window：普通背景（`Material.ultraThin`）
 - **最多显示 4 个**：超出显示 `···` 药丸，点击弹出完整 window 列表 Popover
+  - Popover 内容：垂直排列所有 window，格式同药丸标签，点击切换并关闭 Popover
+  - Popover preferredEdge: `.bottom`
 - **Detach 按钮**：`⏏` 图标，右侧
 - **透明度行为**：鼠标不在区域时 opacity 0.4，hover 时 opacity 1.0
+  - 动画：`.easeInOut(duration: 0.2)`
 - **尺寸**：标签高 22pt，字体 system 10pt
 
 ### 交互
 
-- **点击 window 标签**：注入 `tmux select-window -t <session>:<index>\n` 切换 window
+- **点击 window 标签**：通过 `TmuxCommandRunner.runSilent(args: ["select-window", "-t", "\(session):\(index)"])` 切换 window（使用子进程而非文本注入，避免在 vim 等全屏应用内失效）
 - **点击 `···`**：弹出 Popover 显示完整 window 列表
 - **点击 `⏏`**：detach 操作
-  - 注入 `tmux detach-client\n`
+  - 通过 `TmuxCommandRunner.runSilent(args: ["detach-client", "-s", sessionName])` 执行 detach（使用子进程，不依赖终端状态）
   - 清除当前 tab 的 `tmuxState`
   - Overlay 消失，tab 回到普通 shell
 
@@ -132,7 +143,14 @@ final class TmuxSessionPickerViewModel: ObservableObject {
 
 ### 拦截点
 
-`TerminalController.closePolterttyTab(_:)` 中，在关闭前检查目标 tab 的 `tmuxState`。
+所有可能关闭 tmux tab 的路径都需拦截：
+
+1. `closePolterttyTab(_:)` — 自定义 tab bar 的关闭按钮
+2. `closeTab(_:)` — IBAction / Cmd+W 快捷键
+3. `closeSurface(_:)` — surface tree 移除（root node 关闭时）
+4. `windowShouldClose(_:)` — 窗口关闭按钮（此时需检查所有 tab）
+
+实现方式：抽取统一的检查方法 `tmuxTabRequiresConfirmation(_ tabId: UUID) -> TmuxAttachState?`，在上述 4 个路径中调用。
 
 ### 对话框
 
@@ -141,8 +159,8 @@ final class TmuxSessionPickerViewModel: ObservableObject {
 - **标题**：`Tmux Session "<sessionName>"`
 - **内容**：`该 tab 已 attach 到 tmux session，你想要：`
 - **按钮**：
-  - `Detach`（默认）：注入 `tmux detach-client\n`，等待 100ms，关闭 tab
-  - `Kill Session`（destructive）：执行 `tmux kill-session -t <name>`，关闭 tab
+  - `Detach`（默认）：通过 `TmuxCommandRunner.runSilent(args: ["detach-client", "-s", sessionName])` detach，然后关闭 tab
+  - `Kill Session`（destructive）：通过 `TmuxCommandRunner.runSilent(args: ["kill-session", "-t", sessionName])` kill，然后关闭 tab
   - `取消`
 
 ### 实现
@@ -167,6 +185,15 @@ private func closeTmuxTab(_ tabId: UUID, sessionName: String) {
 - **启动条件**：存在任何 `tmuxState != nil` 的 tab
 - **停止条件**：所有 tmux tab 关闭或 detach
 - **查询命令**：对每个 tmux tab 执行 `tmux list-windows -t <session> -F "#{window_index}|#{window_name}|#{window_active}"`
+- **解析**：复用 `TmuxParser.parseWindows()`，然后映射为 `TmuxAttachState.WindowInfo`
+
+### 与 TmuxPanelViewModel 的关系
+
+两者独立轮询，互不干扰。原因：
+- TmuxPanelViewModel 轮询所有 session + window + pane 的完整树，数据量大
+- TmuxTabMonitor 仅轮询已 attach tab 对应 session 的 window 列表，查询轻量
+- TmuxPanelViewModel 将在 Phase 2 废弃，不值得为短期共存做合并
+- 两者同时活跃时，各自 2s 轮询对 tmux server 无压力
 
 ### 异常处理
 
@@ -213,14 +240,18 @@ macos/Sources/App/macOS/MainMenu.xib — File 菜单新增 menuItem
 
 ## 7. 通知定义
 
+在 `PolterttyRootView.swift` 的现有 `Notification.Name` 扩展中添加（与 `.toggleTmuxPanel` 等保持一致）：
+
 ```swift
-extension Notification.Name {
-    /// 显示 tmux session 选择器对话框
-    static let showTmuxSessionPicker = Notification.Name("poltertty.showTmuxSessionPicker")
-}
+static let showTmuxSessionPicker = Notification.Name("poltertty.showTmuxSessionPicker")
 ```
 
-## 8. 上游冲突风险
+## 8. 已知限制
+
+- **Undo 不支持**：tmux tab 的创建/关闭不支持 undo。这是合理的，因为 tmux session 独立于 Poltertty 生命周期，undo 语义不明确。
+- **初始 attach 使用文本注入**：新 tab 创建时通过注入 `tmux attach-session` 命令 attach，依赖 shell 已就绪（通过 300ms 延迟缓解）。这是 Phase 1 的已知限制，Phase 3 的 control mode 将完全替代。
+
+## 9. 上游冲突风险
 
 | 文件 | 风险 | 说明 |
 |------|------|------|
@@ -232,7 +263,7 @@ extension Notification.Name {
 | `AppDelegate.swift` | 低 | 新增 outlet + action |
 | `MainMenu.xib` | 低 | 新增 menuItem |
 
-## 9. 后续计划
+## 10. 后续计划
 
 - **Phase 2**：逐步废弃 tmux 侧边栏面板（TmuxPanelView 及相关文件）
 - **Phase 3**：tmux control mode (-CC) 深度集成（已有独立设计文档）
