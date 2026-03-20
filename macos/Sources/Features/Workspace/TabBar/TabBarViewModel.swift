@@ -8,6 +8,7 @@ struct TabItem: Identifiable {
     var titleLocked: Bool   // true = 用户手动设置，忽略 PTY 变化
     var isActive: Bool
     let surfaceId: UUID     // 对应 surfaces 字典的 key（非强引用）
+    var tmuxState: TmuxAttachState?  // nil = 普通 tab，非 nil = 已 attach tmux session
 
     init(title: String, surfaceId: UUID) {
         self.id = UUID()
