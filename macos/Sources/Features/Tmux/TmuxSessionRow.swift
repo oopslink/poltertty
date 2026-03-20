@@ -25,6 +25,7 @@ struct TmuxSessionRow: View {
                     Circle()
                         .fill(Color.green)
                         .frame(width: 6, height: 6)
+                        .accessibilityLabel("Attached")
                 }
                 Spacer()
             }
@@ -32,9 +33,6 @@ struct TmuxSessionRow: View {
         .contextMenu {
             Button("Attach") {
                 Task { await viewModel.attachSession(session.id) }
-            }
-            Button("New Window") {
-                Task { await viewModel.newWindow(sessionName: session.id) }
             }
             Divider()
             Button("Rename...") {

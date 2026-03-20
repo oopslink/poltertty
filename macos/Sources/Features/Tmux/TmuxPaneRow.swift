@@ -21,6 +21,7 @@ struct TmuxPaneRow: View {
             Spacer()
         }
         .padding(.leading, 8)
+        .contentShape(Rectangle())
         .contextMenu {
             Button("Select Pane") {
                 Task { await viewModel.selectPane(paneId: pane.id) }
