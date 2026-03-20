@@ -162,6 +162,22 @@ private struct TerminalSplitLeaf: View {
                                 )
                             }
                         },
+                        onCloseWindow: { index in
+                            let sessionName = tmuxState.sessionName
+                            Task {
+                                try? await TmuxCommandRunner.runSilent(
+                                    args: ["kill-window", "-t", "\(sessionName):\(index)"]
+                                )
+                            }
+                        },
+                        onNewWindow: {
+                            let sessionName = tmuxState.sessionName
+                            Task {
+                                try? await TmuxCommandRunner.runSilent(
+                                    args: ["new-window", "-t", sessionName]
+                                )
+                            }
+                        },
                         onDetach: {
                             let sessionName = tmuxState.sessionName
                             Task {

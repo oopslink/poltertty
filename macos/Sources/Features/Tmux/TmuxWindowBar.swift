@@ -5,10 +5,13 @@ import SwiftUI
 struct TmuxWindowBar: View {
     let state: TmuxAttachState
     let onSelectWindow: (Int) -> Void
+    let onCloseWindow: (Int) -> Void
+    let onNewWindow: () -> Void
     let onDetach: () -> Void
 
     @State private var isHovered = false
     @State private var showOverflowPopover = false
+    @State private var windowToClose: TmuxAttachState.WindowInfo? = nil
 
     private let maxVisible = 4
 
@@ -22,6 +25,7 @@ struct TmuxWindowBar: View {
                 overflowPill
             }
 
+            newWindowButton
             detachButton
         }
         .padding(.horizontal, 8)
@@ -30,6 +34,25 @@ struct TmuxWindowBar: View {
         .opacity(isHovered ? 1.0 : 0.4)
         .animation(.easeInOut(duration: 0.2), value: isHovered)
         .onHover { isHovered = $0 }
+        .alert(
+            "Close tmux Window",
+            isPresented: Binding(
+                get: { windowToClose != nil },
+                set: { if !$0 { windowToClose = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) { windowToClose = nil }
+            Button("Close", role: .destructive) {
+                if let w = windowToClose {
+                    onCloseWindow(w.index)
+                    windowToClose = nil
+                }
+            }
+        } message: {
+            if let w = windowToClose {
+                Text("确定关闭 window \(w.index):\(w.name)？")
+            }
+        }
     }
 
     private var visibleWindows: [TmuxAttachState.WindowInfo] {
@@ -53,6 +76,13 @@ struct TmuxWindowBar: View {
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("Switch to Window") { onSelectWindow(window.index) }
+            Divider()
+            Button("Close Window", role: .destructive) {
+                windowToClose = window
+            }
+        }
     }
 
     private var overflowPill: some View {
@@ -89,11 +119,30 @@ struct TmuxWindowBar: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Close Window", role: .destructive) {
+                            showOverflowPopover = false
+                            windowToClose = window
+                        }
+                    }
                 }
             }
             .padding(4)
             .frame(minWidth: 140)
         }
+    }
+
+    private var newWindowButton: some View {
+        Button {
+            onNewWindow()
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 9, weight: .semibold))
+                .padding(4)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("New tmux window")
     }
 
     private var detachButton: some View {
