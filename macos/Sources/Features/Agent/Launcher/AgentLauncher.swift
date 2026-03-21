@@ -62,7 +62,8 @@ final class AgentLauncher {
         location: AgentLaunchLocation,
         permissionMode: ClaudePermissionMode,
         workspaceId: UUID,
-        cwd: String
+        cwd: String,
+        surfaceOverride: Ghostty.SurfaceView? = nil
     ) {
         guard let tc = terminalController else { return }
 
@@ -70,7 +71,7 @@ final class AgentLauncher {
         let surfaceView: Ghostty.SurfaceView?
         switch location {
         case .currentPane:
-            surfaceView = tc.focusedSurface
+            surfaceView = surfaceOverride ?? tc.focusedSurface
 
         case .newTab:
             tc.addNewTab()

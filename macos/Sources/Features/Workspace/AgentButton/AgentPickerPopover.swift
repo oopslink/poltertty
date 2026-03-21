@@ -42,6 +42,7 @@ struct AgentPickerPopover: View {
             HStack {
                 Text("Permission")
                     .foregroundColor(.secondary)
+                    .fixedSize()
                 Spacer()
                 Picker("", selection: $permissionMode) {
                     ForEach(ClaudePermissionMode.allCases, id: \.self) { mode in
