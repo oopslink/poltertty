@@ -391,7 +391,7 @@ enum TerminalSplitDropZone: String, Equatable {
 
 // MARK: - ShowStatusBar Environment Key
 
-private struct ShowStatusBarKey: EnvironmentKey {
+struct ShowStatusBarKey: EnvironmentKey {
     static let defaultValue: Bool = false
 }
 
