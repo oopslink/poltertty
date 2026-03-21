@@ -115,7 +115,8 @@ private struct TerminalSplitLeafContainer: View {
                     BottomStatusBarView(
                         monitor: statusMonitor,
                         pwd: surfaceView.pwd ?? "",
-                        isFocused: isFocused
+                        isFocused: isFocused,
+                        surfaceId: surfaceView.id
                     )
                 }
             }

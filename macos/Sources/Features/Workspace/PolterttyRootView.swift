@@ -11,6 +11,7 @@ extension Notification.Name {
     static let fileBrowserOpenInTerminal = Notification.Name("poltertty.fileBrowserOpenInTerminal")
     static let toggleAgentMonitor = Notification.Name("poltertty.toggleAgentMonitor")
     static let launchAgentFromSidebar = Notification.Name("poltertty.launchAgentFromSidebar")
+    static let launchAgentFromStatusBar = Notification.Name("poltertty.launchAgentFromStatusBar")
     static let showTmuxSessionPicker = Notification.Name("poltertty.showTmuxSessionPicker")
     static let tmuxAttachNewTab = Notification.Name("poltertty.tmuxAttachNewTab")
     static let tmuxAttachInCurrentPane = Notification.Name("poltertty.tmuxAttachInCurrentPane")
