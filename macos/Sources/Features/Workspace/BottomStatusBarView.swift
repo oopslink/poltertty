@@ -37,6 +37,7 @@ struct BottomStatusBarView: View {
                         }
                     }
                 }
+                AgentButtonView(surfaceId: surfaceId)
             }
             .padding(.horizontal, 8)
             .frame(height: 22)
