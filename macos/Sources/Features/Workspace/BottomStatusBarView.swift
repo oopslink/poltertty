@@ -6,6 +6,7 @@ import AppKit
 struct BottomStatusBarView: View {
     @ObservedObject var monitor: GitStatusMonitor
     let pwd: String
+    let isFocused: Bool
 
     var body: some View {
         let status = monitor.status
@@ -41,6 +42,7 @@ struct BottomStatusBarView: View {
             .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
         }
         .font(.system(size: 11))
+        .opacity(isFocused ? 1.0 : 0.45)
     }
 
     private var abbreviatedPwd: String {

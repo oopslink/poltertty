@@ -61,7 +61,7 @@ private struct TerminalSplitSubtreeView: View {
     var body: some View {
         switch node {
         case .leaf(let leafView):
-            TerminalSplitLeaf(surfaceView: leafView, isSplit: !isRoot, action: action)
+            TerminalSplitLeafContainer(surfaceView: leafView, isSplit: !isRoot, action: action)
 
         case .split(let split):
             let splitViewDirection: SplitViewDirection = switch split.direction {
@@ -90,6 +90,38 @@ private struct TerminalSplitSubtreeView: View {
                 }
             )
         }
+    }
+}
+
+private struct TerminalSplitLeafContainer: View {
+    let surfaceView: Ghostty.SurfaceView
+    let isSplit: Bool
+    let action: (TerminalSplitOperation) -> Void
+
+    @StateObject private var statusMonitor = GitStatusMonitor(pwd: "")
+    @Environment(\.showStatusBar) private var showStatusBar
+    @FocusedValue(\.ghosttySurfaceView) private var focusedSurface
+
+    private var isFocused: Bool {
+        // focusedSurface 为 nil 时（窗口失焦），默认视为 focused，避免所有 pane 同时变半透明
+        guard let focused = focusedSurface else { return true }
+        return focused === surfaceView
+    }
+
+    var body: some View {
+        TerminalSplitLeaf(surfaceView: surfaceView, isSplit: isSplit, action: action)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if showStatusBar {
+                    BottomStatusBarView(
+                        monitor: statusMonitor,
+                        pwd: surfaceView.pwd ?? "",
+                        isFocused: isFocused
+                    )
+                }
+            }
+            .onReceive(surfaceView.$pwd.compactMap { $0 }.removeDuplicates()) { pwd in
+                statusMonitor.updatePwd(pwd)
+            }
     }
 }
 
@@ -354,5 +386,18 @@ enum TerminalSplitDropZone: String, Equatable {
                     .frame(width: geometry.size.width / 2)
             }
         }
+    }
+}
+
+// MARK: - ShowStatusBar Environment Key
+
+struct ShowStatusBarKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+extension EnvironmentValues {
+    var showStatusBar: Bool {
+        get { self[ShowStatusBarKey.self] }
+        set { self[ShowStatusBarKey.self] = newValue }
     }
 }
