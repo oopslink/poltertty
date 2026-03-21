@@ -196,7 +196,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 location: .currentPane,
                 permissionMode: mode,
                 workspaceId: self.workspaceId ?? UUID(),
-                cwd: cwd
+                cwd: cwd,
+                surfaceOverride: targetSurface
             )
         }
         center.addObserver(

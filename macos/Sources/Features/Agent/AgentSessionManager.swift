@@ -128,6 +128,7 @@ final class AgentSessionManager: ObservableObject {
                 if let cwd = cwd {
                     AgentService.shared.cleanupHooks(for: cwd)
                 }
+                remove(surfaceId: surfaceId)
             } else {
                 updateFromClaudeSession(sid) { $0.state = .done(exitCode: 0) }
             }
