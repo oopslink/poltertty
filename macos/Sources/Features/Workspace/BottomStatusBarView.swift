@@ -7,6 +7,7 @@ struct BottomStatusBarView: View {
     @ObservedObject var monitor: GitStatusMonitor
     let pwd: String
     let isFocused: Bool
+    let surfaceId: UUID
 
     var body: some View {
         let status = monitor.status
