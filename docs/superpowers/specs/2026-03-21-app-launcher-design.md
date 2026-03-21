@@ -56,7 +56,7 @@ macos/Sources/Features/App Launcher/
 - `symbols`：`keyEquivalent` 转义为符号字符串
 - `action`：`NSApp.sendAction(_:to:from:)`
 
-每次打开 launcher 时重新扫描，保证反映当前菜单状态。
+每次打开 launcher 时重新扫描，保证反映当前菜单状态。扫描必须在主线程（`@MainActor`）执行，在 `AppLauncherView.onAppear` 中触发，不在 `ShiftDoubleTapDetector` 回调里同步执行。
 
 **命令来源 2 — Poltertty 本地 actions**
 手动注册，对应现有 Notifications：
@@ -78,8 +78,8 @@ static func rank(_ query: String, in options: [CommandOption]) -> [CommandOption
 算法：
 1. query 为空 → 返回空数组
 2. 对每个 option 计算 `levenshteinDistance(query.lowercased(), option.title.lowercased())`
-3. contains 匹配优先（对距离加权降低）
-4. 按距离升序排列，过滤距离超过 `max(query.count, 3)` 的结果
+3. contains 匹配优先：若 `option.title.lowercased().contains(query.lowercased())` 为 true，则对该 option 的距离值减 3（最低为 0）作为排序用的有效距离
+4. 按有效距离升序排列，过滤有效距离超过 `max(query.count, 3)` 的结果
 5. 返回前 8 条
 
 Levenshtein 实现：标准 DP 矩阵，O(n×m)。
@@ -95,9 +95,18 @@ class ShiftDoubleTapDetector {
 }
 ```
 
-条件：两次 `keyCode == kVK_Shift`，modifierFlags 仅含 `.shift`，间隔 ≤ 350ms。
+**事件类型**：监听 `NSEvent.EventType.flagsChanged`（不是 `.keyDown`）。单独按下 Shift 键产生 `flagsChanged` 事件，不产生 `keyDown`。
 
-在 `AppDelegate` 启动时调用 `start()`。
+**触发条件**：
+- `flagsChanged` 事件且 `modifierFlags.contains(.shift)` 为 true（即 Shift 被按下的瞬间，而非松开）
+- `keyCode` 为 `kVK_Shift`（0x38，左 Shift）或 `kVK_RightShift`（0x3C，右 Shift）
+- 两次 Shift 间隔 ≤ 350ms
+- 两次触发之间没有其他按键事件介入（如有其他键按下则重置计时器）
+- 左右 Shift 混合触发视为有效（一次左 Shift + 一次右 Shift 也算双击）
+
+**已打开时的行为**：若 launcher 已处于显示状态，再次双击 Shift 则关闭（toggle 语义）。
+
+在 `AppDelegate` 启动时调用 `start()`，同时注册一个 `.keyDown` monitor 用于在两次 Shift 之间检测其他按键并重置计时器。
 
 ### AppLauncherView
 
@@ -119,7 +128,13 @@ ZStack (全屏覆盖)
 - `Return` — 执行并关闭
 - `Escape` / 失焦 — 关闭
 
+### CommandRow 复用策略
+
+`CommandPalette.swift` 中的 `CommandRow` 是 `private struct`，无法跨文件使用。策略：将 `CommandRow`、`CommandTable`、`ShortcutSymbolsView` 的访问控制从 `private` 改为 `internal`（即去掉 `private` 修饰符），使 `AppLauncherView` 可以直接复用这些组件。`CommandPaletteQuery` 同理。
+
 ### PolterttyRootView 集成
+
+`PolterttyRootView` 是 per-window 组件，每个窗口有独立实例。Launcher 应只在 key window 中显示，避免多窗口同时弹出。
 
 ```swift
 @State private var launcherVisible = false
@@ -129,11 +144,14 @@ if launcherVisible {
     AppLauncherView(isPresented: $launcherVisible)
 }
 
-// onReceive：
+// onReceive：只在当前窗口是 key window 时响应
 .onReceive(NotificationCenter.default.publisher(for: .toggleAppLauncher)) { _ in
+    guard view.window?.isKeyWindow == true else { return }
     launcherVisible.toggle()
 }
 ```
+
+由于 SwiftUI View 没有直接的 `window` 引用，可通过 `NSApp.keyWindow` 判断，或在 `TerminalController`（NSWindowController 层）拦截 Notification 并转发给当前 key window 的 root view。
 
 同时在 `Notification.Name` 扩展中添加 `.toggleAppLauncher`。
 
