@@ -31,8 +31,12 @@ struct AgentMonitorPanel: View {
                 Divider()
 
                 if viewModel.sessions.isEmpty && !viewModel.hasExternalSessions {
-                    VStack(spacing: 6) {
+                    VStack(spacing: 5) {
                         Spacer()
+                        Image(systemName: "circle.hexagongrid")
+                            .font(.system(size: 24, weight: .thin))
+                            .foregroundStyle(.quaternary)
+                            .padding(.bottom, 3)
                         Text("No active agents").font(.system(size: 11)).foregroundStyle(.secondary)
                         Text("⌘⇧A to launch").font(.system(size: 10)).foregroundStyle(.tertiary)
                         Spacer()
@@ -99,12 +103,20 @@ struct AgentMonitorPanel: View {
 
     private var externalSessionsSectionView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("外部会话 (\(viewModel.externalSessions.count))")
-                .font(.system(size: 8, weight: .semibold))
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+            HStack(spacing: 4) {
+                Text("外部会话")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text("\(viewModel.externalSessions.count)")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(Color(.separatorColor).opacity(0.5))
+                    .foregroundStyle(.secondary)
+                    .clipShape(Capsule())
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(viewModel.externalSessions) { session in
@@ -143,9 +155,9 @@ struct AgentMonitorPanel: View {
             Button(action: { viewModel.toggleHistory() }) {
                 HStack(spacing: 4) {
                     Image(systemName: viewModel.historyExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 8)).foregroundStyle(.tertiary)
+                        .font(.system(size: 8)).foregroundStyle(.secondary)
                     Text("HISTORY")
-                        .font(.system(size: 8, weight: .semibold)).foregroundStyle(.tertiary)
+                        .font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 10).padding(.vertical, 5)
             }

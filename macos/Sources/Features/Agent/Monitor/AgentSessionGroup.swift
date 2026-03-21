@@ -18,6 +18,7 @@ struct AgentSessionGroup: View {
                 }
             }
         }
+        .opacity(session.state.isActive ? 1.0 : 0.55)
         .onReceive(timer) { t in if session.state.isActive { tick = t } }
     }
 
@@ -27,30 +28,49 @@ struct AgentSessionGroup: View {
         let item = DrawerItem.sessionOverview(session)
         let isSelected = viewModel.selectedItems.contains(item)
         return HStack(spacing: 5) {
-            AgentStateDot(state: session.state)
+            if session.state.isActive {
+                AgentStateDot(state: session.state)
+            } else {
+                Circle().fill(Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
+            }
             Text(session.definition.name)
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(isSelected ? (Color(hex: "#90bfff") ?? .blue) : .primary)
+                .foregroundStyle(isSelected ? (Color(hex: "#90bfff") ?? .blue) : (session.state.isActive ? .primary : .secondary))
                 .lineLimit(1)
             Spacer()
             if activeCount > 0 {
-                Text("\(activeCount)↑")
-                    .font(.system(size: 8, weight: .medium))
-                    .padding(.horizontal, 4).padding(.vertical, 1)
-                    .background(Color(hex: "#1a2e1a") ?? Color(.separatorColor))
-                    .foregroundStyle(Color(hex: "#4caf50") ?? .green)
-                    .clipShape(Capsule())
+                HStack(spacing: 3) {
+                    Circle()
+                        .fill(Color(hex: "#4caf50") ?? .green)
+                        .frame(width: 5, height: 5)
+                    Text("\(activeCount)")
+                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Color(hex: "#4caf50") ?? .green)
+                }
+                .padding(.horizontal, 5).padding(.vertical, 1)
+                .background(Color(hex: "#1a2e1a") ?? Color(.separatorColor))
+                .clipShape(Capsule())
             } else {
-                Text("done")
-                    .font(.system(size: 8))
-                    .padding(.horizontal, 4).padding(.vertical, 1)
-                    .background(Color(.separatorColor).opacity(0.4))
-                    .foregroundStyle(.tertiary)
-                    .clipShape(Capsule())
+                HStack(spacing: 3) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 7, weight: .semibold))
+                    Text("done")
+                        .font(.system(size: 8))
+                }
+                .padding(.horizontal, 5).padding(.vertical, 1)
+                .background((Color(hex: "#1a2e1a") ?? Color(.separatorColor)).opacity(0.8))
+                .foregroundStyle((Color(hex: "#4caf50") ?? .green).opacity(0.7))
+                .clipShape(Capsule())
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
         .background(isSelected ? (Color(hex: "#1a2535") ?? Color.accentColor.opacity(0.2)) : Color.clear)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(Color.accentColor)
+                .frame(width: 2)
+                .opacity(isSelected ? 1.0 : 0.0)
+        }
         .contentShape(Rectangle())
         .onTapGesture { viewModel.select(item) }
     }

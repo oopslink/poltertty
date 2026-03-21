@@ -15,9 +15,12 @@ final class AgentMonitorViewModel: ObservableObject {
     @Published private(set) var externalSessions: [ExternalSessionRecord] = []
     private var externalDiscovery: ExternalSessionDiscovery?
 
-    /// drawer 宽度：统一视图 800，对比模式按面板数
+    /// drawer 宽度：统一视图按 subagent 数量动态调整，对比模式按面板数
     var drawerWidth: CGFloat {
-        if unifiedSession != nil { return 800 }
+        if let session = unifiedSession {
+            // 没有 subagent 时只需展示 overview，400pt 足够；有 subagent 才用双列 800pt
+            return session.subagents.isEmpty ? 400 : 800
+        }
         switch selectedItems.count {
         case 0:  return 0
         case 1:  return 400

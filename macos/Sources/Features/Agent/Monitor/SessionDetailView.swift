@@ -26,12 +26,17 @@ struct SessionDetailView: View {
         VStack(spacing: 0) {
             tabBar
             Divider()
-            HStack(spacing: 0) {
+            if session.subagents.isEmpty {
+                // 还没有 subagent，全宽显示 overview，避免右侧空白浪费
                 overviewColumn
-                    .frame(maxWidth: .infinity)
-                Divider()
-                detailColumn
-                    .frame(maxWidth: .infinity)
+            } else {
+                HStack(spacing: 0) {
+                    overviewColumn
+                        .frame(maxWidth: .infinity)
+                    Divider()
+                    detailColumn
+                        .frame(maxWidth: .infinity)
+                }
             }
         }
         .onAppear {
@@ -48,8 +53,8 @@ struct SessionDetailView: View {
             ForEach(Tab.allCases, id: \.self) { t in
                 Button(action: { tab = t }) {
                     Text(t.rawValue)
-                        .font(.system(size: 10))
-                        .padding(.horizontal, 12).padding(.vertical, 5)
+                        .font(.system(size: 10, weight: tab == t ? .medium : .regular))
+                        .padding(.horizontal, 12).padding(.vertical, 6)
                         .foregroundStyle(tab == t ? .primary : .secondary)
                         .overlay(alignment: .bottom) {
                             if tab == t {

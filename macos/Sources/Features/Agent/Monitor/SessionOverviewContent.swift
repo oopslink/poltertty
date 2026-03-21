@@ -52,10 +52,13 @@ struct SessionOverviewContent: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                statRow("总耗时", value: elapsedSinceStart)
-                statRow("Cost",   value: costLabel)
-                statRow("Tokens", value: tokensLabel)
-                statRow("Context", value: String(format: "%.0f%%", session.tokenUsage.contextUtilization * 100))
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 4) {
+                    statCell("总耗时", value: elapsedSinceStart)
+                    statCell("Cost", value: costLabel)
+                    statCell("Tokens", value: tokensLabel)
+                    statCell("Context", value: String(format: "%.0f%%", session.tokenUsage.contextUtilization * 100))
+                }
+                .padding(.bottom, 6)
                 contextBar
                     .padding(.bottom, 8)
                 Divider().padding(.vertical, 6)
@@ -100,17 +103,34 @@ struct SessionOverviewContent: View {
         .padding(.bottom, 3)
     }
 
+    private func statCell(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+            Text(value)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 5)
+        .padding(.horizontal, 7)
+        .background(Color(.separatorColor).opacity(0.25))
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+    }
+
     private var contextBar: some View {
         let u = CGFloat(session.tokenUsage.contextUtilization)
         let color: Color = u < 0.55 ? (Color(hex: "#4caf50") ?? .green) : u < 0.75 ? .yellow : .red
         return GeometryReader { geo in
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2).fill(Color(.separatorColor)).frame(height: 3)
+                RoundedRectangle(cornerRadius: 2).fill(Color(.separatorColor)).frame(height: 4)
                 RoundedRectangle(cornerRadius: 2).fill(color)
-                    .frame(width: geo.size.width * u, height: 3)
+                    .frame(width: geo.size.width * u, height: 4)
             }
         }
-        .frame(height: 3)
+        .frame(height: 4)
     }
 
     private func overviewRow(_ sub: SubagentInfo) -> some View {
@@ -197,10 +217,10 @@ struct SessionOverviewContent: View {
             Button(action: { withAnimation(.easeInOut(duration: 0.2)) { subagentsExpanded.toggle() } }) {
                 HStack(spacing: 4) {
                     Image(systemName: subagentsExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 8)).foregroundStyle(.tertiary)
+                        .font(.system(size: 8)).foregroundStyle(.secondary)
                     Text("SUBAGENTS")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                 }
             }
             .buttonStyle(.plain)
@@ -225,10 +245,10 @@ struct SessionOverviewContent: View {
             Button(action: { withAnimation(.easeInOut(duration: 0.2)) { activityExpanded.toggle() } }) {
                 HStack(spacing: 4) {
                     Image(systemName: activityExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 8)).foregroundStyle(.tertiary)
+                        .font(.system(size: 8)).foregroundStyle(.secondary)
                     Text("ACTIVITY")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                 }
             }
             .buttonStyle(.plain)
@@ -245,7 +265,7 @@ struct SessionOverviewContent: View {
     private func eventLogSection(_ events: [RecentEventEntry], total: Int) -> some View {
         let fmt = Self.eventTimeFmt
         return VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(events.enumerated()), id: \.offset) { _, ev in
+            ForEach(Array(events.enumerated()), id: \.offset) { idx, ev in
                 HStack(spacing: 4) {
                     Text(fmt.string(from: ev.time))
                         .font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
@@ -259,12 +279,19 @@ struct SessionOverviewContent: View {
                         .lineLimit(1)
                     Spacer()
                     if ev.isDone {
-                        Text("✓").font(.system(size: 9)).foregroundStyle(Color(hex: "#4caf50") ?? .green)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(Color(hex: "#4caf50") ?? .green)
                     } else {
-                        Text("⏳").font(.system(size: 9)).foregroundStyle(.orange)
+                        Circle()
+                            .fill(Color.orange.opacity(0.7))
+                            .frame(width: 6, height: 6)
                     }
                 }
-                .padding(.vertical, 1)
+                .padding(.vertical, 2)
+                .padding(.horizontal, 4)
+                .background(idx % 2 == 0 ? Color.clear : Color(.separatorColor).opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 3))
             }
             if total > 50 {
                 Text("… and \(total - 50) more")
@@ -281,10 +308,10 @@ struct SessionOverviewContent: View {
             Button(action: { withAnimation(.easeInOut(duration: 0.2)) { graphExpanded.toggle() } }) {
                 HStack(spacing: 4) {
                     Image(systemName: graphExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 8)).foregroundStyle(.tertiary)
+                        .font(.system(size: 8)).foregroundStyle(.secondary)
                     Text("AGENT GRAPH")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                 }
             }
             .buttonStyle(.plain)

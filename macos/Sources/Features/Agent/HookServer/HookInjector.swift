@@ -55,21 +55,27 @@ final class HookInjector {
 
     /// 判断一个 hook 条目是否是我们注入的
     private static func isOurHook(_ item: [String: Any]) -> Bool {
-        // 新格式：URL 包含 src=poltertty
-        if let url = item["url"] as? String, url.contains(markerQuery) { return true }
-        // 旧格式：_poltertty 字段
-        if (item["_poltertty"] as? Bool) == true { return true }
-        // 旧格式：URL 匹配 localhost:PORT/hook（无 query）
-        if let url = item["url"] as? String, isLocalhostHook(url) { return true }
-        // 旧嵌套 wrapper 格式
+        // 当前格式：{hooks: [{url, type}]}，递归检查内层
         if let inner = item["hooks"] as? [[String: Any]] {
             return inner.contains { isOurHook($0) }
         }
+        // 各代旧格式：直接有 url 字段
+        if let url = item["url"] as? String {
+            if url.contains(markerQuery) { return true }  // 带 src=poltertty query 的旧格式
+            if isPolterttyHookUrl(url) { return true }     // 无 query 的最早期旧格式
+        }
+        // 最早期旧格式：_poltertty 字段标记
+        if (item["_poltertty"] as? Bool) == true { return true }
         return false
     }
 
-    private static func isLocalhostHook(_ url: String) -> Bool {
-        url.hasPrefix("http://localhost:") && url.contains("/hook")
+    /// 精确匹配 poltertty hook URL（路径必须是 /hook，防止误删用户的 localhost hook）
+    private static func isPolterttyHookUrl(_ url: String) -> Bool {
+        guard url.hasPrefix("http://localhost:") else { return false }
+        // 解析路径部分，必须精确等于 /hook（不含其他路径段）
+        guard let components = URLComponents(string: url),
+              components.path == "/hook" else { return false }
+        return true
     }
 
     private static func settingsPath(cwd: String) -> String {

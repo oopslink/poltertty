@@ -77,10 +77,12 @@ static func rank(_ query: String, in options: [CommandOption]) -> [CommandOption
 
 算法：
 1. query 为空 → 返回空数组
-2. 对每个 option 计算 `levenshteinDistance(query.lowercased(), option.title.lowercased())`
-3. contains 匹配优先：若 `option.title.lowercased().contains(query.lowercased())` 为 true，则对该 option 的距离值减 3（最低为 0）作为排序用的有效距离
+2. 对每个 option 同时计算 `title` 和 `subtitle` 的编辑距离，取较小值（`subtitle` 用于支持英文搜索中文标题的场景，如输入 "sidebar" 匹配 subtitle 为 "Workspace Sidebar" 的条目）
+3. contains 匹配优先：若 `title` 或 `subtitle` 包含 query（lowercased），则距离值减 3（最低为 0）作为排序用的有效距离
 4. 按有效距离升序排列，过滤有效距离超过 `max(query.count, 3)` 的结果
 5. 返回前 8 条
+
+**注：** subtitle 为 nil 时跳过，仅对 title 计算。
 
 Levenshtein 实现：标准 DP 矩阵，O(n×m)。
 
@@ -104,7 +106,7 @@ class ShiftDoubleTapDetector {
 
 **计时器重置条件**（以下任一情况发生时重置 `lastShiftTime`）：
 - 收到 `.keyDown` 事件（有其他普通键被按下）
-- 收到 `flagsChanged` 事件，但 `keyCode` 不是 Shift（说明 Cmd、Option、Ctrl 等修饰符发生变化）
+- 收到 `flagsChanged` 事件，但 `keyCode` 不是 Shift（说明 Cmd、Option、Ctrl、Capslock 等修饰符发生变化；Capslock 也产生 `flagsChanged` 事件，keyCode 非 Shift，同样重置计时器，这是预期行为）
 
 **已打开时的行为**：若 launcher 已处于显示状态，再次双击 Shift 则关闭（toggle 语义）。
 
@@ -140,7 +142,15 @@ ZStack (全屏覆盖)
 
 `PolterttyRootView` 是 per-window 组件，每个窗口有独立实例。Launcher 应只在 key window 中显示，避免多窗口同时弹出。
 
+**多窗口过滤方案：**
+1. `ShiftDoubleTapDetector` post 通知时将 `NSApp.keyWindow` 作为 `object` 携带
+2. `PolterttyRootView` 通过 `windowProvider: () -> NSWindow?` 闭包获取宿主窗口引用（由 `TerminalController` 在初始化时注入，传 `{ [weak self] in self?.window }`）
+3. 接收通知时比对 `notification.object as? NSWindow == windowProvider()`，不匹配则忽略
+
 ```swift
+// PolterttyRootView 新增 init 参数：
+let windowProvider: () -> NSWindow?
+
 @State private var launcherVisible = false
 
 // ZStack 内添加：
@@ -148,16 +158,19 @@ if launcherVisible {
     AppLauncherView(isPresented: $launcherVisible)
 }
 
-// onReceive：只在当前窗口是 key window 时响应
-.onReceive(NotificationCenter.default.publisher(for: .toggleAppLauncher)) { _ in
-    guard NSApp.keyWindow != nil else { return }
+// onReceive：只在目标窗口匹配时响应
+.onReceive(NotificationCenter.default.publisher(for: .toggleAppLauncher)) { notification in
+    guard notification.object as? NSWindow == windowProvider() else { return }
     launcherVisible.toggle()
 }
 ```
 
-注意：SwiftUI View 没有直接的 `window` 引用，用 `NSApp.keyWindow != nil` 做粗略判断。更精确的方案是在 `TerminalController`（NSWindowController 层）检查 `self.window?.isKeyWindow` 后再 post notification，使 notification 只被 key window 处理。
+`TerminalController`（`NSWindowController`）在创建 `PolterttyRootView` 时传入：
+```swift
+windowProvider: { [weak self] in self?.window }
+```
 
-同时在 `Notification.Name` 扩展中添加 `.toggleAppLauncher`。
+`.toggleAppLauncher` 通知名定义在 `AppLauncherView.swift` 的 `Notification.Name` 扩展中，`ShiftDoubleTapDetector` 和 `PolterttyRootView` 均引用该定义。
 
 ---
 
