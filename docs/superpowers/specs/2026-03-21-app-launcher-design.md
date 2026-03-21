@@ -98,15 +98,17 @@ class ShiftDoubleTapDetector {
 **事件类型**：监听 `NSEvent.EventType.flagsChanged`（不是 `.keyDown`）。单独按下 Shift 键产生 `flagsChanged` 事件，不产生 `keyDown`。
 
 **触发条件**：
-- `flagsChanged` 事件且 `modifierFlags.contains(.shift)` 为 true（即 Shift 被按下的瞬间，而非松开）
-- `keyCode` 为 `kVK_Shift`（0x38，左 Shift）或 `kVK_RightShift`（0x3C，右 Shift）
-- 两次 Shift 间隔 ≤ 350ms
-- 两次触发之间没有其他按键事件介入（如有其他键按下则重置计时器）
+- `flagsChanged` 事件，`keyCode` 为 `kVK_Shift`（0x38，左 Shift）或 `kVK_RightShift`（0x3C，右 Shift），且 `modifierFlags.contains(.shift)` 为 true（按下瞬间，松开时该值为 false，松开事件忽略）
+- 两次 Shift 按下（满足上述条件）间隔 ≤ 350ms
 - 左右 Shift 混合触发视为有效（一次左 Shift + 一次右 Shift 也算双击）
+
+**计时器重置条件**（以下任一情况发生时重置 `lastShiftTime`）：
+- 收到 `.keyDown` 事件（有其他普通键被按下）
+- 收到 `flagsChanged` 事件，但 `keyCode` 不是 Shift（说明 Cmd、Option、Ctrl 等修饰符发生变化）
 
 **已打开时的行为**：若 launcher 已处于显示状态，再次双击 Shift 则关闭（toggle 语义）。
 
-在 `AppDelegate` 启动时调用 `start()`，同时注册一个 `.keyDown` monitor 用于在两次 Shift 之间检测其他按键并重置计时器。
+在 `AppDelegate` 启动时调用 `start()`，同时注册 `.keyDown` 和 `.flagsChanged` 两个 local monitor 用于计时器重置检测。
 
 ### AppLauncherView
 
@@ -130,7 +132,9 @@ ZStack (全屏覆盖)
 
 ### CommandRow 复用策略
 
-`CommandPalette.swift` 中的 `CommandRow` 是 `private struct`，无法跨文件使用。策略：将 `CommandRow`、`CommandTable`、`ShortcutSymbolsView` 的访问控制从 `private` 改为 `internal`（即去掉 `private` 修饰符），使 `AppLauncherView` 可以直接复用这些组件。`CommandPaletteQuery` 同理。
+`CommandPalette.swift` 中的 `CommandRow` 是 `private struct`，无法跨文件使用。策略：将 `CommandRow`、`CommandTable`、`ShortcutSymbolsView` 的访问控制从 `private` 改为 `internal`（去掉 `private`），使 `AppLauncherView` 可以直接复用这三个纯展示组件。
+
+`CommandPaletteQuery` **不复用**：其初始化器接受 `FocusState<Bool>` 参数，跨 view 传递会导致焦点状态交叉污染。`AppLauncherView` 的输入框部分在内部独立实现（与 `CommandPaletteQuery` 逻辑相似但各自管理自己的 `@FocusState`）。
 
 ### PolterttyRootView 集成
 
@@ -146,12 +150,12 @@ if launcherVisible {
 
 // onReceive：只在当前窗口是 key window 时响应
 .onReceive(NotificationCenter.default.publisher(for: .toggleAppLauncher)) { _ in
-    guard view.window?.isKeyWindow == true else { return }
+    guard NSApp.keyWindow != nil else { return }
     launcherVisible.toggle()
 }
 ```
 
-由于 SwiftUI View 没有直接的 `window` 引用，可通过 `NSApp.keyWindow` 判断，或在 `TerminalController`（NSWindowController 层）拦截 Notification 并转发给当前 key window 的 root view。
+注意：SwiftUI View 没有直接的 `window` 引用，用 `NSApp.keyWindow != nil` 做粗略判断。更精确的方案是在 `TerminalController`（NSWindowController 层）检查 `self.window?.isKeyWindow` 后再 post notification，使 notification 只被 key window 处理。
 
 同时在 `Notification.Name` 扩展中添加 `.toggleAppLauncher`。
 
