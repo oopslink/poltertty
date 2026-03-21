@@ -42,6 +42,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var fileBrowserDividerHovered = false
     @State private var showTmuxPicker = false
     @State private var tmuxPickerAttachInCurrentPane = false
+    @State private var launcherVisible = false
     @State private var convertTargetId: UUID?
     @State private var convertName = ""
 
@@ -54,6 +55,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     let onNewTab: () -> Void
     let onCloseTab: (UUID) -> Void
     let onSwitchTab: ((UUID) -> Void)?
+    let windowProvider: () -> NSWindow?
 
     init(
         ghostty: Ghostty.App,
@@ -72,7 +74,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
         showStatusBar: Bool,
         onNewTab: @escaping () -> Void,
         onCloseTab: @escaping (UUID) -> Void,
-        onSwitchTab: ((UUID) -> Void)? = nil
+        onSwitchTab: ((UUID) -> Void)? = nil,
+        windowProvider: @escaping () -> NSWindow? = { nil }
     ) {
         self.ghostty = ghostty
         self.workspaceId = workspaceId
@@ -91,6 +94,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
         self.onNewTab = onNewTab
         self.onCloseTab = onCloseTab
         self.onSwitchTab = onSwitchTab
+        self.windowProvider = windowProvider
 
         if let wsId = workspaceId {
             self._fileBrowserVM = ObservedObject(
@@ -262,6 +266,15 @@ struct PolterttyRootView<TerminalContent: View>: View {
                     onDismiss: { quickSwitcherVisible = false }
                 )
             }
+
+            // App Launcher overlay
+            if launcherVisible {
+                AppLauncherView(
+                    isPresented: $launcherVisible,
+                    backgroundColor: Color(nsColor: .windowBackgroundColor)
+                )
+                .ignoresSafeArea()
+            }
         }
         .onAppear { startupMode = initialStartupMode }
         .onReceive(NotificationCenter.default.publisher(for: .toggleWorkspaceSidebar)) { _ in
@@ -282,6 +295,10 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .onReceive(NotificationCenter.default.publisher(for: .showTmuxSessionPicker)) { notification in
             tmuxPickerAttachInCurrentPane = notification.userInfo?["attachInCurrentPane"] as? Bool ?? false
             showTmuxPicker = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleAppLauncher)) { notification in
+            guard notification.object as? NSWindow == windowProvider() else { return }
+            launcherVisible.toggle()
         }
         .sheet(isPresented: $showTmuxPicker) {
             TmuxSessionPicker(

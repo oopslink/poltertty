@@ -284,7 +284,7 @@ private struct CommandPaletteQuery: View {
     }
 }
 
-private struct CommandTable: View {
+struct CommandTable: View {
     var options: [CommandOption]
     @Binding var selectedIndex: UInt?
     @Binding var hoveredOptionID: UUID?
@@ -317,8 +317,10 @@ private struct CommandTable: View {
                             }
                         }
                     }
-                    .padding(10)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 10)
                 }
+                .ignoresSafeArea(.all, edges: .top)
                 .frame(maxHeight: 200)
                 .onChange(of: selectedIndex) { _ in
                     guard let selectedIndex,
@@ -332,7 +334,7 @@ private struct CommandTable: View {
 }
 
 /// A single row in the command palette.
-private struct CommandRow: View {
+struct CommandRow: View {
     let option: CommandOption
     var isSelected: Bool
     @Binding var hoveredID: UUID?
@@ -383,6 +385,7 @@ private struct CommandRow: View {
                 }
             }
             .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .background(
                 isSelected
@@ -406,7 +409,7 @@ private struct CommandRow: View {
 }
 
 /// A row of Text representing a shortcut.
-private struct ShortcutSymbolsView: View {
+struct ShortcutSymbolsView: View {
     let symbols: [String]
 
     var body: some View {
