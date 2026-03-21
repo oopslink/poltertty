@@ -172,6 +172,33 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                   notifId == self.workspaceId else { return }
             self.launchAgentAction()
         }
+        NotificationCenter.default.addObserver(
+            forName: .launchAgentFromStatusBar,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self,
+                  let surfaceId = note.userInfo?["surfaceId"] as? UUID,
+                  let defId = note.userInfo?["definitionId"] as? String,
+                  let modeRaw = note.userInfo?["permissionMode"] as? String,
+                  let mode = ClaudePermissionMode(rawValue: modeRaw),
+                  let def = AgentRegistry.shared.definitions.first(where: { $0.id == defId })
+            else { return }
+
+            // 确保焦点在目标 surface
+            if let targetSurface = self.surfaceTree.first(where: { $0.id == surfaceId }) {
+                self.focusSurface(targetSurface)
+            }
+
+            let cwd = self.surfaceTree.first(where: { $0.id == surfaceId })?.pwd ?? "~"
+            AgentLauncher(terminalController: self).launch(
+                definition: def,
+                location: .currentPane,
+                permissionMode: mode,
+                workspaceId: self.workspaceId ?? UUID(),
+                cwd: cwd
+            )
+        }
         center.addObserver(
             self,
             selector: #selector(onTmuxAttachNewTab(_:)),
