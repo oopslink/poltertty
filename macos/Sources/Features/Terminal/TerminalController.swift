@@ -66,9 +66,6 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// Custom tab bar view model — owns all SurfaceView instances for this window
     let tabBarViewModel = TabBarViewModel()
 
-    /// Git status monitor for the bottom status bar
-    let statusMonitor: GitStatusMonitor
-
     /// Per-tab surface trees: tabId → SplitTree (supports splits within each tab)
     private var tabSurfaceTrees: [UUID: SplitTree<Ghostty.SurfaceView>] = [:]
 
@@ -82,11 +79,6 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // Set workspace and startup mode FIRST before anything that might trigger window loading
         self.workspaceId = workspaceId
         self.startupMode = startupMode
-
-        let rootDir = workspaceId
-            .flatMap { WorkspaceManager.shared.workspace(for: $0) }?.rootDirExpanded
-            ?? NSHomeDirectory()
-        self.statusMonitor = GitStatusMonitor(pwd: rootDir)
 
         // The window we manage is not restorable if we've specified a command
         // to execute. We do this because the restored window is meaningless at the
@@ -1504,12 +1496,6 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                         return Color(hex: workspace.colorHex) ?? .accentColor
                     }
                     return .accentColor
-                }(),
-                statusMonitor: self.statusMonitor,
-                showStatusBar: {
-                    guard let id = workspaceId,
-                          let ws = WorkspaceManager.shared.workspace(for: id) else { return false }
-                    return !ws.isTemporary
                 }(),
                 onNewTab: { [weak self] in self?.addNewTab() },
                 onCloseTab: { [weak self] id in self?.closePolterttyTab(id) },
