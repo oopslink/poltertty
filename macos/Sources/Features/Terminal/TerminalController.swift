@@ -995,11 +995,29 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             }
             return
         }
-        guard tabBarViewModel.tabs.count > 1 else {
-            window?.close()
-            return
+        showTabCloseConfirmation {
+            guard self.tabBarViewModel.tabs.count > 1 else {
+                self.window?.close()
+                return
+            }
+            self.tabBarViewModel.closeTab(id)
         }
-        tabBarViewModel.closeTab(id)
+    }
+
+    /// 显示关闭 tab 的通用确认对话框
+    private func showTabCloseConfirmation(onConfirm: @escaping () -> Void) {
+        guard let window else { return }
+        let alert = NSAlert()
+        alert.messageText = "关闭标签页"
+        alert.informativeText = "确定要关闭该标签页吗？"
+        alert.addButton(withTitle: "关闭")
+        alert.addButton(withTitle: "取消")
+        alert.buttons[0].hasDestructiveAction = true
+        alert.beginSheetModal(for: window) { response in
+            if response == .alertFirstButtonReturn {
+                onConfirm()
+            }
+        }
     }
 
     /// 查找指定 tab 中第一个有 tmux session 的 surface
