@@ -148,7 +148,12 @@ struct AppLauncherView: View {
     private func moveSelection(_ delta: Int) {
         let count = filteredOptions.count
         guard count > 0 else { return }
-        let current = Int(selectedIndex ?? (delta > 0 ? UInt.max : 0))
+        let current: Int
+        if let idx = selectedIndex {
+            current = Int(idx)
+        } else {
+            current = delta > 0 ? -1 : count
+        }
         let next = (current + delta + count) % count
         selectedIndex = UInt(next)
     }
