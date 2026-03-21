@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AGENT_NAME="$(basename "$0")"
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# ── 找到真实 binary（跳过自身目录）──
+find_real_binary() {
+    local IFS=':'
+    for dir in $PATH; do
+        [[ "$dir" == "$SELF_DIR" ]] && continue
+        [[ -x "$dir/$AGENT_NAME" ]] && echo "$dir/$AGENT_NAME" && return 0
+    done
+    echo "poltertty-wrapper: $AGENT_NAME not found in PATH" >&2
+    exit 127
+}
+
+REAL_BINARY="$(find_real_binary)"
+
+# ── 子命令白名单：直接透传 ──
+case "${1:-}" in
+    mcp|config|doctor|update|--help|--version|-v)
+        exec "$REAL_BINARY" "$@" ;;
+esac
+
+# ── 降级条件 ──
+if [[ -z "${POLTERTTY_SURFACE_ID:-}" ]] \
+    || [[ "${POLTERTTY_HOOKS_DISABLED:-}" == "1" ]] \
+    || [[ -n "${POLTERTTY_SESSION_ID:-}" ]]; then
+    exec "$REAL_BINARY" "$@"
+fi
+
+# ── HTTP server 存活检测（750ms 超时）──
+if ! poltertty-cli ping \
+        --port "${POLTERTTY_HTTP_PORT:-}" \
+        --timeout 750 2>/dev/null; then
+    exec "$REAL_BINARY" "$@"
+fi
+
+# ── 提取并移除用户的 --settings（纳入 merge）──
+USER_SETTINGS_FLAG=""
+FILTERED_ARGS=()
+SKIP_NEXT=false
+for arg in "$@"; do
+    if $SKIP_NEXT; then
+        USER_SETTINGS_FLAG="$arg"
+        SKIP_NEXT=false
+        continue
+    fi
+    if [[ "$arg" == "--settings" ]]; then
+        SKIP_NEXT=true
+        continue
+    fi
+    FILTERED_ARGS+=("$arg")
+done
+set -- "${FILTERED_ARGS[@]}"
+
+# ── 解析 Claude Code session id ──
+CC_SESSION_ARGS=()
+CC_SID=""
+if [[ " $* " == *" --resume "* ]]; then
+    : # 用户用 --resume，让 CC 自己选 session
+elif CC_SID=$(poltertty-cli extract-flag --session-id "$@") \
+        && [[ -n "$CC_SID" ]]; then
+    : # 用户自带 --session-id，尊重
+else
+    CC_SID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+    CC_SESSION_ARGS=("--session-id" "$CC_SID")
+fi
+
+# ── 通过 HTTP 调用 App 创建 session（合并步骤）──
+# prepare-session 向 App 发送 HTTP 请求：
+#   - App 生成 token
+#   - App 读取 4 层 claude settings + 用户 --settings，合并 hooks
+#   - App 创建 session 目录，写入 meta.json + settings.json
+#   - App 返回 session dir 路径
+PTS_ID="pts-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+PREPARE_ARGS=(
+    --session-id       "$PTS_ID"
+    --agent            "$AGENT_NAME"
+    --agent-session-id "${CC_SID:-unknown}"
+    --cwd              "$(pwd)"
+    --workspace-id     "$POLTERTTY_WORKSPACE_ID"
+    --surface-id       "$POLTERTTY_SURFACE_ID"
+    --port             "$POLTERTTY_HTTP_PORT"
+    --pid              $$
+)
+if [[ -n "$USER_SETTINGS_FLAG" ]]; then
+    PREPARE_ARGS+=(--user-settings "$USER_SETTINGS_FLAG")
+fi
+
+SESSION_DIR=$(poltertty-cli prepare-session "${PREPARE_ARGS[@]}") || {
+    # prepare 失败，降级透传
+    exec "$REAL_BINARY" "$@"
+}
+
+# ── exec agent ──
+export POLTERTTY_SESSION_ID="$PTS_ID"
+export POLTERTTY_AGENT_PID=$$
+unset CLAUDECODE 2>/dev/null || true   # 防止 CC 误判为嵌套 session（已验证变量名）
+
+exec "$REAL_BINARY" \
+    "${CC_SESSION_ARGS[@]}" \
+    --settings "$SESSION_DIR/settings.json" \
+    "$@"
