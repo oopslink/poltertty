@@ -26,6 +26,7 @@ enum EditDistanceFilter {
     }
 
     /// 对 options 按相关性排序。query 为空时返回空数组。
+    /// 同时对 title 和 subtitle 计算距离，取较小值（支持英文搜索中文标题）。
     /// contains 匹配的 option 距离减 3（最低 0）。
     /// 过滤有效距离超过 max(query.count, 3) 的结果。
     /// 返回前 8 条。
@@ -39,9 +40,16 @@ enum EditDistanceFilter {
             .compactMap { option -> (CommandOption, Int)? in
                 let title = option.title.lowercased()
                 var dist = levenshteinDistance(q, title)
-                if title.contains(q) {
-                    dist = max(0, dist - 3)
+                var containsMatch = title.contains(q)
+
+                // 同时检查 subtitle（支持英文 query 匹配中文标题的 subtitle）
+                if let subtitle = option.subtitle?.lowercased() {
+                    let subtitleDist = levenshteinDistance(q, subtitle)
+                    if subtitleDist < dist { dist = subtitleDist }
+                    if subtitle.contains(q) { containsMatch = true }
                 }
+
+                if containsMatch { dist = max(0, dist - 3) }
                 guard dist <= threshold else { return nil }
                 return (option, dist)
             }
