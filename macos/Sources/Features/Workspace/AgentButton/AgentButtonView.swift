@@ -19,7 +19,7 @@ struct AgentButtonView: View {
             if let session {
                 agentStateIcon(session: session)
             } else {
-                Text("\u{2B21}")
+                Text("\u{2B22}")
                     .foregroundColor(Color(hex: "#A855F7") ?? .purple)
             }
         }
