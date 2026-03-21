@@ -112,6 +112,10 @@ final class AgentLauncher {
         )
         guard let surfaceModel = targetSurface.surfaceModel else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            // currentPane 需要主动把焦点送回 terminal，因为打开 launch 菜单会把焦点移走
+            if location == .currentPane {
+                tc.focusSurface(targetSurface)
+            }
             surfaceModel.sendText(command)
         }
     }
