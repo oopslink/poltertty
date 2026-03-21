@@ -37,8 +37,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var sidebarWidth: CGFloat = CGFloat(PolterttyConfig.shared.sidebarWidth)
     @State private var quickSwitcherVisible = false
     @State private var notificationCenterVisible = false
-    @FocusedValue(\.ghosttySurfacePwd) private var focusedPwd
-
     @State private var startupMode: WorkspaceStartupMode = .terminal
 
     @State private var showConvertAlert = false
@@ -53,8 +51,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @ObservedObject private var agentMonitorVM: AgentMonitorViewModel
     @ObservedObject var tabBarViewModel: TabBarViewModel
     let workspaceAccentColor: Color
-    let statusMonitor: GitStatusMonitor
-    let showStatusBar: Bool
     let onNewTab: () -> Void
     let onCloseTab: (UUID) -> Void
     let onSwitchTab: ((UUID) -> Void)?
@@ -73,8 +69,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
         onCreateTemporary: (() -> Void)?,
         tabBarViewModel: TabBarViewModel,
         workspaceAccentColor: Color,
-        statusMonitor: GitStatusMonitor,
-        showStatusBar: Bool,
         onNewTab: @escaping () -> Void,
         onCloseTab: @escaping (UUID) -> Void,
         onSwitchTab: ((UUID) -> Void)? = nil,
@@ -90,8 +84,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
         self.onCreateTemporaryWorkspace = onCreateTemporaryWorkspace
         self.onRestoreWorkspaces = onRestoreWorkspaces
         self.onCreateTemporary = onCreateTemporary
-        self.statusMonitor = statusMonitor
-        self.showStatusBar = showStatusBar
         self.tabBarViewModel = tabBarViewModel
         self.workspaceAccentColor = workspaceAccentColor
         self.onNewTab = onNewTab
@@ -119,6 +111,12 @@ struct PolterttyRootView<TerminalContent: View>: View {
             )
         }
 
+    }
+
+    private var showStatusBar: Bool {
+        guard let id = workspaceId,
+              let ws = WorkspaceManager.shared.workspace(for: id) else { return false }
+        return !ws.isTemporary
     }
 
     private var effectiveSidebarWidth: CGFloat {
@@ -258,11 +256,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
                     }
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: agentMonitorVM.selectedItems.isEmpty)
                 }
-                .onChange(of: focusedPwd) { newPwd in
-                    // single-parameter closure, compatible with macOS 13+
-                    guard let pwd = newPwd, !pwd.isEmpty else { return }
-                    statusMonitor.updatePwd(pwd)
-                }
+                .environment(\.showStatusBar, showStatusBar)
             }
 
             // Quick switcher overlay (always available in terminal mode)
@@ -428,13 +422,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
             terminalView
                 .environmentObject(tabBarViewModel)
 
-            // Status bar 在 shell 区域正下方，与 shell 区域对齐
-            if showStatusBar {
-                BottomStatusBarView(
-                    monitor: statusMonitor,
-                    pwd: focusedPwd ?? ""
-                )
-            }
         }
         .animation(.easeInOut(duration: 0.2), value: tabBarViewModel.tabs.count > 1)
     }
