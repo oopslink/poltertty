@@ -14,6 +14,7 @@ extension Notification.Name {
     static let showTmuxSessionPicker = Notification.Name("poltertty.showTmuxSessionPicker")
     static let tmuxAttachNewTab = Notification.Name("poltertty.tmuxAttachNewTab")
     static let tmuxAttachInCurrentPane = Notification.Name("poltertty.tmuxAttachInCurrentPane")
+    static let toggleAppLauncher = Notification.Name("poltertty.toggleAppLauncher")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -42,6 +43,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var fileBrowserDividerHovered = false
     @State private var showTmuxPicker = false
     @State private var tmuxPickerAttachInCurrentPane = false
+    @State private var launcherVisible = false
     @State private var convertTargetId: UUID?
     @State private var convertName = ""
 
@@ -262,6 +264,15 @@ struct PolterttyRootView<TerminalContent: View>: View {
                     onDismiss: { quickSwitcherVisible = false }
                 )
             }
+
+            // App Launcher overlay
+            if launcherVisible {
+                AppLauncherView(
+                    isPresented: $launcherVisible,
+                    backgroundColor: Color(nsColor: .windowBackgroundColor)
+                )
+                .ignoresSafeArea()
+            }
         }
         .onAppear { startupMode = initialStartupMode }
         .onReceive(NotificationCenter.default.publisher(for: .toggleWorkspaceSidebar)) { _ in
@@ -282,6 +293,10 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .onReceive(NotificationCenter.default.publisher(for: .showTmuxSessionPicker)) { notification in
             tmuxPickerAttachInCurrentPane = notification.userInfo?["attachInCurrentPane"] as? Bool ?? false
             showTmuxPicker = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleAppLauncher)) { _ in
+            guard NSApp.keyWindow != nil else { return }
+            launcherVisible.toggle()
         }
         .sheet(isPresented: $showTmuxPicker) {
             TmuxSessionPicker(

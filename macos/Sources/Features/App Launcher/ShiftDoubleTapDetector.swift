@@ -71,8 +71,3 @@ final class ShiftDoubleTapDetector {
         }
     }
 }
-
-// Temporary — will be moved to PolterttyRootView.swift in Task 6
-extension Notification.Name {
-    static let toggleAppLauncher = Notification.Name("poltertty.toggleAppLauncher")
-}
