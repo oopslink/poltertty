@@ -85,21 +85,19 @@ struct AgentLaunchMenu: View {
             Divider()
 
             // Location
-            VStack(spacing: 0) {
-                ForEach(AgentLaunchLocation.allCases, id: \.self) { loc in
-                    HStack(spacing: 8) {
-                        Image(systemName: location == loc ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 13))
-                            .foregroundStyle(location == loc ? Color.accentColor : .secondary)
-                        Text(loc.displayName).font(.system(size: 12))
-                        Spacer()
+            HStack {
+                Text("Location").font(.system(size: 11)).foregroundStyle(.secondary)
+                Spacer()
+                Picker("", selection: $location) {
+                    ForEach(AgentLaunchLocation.allCases, id: \.self) { loc in
+                        Text(loc.displayName).tag(loc)
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 5)
-                    .contentShape(Rectangle())
-                    .onTapGesture { location = loc }
                 }
+                .pickerStyle(.menu)
+                .font(.system(size: 11))
+                .fixedSize()
             }
-            .padding(.vertical, 2)
+            .padding(.horizontal, 12).padding(.vertical, 7)
 
             // Permission（仅 .full agent）
             if selectedAgent?.hookCapability == .full {
