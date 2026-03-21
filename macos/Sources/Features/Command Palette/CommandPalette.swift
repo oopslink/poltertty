@@ -317,7 +317,8 @@ struct CommandTable: View {
                             }
                         }
                     }
-                    .padding(10)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 10)
                 }
                 .frame(maxHeight: 200)
                 .onChange(of: selectedIndex) { _ in
