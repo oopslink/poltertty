@@ -1,95 +1,140 @@
 # Poltertty
 
-> Ghostty 终端模拟器的 macOS fork，专为 AI 辅助开发工作流设计
+**An agent-friendly terminal for the AI-native development era.**
 
-Poltertty 基于 [Ghostty](https://ghostty.org) 构建，在保留其全部核心终端能力的同时，增加了 **Workspace 工作区管理**、**文件浏览器**、**AI Agent 监控**和 **tmux 深度集成**等功能。
+Poltertty is a macOS fork of [Ghostty](https://ghostty.org) that adds first-class support for AI agent workflows — workspace management, a built-in file browser, live agent session monitoring, and deep tmux integration — while staying fully compatible with Ghostty's configuration and terminal core.
 
-[English README](README.en.md)
+[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](https://github.com/oopslink/poltertty)
+[![Swift](https://img.shields.io/badge/language-Swift%2FSwiftUI-orange)](https://github.com/oopslink/poltertty)
+[![Based on Ghostty](https://img.shields.io/badge/based%20on-Ghostty-purple)](https://ghostty.org)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
----
-
-## 特性
-
-### Workspace 工作区管理
-
-多项目终端管理的核心能力：
-
-- **创建与管理**：为每个项目建立独立的 Workspace，自定义名称、颜色、图标、根目录和描述
-- **分组**：将相关 Workspace 整理到分组中，保持侧边栏整洁有序
-- **持久化**：配置与窗口快照自动保存至 `~/.config/poltertty/workspaces/`，重启后自动恢复
-- **临时 Workspace**：直接打开目录时创建临时 Workspace，退出后自动清理，不写入磁盘
-- **快速切换**：`Cmd+K` 打开 Quick Switcher，在 Workspace 间快速跳转
-- **侧边栏**：支持展开/折叠，双击空白区域快速新建临时 Workspace；右键菜单支持重命名、删除（带二次确认）等操作
-
-### 文件浏览器
-
-内置轻量文件树面板，无需离开终端即可管理项目文件：
-
-- **树形视图**：显示 Workspace 根目录下的文件结构，单击展开/折叠目录
-- **多选操作**：`Cmd+A` 全选、`Shift+Click` 范围选择，支持批量删除和移动
-- **拖拽**：多文件拖拽移动，支持跨目录操作
-- **文件过滤**：顶部搜索框实时过滤文件名
-- **文件预览**：点击文件在右侧预览内容，支持 `.zig`、常见文本及代码格式
-- **Git 状态徽标**：在文件旁实时展示 git 变更状态（`M`/`A`/`?` 等）
-- **键盘导航**：方向键浏览文件树，`Enter` 展开目录，`Space` 注入路径到当前终端
-- **右键菜单**：在 Finder 中显示、复制路径、内联重命名等操作
-- **快捷键**：`Cmd+\` 切换显示/隐藏
-
-### AI Agent 监控
-
-原生管理 AI 编程 Agent 会话，无需借助外部工具：
-
-- **启动面板**：一键启动 Claude Code、Gemini CLI、OpenCode 等 Agent，支持自定义命令
-- **会话监控**：实时监控 Agent 工作状态，通过内嵌 HTTP Hook Server 接收 Claude Code hook 事件
-- **Subagent 跟踪**：可视化 Agent 调用树，实时跟踪 Subagent 启动与完成状态
-- **外部会话发现**：自动发现并展示系统中正在运行的 Claude Code（`.jsonl`）、OpenCode（SQLite）、Gemini 会话
-- **侧边栏入口**：侧边栏 Agent 按钮快速访问监控面板
-
-### tmux 深度集成
-
-将 tmux 会话管理直接带入终端 UI：
-
-- **tmux 管理面板**：以 Tab 形式 attach tmux 会话，在专属面板中管理会话窗口
-- **窗口栏**：展示 tmux 所有窗口，支持切换、新建和关闭窗口（带确认）
-- **快速 Attach/Detach**：一键 attach 或 detach tmux session，无需手动输入命令
-
-### 底部状态栏
-
-终端底部的实时上下文信息：
-
-- **Git 状态**：监控当前 Workspace 根目录的 git 变更，实时展示分支和修改数量
-- **集成显示**：状态栏与 shell 区域对齐，显示在终端内容区域下方
+[中文文档](README.zh.md)
 
 ---
 
-## 与 Ghostty 的关系
+## Why Poltertty?
 
-Poltertty 直接 fork 自 [ghostty-org/ghostty](https://github.com/ghostty-org/ghostty)，持续跟踪上游。
+Modern AI coding agents — Claude Code, Gemini CLI, OpenCode — run inside terminals. But terminals were designed for humans, not agents. Poltertty bridges that gap:
 
-| 层面 | 说明 |
-|------|------|
-| **底层终端** | 终端模拟、渲染（Metal）、字体（CoreText）、键绑定、配置系统均来自 Ghostty，无任何改动 |
-| **新功能** | 全部以 Swift/SwiftUI 实现，位于 `macos/Sources/Features/` 下的独立模块 |
-| **配置兼容** | Ghostty 的所有配置项均可使用，配置文件路径为 `~/.config/poltertty/config` |
-
-如需了解终端模拟相关文档，请参阅 [Ghostty 官方文档](https://ghostty.org/docs)。
+- **Agents need project context.** Workspaces give every project its own isolated terminal environment, with persisted layout and configuration.
+- **Agents need visibility.** The built-in Agent Monitor tracks running sessions, subagent call trees, and real-time status — no external dashboard needed.
+- **Agents need hooks.** The embedded HTTP Hook Server receives Claude Code lifecycle events directly, enabling reactive workflows without any glue code.
+- **Humans need to stay in flow.** The file browser, tmux integration, and status bar keep everything visible without leaving the terminal.
 
 ---
 
-## 构建
+## Features
+
+### Workspace Management
+
+Persistent, per-project terminal environments:
+
+- **Create & manage** — each Workspace has a name, color, icon, root directory, and description
+- **Groups** — organize Workspaces into collapsible groups in the sidebar
+- **Persistence** — configuration and window snapshots saved to `~/.config/poltertty/workspaces/`, restored automatically on restart
+- **Temporary Workspaces** — opening a directory creates a transient Workspace that is cleaned up on exit, nothing written to disk
+- **Quick Switcher** — `Cmd+K` to jump between Workspaces instantly
+- **Sidebar** — right-click to rename or delete; double-click empty area to create a temporary Workspace
+
+### AI Agent Monitor
+
+Native visibility into AI coding agent sessions:
+
+- **Launch panel** — one-click launch for Claude Code, Gemini CLI, OpenCode, and custom commands
+- **Session monitoring** — real-time agent status via a built-in HTTP Hook Server that receives Claude Code hook events
+- **Subagent tracking** — visualize agent call trees with live tracking of subagent start and completion
+- **External session discovery** — automatically discovers running Claude Code (`.jsonl`), OpenCode (SQLite), and Gemini sessions on the system
+- **Sidebar integration** — dedicated sidebar button for quick access
+
+### File Browser
+
+A lightweight file tree panel, integrated directly into the terminal:
+
+- **Tree view** — browse the Workspace root; single-click to expand/collapse directories
+- **Multi-select** — `Cmd+A` to select all, `Shift+Click` for range selection; batch delete and move
+- **Drag & drop** — drag multiple files across directories
+- **Real-time filter** — search bar at the top for instant filename filtering
+- **File preview** — click any file to preview its contents; supports `.zig`, common text, and code formats
+- **Git status badges** — live change indicators (`M`/`A`/`?`) next to each file
+- **Keyboard navigation** — arrow keys to browse, `Enter` to expand, `Space` to inject the path into the active terminal
+- **Context menu** — Show in Finder, copy path, inline rename
+- **Toggle** — `Cmd+\`
+
+### tmux Integration
+
+tmux session management surfaced directly in the terminal UI:
+
+- **Session panel** — attach tmux sessions as tabs; manage windows in a dedicated panel
+- **Window bar** — displays all tmux windows; create, switch, and close with confirmation
+- **Quick attach/detach** — one click, no commands to type
+
+### Bottom Status Bar
+
+Context at a glance, always visible:
+
+- **Git status** — branch name and change count for the current Workspace root, updated live
+- **Inline rendering** — aligned with the shell area, rendered below the terminal content region
+
+---
+
+## Relationship to Ghostty
+
+Poltertty is a direct fork of [ghostty-org/ghostty](https://github.com/ghostty-org/ghostty) and tracks upstream continuously.
+
+| Layer | Details |
+|-------|---------|
+| **Terminal core** | Terminal emulation, Metal rendering, CoreText fonts, keybindings, and the configuration system come from Ghostty — untouched |
+| **New features** | All additions are implemented in Swift/SwiftUI as standalone modules under `macos/Sources/Features/` |
+| **Config compatibility** | All Ghostty configuration options work in Poltertty; config file path is `~/.config/poltertty/config` |
+
+For terminal emulation documentation, refer to the [official Ghostty docs](https://ghostty.org/docs).
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- macOS 14 (Sonoma) or later
+- Xcode 15 or later
+- [Zig](https://ziglang.org/) (see [build-rules.md](docs/build-rules.md) for the required version)
+
+### Build
 
 ```bash
-# 初始化本地 Git Hooks（新克隆仓库后执行一次）
+# Clone the repository
+git clone https://github.com/oopslink/poltertty.git
+cd poltertty
+
+# Initialize local Git Hooks (run once after cloning)
 make init-git-hooks
 
-# 开发构建并运行
+# Development build and run
 make run-dev
 
-# Release 构建
+# Release build
 make release
 
-# 查看所有命令
+# List all available commands
 make help
 ```
 
-详细构建说明见 [docs/build-rules.md](docs/build-rules.md)。
+See [docs/build-rules.md](docs/build-rules.md) for detailed build instructions.
+
+---
+
+## Contributing
+
+Poltertty follows a branch-protection workflow:
+
+1. All feature work is developed in git worktrees under `.worktrees/`
+2. Changes land on `main` via Pull Request only — no direct pushes
+
+See [docs/development-rules.md](docs/development-rules.md) for the full contribution workflow.
+
+---
+
+## License
+
+Poltertty inherits Ghostty's [MIT License](LICENSE). New code added by this project is also MIT-licensed.
