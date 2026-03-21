@@ -1,0 +1,5 @@
+# Poltertty shell integration — PATH 补强 (zsh)
+# 防止用户 source ~/.zshrc 后 PATH 被重置导致 wrapper 失效
+if [[ -n "$POLTERTTY_BIN_DIR" ]] && [[ ":$PATH:" != *":$POLTERTTY_BIN_DIR:"* ]]; then
+    export PATH="$POLTERTTY_BIN_DIR:$PATH"
+fi
