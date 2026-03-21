@@ -1,6 +1,5 @@
 // macos/Tests/AppLauncher/EditDistanceFilterTests.swift
 import Testing
-import SwiftUI
 @testable import Ghostty
 
 struct EditDistanceFilterTests {
@@ -40,15 +39,16 @@ struct EditDistanceFilterTests {
     }
 
     @Test func testContainsMatchRankedHigher() {
-        let opts = [option("New Window"), option("New Tab")]
+        // 两个都通过 threshold，contains 匹配的有 -3 bonus 应排在前面
+        let opts = [option("tab extra"), option("tab")]
         let result = EditDistanceFilter.rank("tab", in: opts)
-        #expect(result.first?.title == "New Tab")
+        #expect(result.first?.title == "tab")
     }
 
     @Test func testResultsLimitedToEight() {
         let opts = (0..<12).map { option("tab \($0)") }
         let result = EditDistanceFilter.rank("tab", in: opts)
-        #expect(result.count <= 8)
+        #expect(result.count == 8)
     }
 
     @Test func testTooDistantResultsFiltered() {

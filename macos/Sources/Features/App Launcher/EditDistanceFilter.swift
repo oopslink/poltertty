@@ -1,5 +1,4 @@
 // macos/Sources/Features/App Launcher/EditDistanceFilter.swift
-import SwiftUI
 
 enum EditDistanceFilter {
     /// Levenshtein 距离（标准 DP 矩阵）
