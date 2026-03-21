@@ -13,6 +13,9 @@ final class AgentSessionManager: ObservableObject {
     @Published private(set) var sessions: [UUID: AgentSession] = [:]  // surfaceId → session
     private var claudeSessionIndex: [String: UUID] = [:]              // claudeSessionId → surfaceId
 
+    /// preToolUse 收到后，等待 postToolUse 取消的延迟通知任务（toolUseId → Task）
+    private var pendingToolConfirmTasks: [String: Task<Void, Never>] = [:]
+
     // MARK: - 生命周期
 
     func register(_ session: AgentSession) {
@@ -113,6 +116,14 @@ final class AgentSessionManager: ObservableObject {
                     Task.detached(priority: .utility) {
                         SessionStore.shared.save(snap)
                     }
+                    // 通知中心：会话结束
+                    AgentNotificationStore.shared.insert(AgentNotification(
+                        id: UUID(), timestamp: Date(),
+                        workspaceId: session.workspaceId, surfaceId: surfaceId,
+                        agentDefinitionId: session.definition.id, sessionId: sid,
+                        type: .done, title: "\(session.definition.name) 会话结束",
+                        body: nil, priority: .normal
+                    ))
                 }
                 if let cwd = cwd {
                     AgentService.shared.cleanupHooks(for: cwd)
@@ -125,6 +136,33 @@ final class AgentSessionManager: ObservableObject {
             let indexed = claudeSessionIndex[sid] != nil
             Self.logger.warning("preToolUse: sid=\(sid) indexed=\(indexed) tool=\(payload.toolName ?? "nil") toolUseId=\(payload.toolUseId ?? "nil") agentId=\(payload.agentId ?? "-")")
             updateFromClaudeSession(sid) { $0.state = .working }
+
+            // 延迟 2 秒发通知：若 postToolUse 先到则取消（自动批准工具不产生通知）
+            if let toolUseId = payload.toolUseId {
+                let toolName = payload.toolName ?? "工具"
+                // 优先用 claudeSessionId 查找，找不到则用 cwd 兜底，仍找不到则用 nil（全局通知）
+                let toolSession = session(forClaudeSessionId: sid)
+                    ?? payload.cwd.flatMap { c in
+                        sessions.values.first { Self.realPath($0.cwd) == Self.realPath(c) }
+                    }
+                let surfaceId = claudeSessionIndex[sid]
+                let wsId = toolSession?.workspaceId       // nil = 未关联工作区
+                let defId = toolSession?.definition.id ?? "unknown"
+                let agentName = toolSession?.definition.name ?? "CC"
+                let task = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(2))
+                    guard !Task.isCancelled else { return }
+                    self?.pendingToolConfirmTasks.removeValue(forKey: toolUseId)
+                    AgentNotificationStore.shared.insert(AgentNotification(
+                        id: UUID(), timestamp: Date(),
+                        workspaceId: wsId, surfaceId: surfaceId,
+                        agentDefinitionId: defId, sessionId: sid,
+                        type: .waiting, title: "\(agentName) 等待确认：\(toolName)",
+                        body: nil, priority: .high
+                    ))
+                }
+                pendingToolConfirmTasks[toolUseId] = task
+            }
             if payload.toolName == "Agent" {
                 // Agent tool → 新建 subagent 记录（去重）
                 let toolUseId = payload.toolUseId ?? UUID().uuidString
@@ -155,6 +193,12 @@ final class AgentSessionManager: ObservableObject {
             guard let sid else { Self.logger.warning("postToolUse: no sessionId"); return }
             Self.logger.info("postToolUse: sid=\(sid) tool=\(payload.toolName ?? "nil") toolUseId=\(payload.toolUseId ?? "nil") agentId=\(payload.agentId ?? "-")")
             updateFromClaudeSession(sid) { $0.state = .working }
+
+            // 工具已执行完成，取消对应的等待确认通知
+            if let toolUseId = payload.toolUseId {
+                pendingToolConfirmTasks[toolUseId]?.cancel()
+                pendingToolConfirmTasks.removeValue(forKey: toolUseId)
+            }
             if payload.toolName == "Agent" {
                 // Agent tool 完成 → 标记 subagent done，保存输出
                 let toolUseId = payload.toolUseId ?? ""
@@ -184,10 +228,30 @@ final class AgentSessionManager: ObservableObject {
             guard let sid else { return }
             if payload.notificationType == "idle_prompt" {
                 updateFromClaudeSession(sid) { $0.state = .idle }
+                // 通知中心：Agent 等待用户操作
+                if let session = session(forClaudeSessionId: sid) {
+                    AgentNotificationStore.shared.insert(AgentNotification(
+                        id: UUID(), timestamp: Date(),
+                        workspaceId: session.workspaceId, surfaceId: claudeSessionIndex[sid],
+                        agentDefinitionId: session.definition.id, sessionId: sid,
+                        type: .waiting, title: "\(session.definition.name) 等待操作",
+                        body: nil, priority: .high
+                    ))
+                }
             }
         case .stop:
             guard let sid else { return }
             updateFromClaudeSession(sid) { $0.state = .idle }
+            // 通知中心：轮次完成
+            if let session = session(forClaudeSessionId: sid) {
+                AgentNotificationStore.shared.insert(AgentNotification(
+                    id: UUID(), timestamp: Date(),
+                    workspaceId: session.workspaceId, surfaceId: claudeSessionIndex[sid],
+                    agentDefinitionId: session.definition.id, sessionId: sid,
+                    type: .done, title: "\(session.definition.name) 轮次完成",
+                    body: nil, priority: .low
+                ))
+            }
             if let surfaceId = claudeSessionIndex[sid],
                let path = payload.transcriptPath {
                 AgentService.shared.tokenTracker?.processStopEvent(

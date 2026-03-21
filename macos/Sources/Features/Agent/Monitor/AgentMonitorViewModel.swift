@@ -71,7 +71,7 @@ final class AgentMonitorViewModel: ObservableObject {
         // 获取 workspace rootDir 并启动外部 session 监控
         if let rootDir = WorkspaceManager.shared.workspace(for: workspaceId)?.rootDirExpanded,
            !rootDir.isEmpty {
-            let discovery = ExternalSessionDiscovery(workspaceRootDir: rootDir)
+            let discovery = ExternalSessionDiscovery(workspaceRootDir: rootDir, workspaceId: workspaceId)
             externalDiscovery = discovery
             discovery.$sessions
                 .receive(on: RunLoop.main)

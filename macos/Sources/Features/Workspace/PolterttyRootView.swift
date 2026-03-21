@@ -14,6 +14,8 @@ extension Notification.Name {
     static let showTmuxSessionPicker = Notification.Name("poltertty.showTmuxSessionPicker")
     static let tmuxAttachNewTab = Notification.Name("poltertty.tmuxAttachNewTab")
     static let tmuxAttachInCurrentPane = Notification.Name("poltertty.tmuxAttachInCurrentPane")
+    static let toggleNotificationCenter = Notification.Name("poltertty.toggleNotificationCenter")
+    static let jumpToHighestPriorityUnread = Notification.Name("poltertty.jumpToHighestPriorityUnread")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -34,6 +36,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var sidebarCollapsed: Bool = UserDefaults.standard.bool(forKey: "poltertty.sidebarCollapsed")
     @State private var sidebarWidth: CGFloat = CGFloat(PolterttyConfig.shared.sidebarWidth)
     @State private var quickSwitcherVisible = false
+    @State private var notificationCenterVisible = false
     @FocusedValue(\.ghosttySurfacePwd) private var focusedPwd
 
     @State private var startupMode: WorkspaceStartupMode = .terminal
@@ -224,6 +227,17 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         terminalAreaView
                     }
 
+                    // Notification Center Panel
+                    if notificationCenterVisible {
+                        Divider()
+                        NotificationCenterPanel(
+                            workspaceId: workspaceId,
+                            onJumpToSurface: { surfaceId in
+                                onSwitchTab?(surfaceId)
+                            }
+                        )
+                    }
+
                     // Agent Monitor Panel
                     if agentMonitorVM.isVisible {
                         Divider()
@@ -278,6 +292,20 @@ struct PolterttyRootView<TerminalContent: View>: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleAgentMonitor)) { _ in
             agentMonitorVM.toggle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleNotificationCenter)) { _ in
+            notificationCenterVisible.toggle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .jumpToHighestPriorityUnread)) { _ in
+            if let notification = AgentNotificationStore.shared.highestPriorityUnread() {
+                AgentNotificationStore.shared.markRead(notification.id)
+                if let sid = notification.surfaceId {
+                    onSwitchTab?(sid)
+                }
+                if !notificationCenterVisible {
+                    notificationCenterVisible = true
+                }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .showTmuxSessionPicker)) { notification in
             tmuxPickerAttachInCurrentPane = notification.userInfo?["attachInCurrentPane"] as? Bool ?? false
