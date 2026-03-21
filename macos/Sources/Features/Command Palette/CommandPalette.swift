@@ -284,7 +284,7 @@ private struct CommandPaletteQuery: View {
     }
 }
 
-private struct CommandTable: View {
+struct CommandTable: View {
     var options: [CommandOption]
     @Binding var selectedIndex: UInt?
     @Binding var hoveredOptionID: UUID?
@@ -332,7 +332,7 @@ private struct CommandTable: View {
 }
 
 /// A single row in the command palette.
-private struct CommandRow: View {
+struct CommandRow: View {
     let option: CommandOption
     var isSelected: Bool
     @Binding var hoveredID: UUID?
@@ -406,7 +406,7 @@ private struct CommandRow: View {
 }
 
 /// A row of Text representing a shortcut.
-private struct ShortcutSymbolsView: View {
+struct ShortcutSymbolsView: View {
     let symbols: [String]
 
     var body: some View {
