@@ -21,6 +21,8 @@ final class ShiftDoubleTapDetector {
 
     private init() {}
 
+    /// 注：单例的 deinit 在正常 App 生命周期中不会被调用。
+    /// 如需显式释放（如测试场景），请直接调用 stop()。
     deinit { stop() }
 
     func start() {
