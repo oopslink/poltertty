@@ -26,7 +26,8 @@ cd .worktrees/app-launcher
 | 新建 | `macos/Sources/Features/App Launcher/AppLauncherView.swift` | 主 SwiftUI UI |
 | 新建 | `macos/Tests/AppLauncher/EditDistanceFilterTests.swift` | EditDistanceFilter 单元测试 |
 | 修改 | `macos/Sources/Features/Command Palette/CommandPalette.swift` | CommandRow/CommandTable/ShortcutSymbolsView 改为 internal |
-| 修改 | `macos/Sources/Features/Workspace/PolterttyRootView.swift` | 添加 launcher overlay + .toggleAppLauncher 通知 |
+| 修改 | `macos/Sources/Features/Workspace/PolterttyRootView.swift` | 添加 windowProvider 参数 + launcher overlay + .toggleAppLauncher 通知过滤 |
+| 修改 | `macos/Sources/Features/Terminal/TerminalController.swift` | 向 PolterttyRootView 传入 windowProvider 闭包 |
 | 修改 | `macos/Sources/App/macOS/AppDelegate.swift` | 启动 ShiftDoubleTapDetector |
 
 ---
@@ -107,7 +108,11 @@ struct EditDistanceFilterTests {
 }
 ```
 
-- [ ] **Step 2: 运行测试验证失败**
+- [ ] **Step 2: 在 Xcode 中将测试文件加入测试 target**
+
+在 Xcode 中打开 `macos/Ghostty.xcodeproj`，选中 `GhosttyTests` target → Build Phases → Compile Sources，将 `EditDistanceFilterTests.swift` 添加进去。未添加则 `xcodebuild test -only-testing:GhosttyTests/EditDistanceFilterTests` 会静默跳过而非报错，导致误判为"通过"。
+
+- [ ] **Step 3: 运行测试验证失败**
 
 ```bash
 xcodebuild test \
@@ -120,7 +125,7 @@ xcodebuild test \
 
 预期：编译错误，`EditDistanceFilter` 类型不存在。
 
-- [ ] **Step 3: 新建 EditDistanceFilter.swift**
+- [ ] **Step 4: 新建 EditDistanceFilter.swift**
 
 ```swift
 // macos/Sources/Features/App Launcher/EditDistanceFilter.swift
@@ -152,6 +157,7 @@ enum EditDistanceFilter {
     }
 
     /// 对 options 按相关性排序。query 为空时返回空数组。
+    /// 同时对 title 和 subtitle 计算距离，取较小值（支持英文搜索中文标题）。
     /// contains 匹配的 option 距离减 3（最低 0）。
     /// 过滤有效距离超过 max(query.count, 3) 的结果。
     /// 返回前 8 条。
@@ -165,9 +171,16 @@ enum EditDistanceFilter {
             .compactMap { option -> (CommandOption, Int)? in
                 let title = option.title.lowercased()
                 var dist = levenshteinDistance(q, title)
-                if title.contains(q) {
-                    dist = max(0, dist - 3)
+                var containsMatch = title.contains(q)
+
+                // 同时检查 subtitle（支持英文 query 匹配中文标题的 subtitle）
+                if let subtitle = option.subtitle?.lowercased() {
+                    let subtitleDist = levenshteinDistance(q, subtitle)
+                    if subtitleDist < dist { dist = subtitleDist }
+                    if subtitle.contains(q) { containsMatch = true }
                 }
+
+                if containsMatch { dist = max(0, dist - 3) }
                 guard dist <= threshold else { return nil }
                 return (option, dist)
             }
@@ -178,7 +191,7 @@ enum EditDistanceFilter {
 }
 ```
 
-- [ ] **Step 4: 运行测试验证通过**
+- [ ] **Step 5: 运行测试验证通过**
 
 ```bash
 xcodebuild test \
@@ -191,7 +204,7 @@ xcodebuild test \
 
 预期：所有测试 PASS。
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add macos/Sources/Features/App\ Launcher/EditDistanceFilter.swift \
@@ -385,6 +398,8 @@ git commit -m "feat(app-launcher): add AppCommandRegistry with menu scan and Pol
 
 ## Task 4: AppLauncherView
 
+**Dependencies:** Task 2（`CommandRow`/`CommandTable` 需先改为 internal）、Task 3（`AppCommandRegistry` 需先存在）
+
 **Files:**
 - Create: `macos/Sources/Features/App Launcher/AppLauncherView.swift`
 
@@ -393,6 +408,11 @@ git commit -m "feat(app-launcher): add AppCommandRegistry with menu scan and Pol
 ```swift
 // macos/Sources/Features/App Launcher/AppLauncherView.swift
 import SwiftUI
+
+extension Notification.Name {
+    /// App Launcher 的触发通知。由 ShiftDoubleTapDetector post（object: NSApp.keyWindow）。
+    static let toggleAppLauncher = Notification.Name("poltertty.toggleAppLauncher")
+}
 
 struct AppLauncherView: View {
     @Binding var isPresented: Bool
@@ -424,11 +444,8 @@ struct AppLauncherView: View {
                 .ignoresSafeArea()
                 .onTapGesture { dismiss() }
 
-            // Launcher 面板（居中偏上 1/4 屏）
+            // Launcher 面板（固定距顶部 80pt）
             VStack {
-                Spacer().frame(maxHeight: .infinity).frame(height: 0)
-                    .frame(maxHeight: UIScreen.main == nil ? 200 : nil)
-
                 launcherPanel(scheme: scheme)
                     .frame(maxWidth: 500)
                     .padding(.top, 80)
@@ -437,7 +454,9 @@ struct AppLauncherView: View {
             }
         }
         .environment(\.colorScheme, scheme)
-        .task {
+        .task { @MainActor in
+            // 在 TextField 获焦前完成菜单扫描，避免焦点切换导致菜单项 isEnabled 状态改变
+            registry.refresh()
             isTextFieldFocused = true
         }
         .onChange(of: isPresented) { newValue in
@@ -452,7 +471,7 @@ struct AppLauncherView: View {
             // 输入框
             inputField
 
-            // 结果列表
+            // 结果列表（最大高度 302pt = 350 - 48，覆盖 CommandTable 内置的 maxHeight: 200 限制）
             if !filteredOptions.isEmpty {
                 Divider()
                 CommandTable(
@@ -463,6 +482,7 @@ struct AppLauncherView: View {
                     dismiss()
                     option.action()
                 }
+                .frame(maxHeight: 302)
             }
         }
         .background(
@@ -479,11 +499,6 @@ struct AppLauncherView: View {
         )
         .shadow(radius: 32, x: 0, y: 12)
         .padding(.horizontal)
-        .onAppear {
-            Task { @MainActor in
-                registry.refresh()
-            }
-        }
         .onChange(of: query) { newValue in
             if !newValue.isEmpty {
                 if selectedIndex == nil { selectedIndex = 0 }
@@ -540,14 +555,20 @@ struct AppLauncherView: View {
     private func moveSelection(_ delta: Int) {
         let count = filteredOptions.count
         guard count > 0 else { return }
-        let current = Int(selectedIndex ?? (delta > 0 ? UInt.max : 0))
-        let next = (current + delta + count) % count
+        // selectedIndex 为 nil 时：delta > 0 从 -1 开始（→ 0），delta < 0 从 count 开始（→ count-1）
+        let current: Int
+        if let idx = selectedIndex {
+            current = Int(idx)
+        } else {
+            current = delta > 0 ? -1 : count
+        }
+        let next = ((current + delta) % count + count) % count
         selectedIndex = UInt(next)
     }
 
     private func dismiss() {
         isPresented = false
-        query = ""
+        // query 清理由 onChange(of: isPresented) 统一处理
     }
 }
 ```
@@ -600,6 +621,8 @@ final class ShiftDoubleTapDetector {
 
     private init() {}
 
+    /// 注：单例的 deinit 在正常 App 生命周期中不会被调用。
+    /// 如需显式释放（如测试场景），请直接调用 stop()。
     deinit { stop() }
 
     func start() {
@@ -643,7 +666,8 @@ final class ShiftDoubleTapDetector {
             lastShiftTime = nil
             Self.logger.debug("double-shift detected, posting toggleAppLauncher")
             DispatchQueue.main.async {
-                NotificationCenter.default.post(name: .toggleAppLauncher, object: nil)
+                // 携带 keyWindow 作为 object，供 PolterttyRootView 做 per-window 过滤
+                NotificationCenter.default.post(name: .toggleAppLauncher, object: NSApp.keyWindow)
             }
         } else {
             lastShiftTime = now
@@ -669,37 +693,44 @@ git commit -m "feat(app-launcher): add ShiftDoubleTapDetector with flagsChanged 
 
 ---
 
-## Task 6: 集成到 PolterttyRootView + AppDelegate
+## Task 6: 集成到 PolterttyRootView + TerminalController + AppDelegate
 
 **Files:**
 - Modify: `macos/Sources/Features/Workspace/PolterttyRootView.swift`
+- Modify: `macos/Sources/Features/Terminal/TerminalController.swift`
 - Modify: `macos/Sources/App/macOS/AppDelegate.swift`
 
-### Step 1: 添加 `.toggleAppLauncher` 通知名
+> 通知名 `.toggleAppLauncher` 已在 Task 4 的 `AppLauncherView.swift` 中定义，无需在此重复添加。
 
-在 `PolterttyRootView.swift` 顶部的 `Notification.Name` 扩展中添加：
+### Step 1: 在 PolterttyRootView 添加 windowProvider 参数 + launcher overlay
 
-- [ ] **在 `PolterttyRootView.swift` 的通知扩展中添加新通知名**
+多窗口过滤方案：`ShiftDoubleTapDetector` post 通知时携带 `NSApp.keyWindow` 作为 object；每个 `PolterttyRootView` 实例通过 `windowProvider` 闭包获取宿主 `NSWindow`，接收通知时比对 object，不匹配则忽略。
 
-找到文件顶部的 `extension Notification.Name {` 块（约第 4-17 行），在末尾的 `}` 之前添加：
+- [ ] **添加 windowProvider init 参数**
+
+在 `PolterttyRootView` 的 `let onNewTab` 附近，添加新属性：
 
 ```swift
-static let toggleAppLauncher = Notification.Name("poltertty.toggleAppLauncher")
+let windowProvider: () -> NSWindow?
 ```
 
-### Step 2: 在 PolterttyRootView 添加 launcher 状态和 overlay
+同时在 `init(...)` 签名末尾添加对应参数：
+
+```swift
+windowProvider: @escaping () -> NSWindow? = { nil }
+```
 
 - [ ] **添加 @State private var launcherVisible = false**
 
-在 `PolterttyRootView` 的 `@State private var showTmuxPicker` 附近（约第 43 行）添加：
+在 `@State private var showTmuxPicker` 附近（约第 43 行）添加：
 
 ```swift
 @State private var launcherVisible = false
 ```
 
-- [ ] **在 ZStack 的 `.terminal` case 最外层 overlay 区域之后添加 launcher overlay**
+- [ ] **在 Quick switcher overlay 之后添加 launcher overlay**
 
-在 `body` 的 ZStack 内，找到 `// Quick switcher overlay (always available in terminal mode)` 块（约第 250 行），在该块之后（快速切换器的 `}` 后面）添加：
+在 ZStack 内，`// Quick switcher overlay` 块（约第 250 行）之后添加：
 
 ```swift
 // App Launcher overlay
@@ -712,15 +743,33 @@ if launcherVisible {
 }
 ```
 
-- [ ] **添加 .toggleAppLauncher 通知监听**
+- [ ] **添加 .toggleAppLauncher 通知监听（带 per-window 过滤）**
 
-在 `body` 末尾的 `.onChange(of: manager.formalWorkspaces.count)` 之后（约第 316 行）添加：
+在 `body` 末尾添加：
 
 ```swift
-.onReceive(NotificationCenter.default.publisher(for: .toggleAppLauncher)) { _ in
-    guard NSApp.keyWindow != nil else { return }
+.onReceive(NotificationCenter.default.publisher(for: .toggleAppLauncher)) { notification in
+    guard notification.object as? NSWindow == windowProvider() else { return }
     launcherVisible.toggle()
 }
+```
+
+- [ ] **验证编译通过**
+
+```bash
+make check 2>&1 | grep "error:" | head -20
+```
+
+### Step 2: 在 TerminalController 传入 windowProvider
+
+`TerminalController` 是 `NSWindowController`，持有 `self.window`。
+
+- [ ] **在创建 PolterttyRootView 时传入 windowProvider**
+
+在 `TerminalController.swift` 的 `PolterttyRootView(...)` 初始化调用（约第 1474 行）末尾添加：
+
+```swift
+windowProvider: { [weak self] in self?.window },
 ```
 
 - [ ] **验证编译通过**
@@ -750,6 +799,7 @@ make check 2>&1 | grep "error:" | head -20
 
 ```bash
 git add macos/Sources/Features/Workspace/PolterttyRootView.swift \
+        macos/Sources/Features/Terminal/TerminalController.swift \
         macos/Sources/App/macOS/AppDelegate.swift
 git commit -m "feat(app-launcher): integrate launcher overlay and shift detector into app"
 ```

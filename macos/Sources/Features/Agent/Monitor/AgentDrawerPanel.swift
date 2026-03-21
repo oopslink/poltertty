@@ -134,8 +134,8 @@ struct AgentDrawerPanel: View {
             ForEach(availableTabs, id: \.self) { t in
                 Button(action: { tab = t }) {
                     Text(t.rawValue)
-                        .font(.system(size: 10))
-                        .padding(.horizontal, 12).padding(.vertical, 5)
+                        .font(.system(size: 10, weight: tab == t ? .medium : .regular))
+                        .padding(.horizontal, 12).padding(.vertical, 6)
                         .foregroundStyle(tab == t ? .primary : .secondary)
                         .overlay(alignment: .bottom) {
                             if tab == t {

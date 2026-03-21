@@ -40,18 +40,26 @@ struct AgentDrawer: View {
     private var drawerHeader: some View {
         HStack(spacing: 8) {
             if let state = singleItemState {
-                AgentStateDot(state: state)
+                if state.isActive {
+                    AgentStateDot(state: state)
+                } else {
+                    Circle().fill(Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
+                }
             }
             Text(headerTitle)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.primary)
             Spacer()
             Button(action: viewModel.closeDrawer) {
-                Image(systemName: "xmark").font(.system(size: 10))
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .medium))
+                    .frame(width: 16, height: 16)
+                    .background(Color(.separatorColor).opacity(0.3))
+                    .clipShape(Circle())
             }
-            .buttonStyle(.plain).foregroundStyle(.tertiary)
+            .buttonStyle(.plain).foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
+        .padding(.horizontal, 12).padding(.vertical, 7)
         .background(Color(.windowBackgroundColor))
     }
 
