@@ -64,7 +64,8 @@ final class ShiftDoubleTapDetector {
             lastShiftTime = nil
             Self.logger.debug("double-shift detected, posting toggleAppLauncher")
             DispatchQueue.main.async {
-                NotificationCenter.default.post(name: .toggleAppLauncher, object: nil)
+                // 携带 keyWindow 作为 object，供 PolterttyRootView 做 per-window 过滤
+                NotificationCenter.default.post(name: .toggleAppLauncher, object: NSApp.keyWindow)
             }
         } else {
             lastShiftTime = now

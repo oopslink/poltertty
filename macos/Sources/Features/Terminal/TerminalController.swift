@@ -1513,7 +1513,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 }(),
                 onNewTab: { [weak self] in self?.addNewTab() },
                 onCloseTab: { [weak self] id in self?.closePolterttyTab(id) },
-                onSwitchTab: { [weak self] id in self?.switchToTab(id) }
+                onSwitchTab: { [weak self] id in self?.switchToTab(id) },
+                windowProvider: { [weak self] in self?.window }
             )
         }
 

@@ -14,7 +14,6 @@ extension Notification.Name {
     static let showTmuxSessionPicker = Notification.Name("poltertty.showTmuxSessionPicker")
     static let tmuxAttachNewTab = Notification.Name("poltertty.tmuxAttachNewTab")
     static let tmuxAttachInCurrentPane = Notification.Name("poltertty.tmuxAttachInCurrentPane")
-    static let toggleAppLauncher = Notification.Name("poltertty.toggleAppLauncher")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -56,6 +55,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     let onNewTab: () -> Void
     let onCloseTab: (UUID) -> Void
     let onSwitchTab: ((UUID) -> Void)?
+    let windowProvider: () -> NSWindow?
 
     init(
         ghostty: Ghostty.App,
@@ -74,7 +74,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
         showStatusBar: Bool,
         onNewTab: @escaping () -> Void,
         onCloseTab: @escaping (UUID) -> Void,
-        onSwitchTab: ((UUID) -> Void)? = nil
+        onSwitchTab: ((UUID) -> Void)? = nil,
+        windowProvider: @escaping () -> NSWindow? = { nil }
     ) {
         self.ghostty = ghostty
         self.workspaceId = workspaceId
@@ -93,6 +94,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
         self.onNewTab = onNewTab
         self.onCloseTab = onCloseTab
         self.onSwitchTab = onSwitchTab
+        self.windowProvider = windowProvider
 
         if let wsId = workspaceId {
             self._fileBrowserVM = ObservedObject(
@@ -294,8 +296,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
             tmuxPickerAttachInCurrentPane = notification.userInfo?["attachInCurrentPane"] as? Bool ?? false
             showTmuxPicker = true
         }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleAppLauncher)) { _ in
-            guard NSApp.keyWindow != nil else { return }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleAppLauncher)) { notification in
+            guard notification.object as? NSWindow == windowProvider() else { return }
             launcherVisible.toggle()
         }
         .sheet(isPresented: $showTmuxPicker) {

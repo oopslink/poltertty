@@ -1,6 +1,11 @@
 // macos/Sources/Features/App Launcher/AppLauncherView.swift
 import SwiftUI
 
+extension Notification.Name {
+    /// App Launcher 触发通知。由 ShiftDoubleTapDetector post（object: NSApp.keyWindow）。
+    static let toggleAppLauncher = Notification.Name("poltertty.toggleAppLauncher")
+}
+
 struct AppLauncherView: View {
     @Binding var isPresented: Bool
     var backgroundColor: Color = Color(nsColor: .windowBackgroundColor)
