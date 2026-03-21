@@ -3,18 +3,15 @@ import SwiftUI
 
 struct AgentLaunchMenu: View {
     @ObservedObject private var registry = AgentRegistry.shared
-    @State private var step: Step = .selectAgent
-    @State private var selectedAgent: AgentDefinition?
     @State private var location: AgentLaunchLocation = .newTab
-    @State private var permissionMode: ClaudePermissionMode = .default
+    /// 每个 agent 独立的 permission mode（仅 .full hook agent 使用）
+    @State private var permissionModes: [String: ClaudePermissionMode] = [:]
     @State private var searchText = ""
 
     let workspaceId: UUID
     let cwd: String
     let onLaunch: (AgentDefinition, AgentLaunchLocation, ClaudePermissionMode) -> Void
     let onCancel: () -> Void
-
-    enum Step { case selectAgent, selectLocation }
 
     private var filtered: [AgentDefinition] {
         guard !searchText.isEmpty else { return registry.definitions }
@@ -26,10 +23,13 @@ struct AgentLaunchMenu: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            switch step {
-            case .selectAgent:    agentSelection
-            case .selectLocation: locationSelection
-            }
+            locationHeader
+            Divider()
+            searchBar
+            Divider()
+            agentList
+            Divider()
+            cancelRow
         }
         .frame(width: 340)
         .background(.regularMaterial)
@@ -37,144 +37,142 @@ struct AgentLaunchMenu: View {
         .shadow(radius: 16)
     }
 
-    // MARK: - Step 1
+    // MARK: - Location Header
 
-    private var agentSelection: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Search agents...", text: $searchText).textFieldStyle(.plain)
-            }
-            .padding(10)
-            Divider()
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(filtered) { agent in
-                        AgentRow(agent: agent).contentShape(Rectangle())
-                            .onTapGesture { pick(agent) }
-                    }
+    private var locationHeader: some View {
+        HStack {
+            Text("Location").font(.system(size: 11)).foregroundStyle(.secondary)
+            Spacer()
+            Picker("", selection: $location) {
+                ForEach(AgentLaunchLocation.allCases, id: \.self) { loc in
+                    Text(loc.displayName).tag(loc)
                 }
             }
-            .frame(maxHeight: 220)
+            .pickerStyle(.menu)
+            .font(.system(size: 11))
+            .fixedSize()
         }
+        .padding(.horizontal, 12).padding(.vertical, 7)
     }
 
-    private func pick(_ agent: AgentDefinition) {
-        selectedAgent = agent
-        permissionMode = .default
-        if registry.definitions.count == 1 {
-            onLaunch(agent, location, permissionMode)
-        } else {
-            step = .selectLocation
+    // MARK: - Search Bar
+
+    private var searchBar: some View {
+        HStack {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("Search agents...", text: $searchText).textFieldStyle(.plain)
         }
+        .padding(10)
     }
 
-    // MARK: - Step 2
+    // MARK: - Agent List
 
-    private var locationSelection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack {
-                Button { step = .selectAgent } label: {
-                    Image(systemName: "chevron.left")
+    private var agentList: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(filtered) { agent in
+                    AgentRow(
+                        agent: agent,
+                        permissionMode: permissionBinding(for: agent),
+                        onLaunch: { launch(agent) }
+                    )
                 }
-                .buttonStyle(.plain)
-                Text("Launch \(selectedAgent?.name ?? "")").font(.system(size: 13, weight: .semibold))
             }
-            .padding(12)
-            Divider()
-
-            // Location
-            HStack {
-                Text("Location").font(.system(size: 11)).foregroundStyle(.secondary)
-                Spacer()
-                Picker("", selection: $location) {
-                    ForEach(AgentLaunchLocation.allCases, id: \.self) { loc in
-                        Text(loc.displayName).tag(loc)
-                    }
-                }
-                .pickerStyle(.menu)
-                .font(.system(size: 11))
-                .fixedSize()
-            }
-            .padding(.horizontal, 12).padding(.vertical, 7)
-
-            // Permission（仅 .full agent）
-            if selectedAgent?.hookCapability == .full {
-                Divider()
-                HStack {
-                    Text("Permission").font(.system(size: 11)).foregroundStyle(.secondary)
-                    Spacer()
-                    Picker("", selection: $permissionMode) {
-                        ForEach(ClaudePermissionMode.allCases, id: \.self) { mode in
-                            Text(mode.displayName).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .font(.system(size: 11))
-                    .foregroundStyle(permissionModeColor(permissionMode))
-                    .fixedSize()
-                }
-                .padding(.horizontal, 12).padding(.vertical, 7)
-            }
-
-            Divider()
-            HStack {
-                Button("Cancel") { onCancel() }.keyboardShortcut(.escape, modifiers: [])
-                Spacer()
-                Button("Launch") {
-                    if let a = selectedAgent { onLaunch(a, location, permissionMode) }
-                }
-                .keyboardShortcut(.return, modifiers: [])
-                .buttonStyle(.borderedProminent)
-            }
-            .padding(12)
         }
+        .frame(maxHeight: 220)
     }
 
-    private func permissionModeColor(_ mode: ClaudePermissionMode) -> Color {
-        switch mode {
-        case .default:          return .accentColor
-        case .acceptEdits:      return .accentColor
-        case .dontAsk:          return .accentColor
-        case .plan:             return .accentColor
-        case .auto:             return .orange
-        case .bypassPermissions: return .red
+    // MARK: - Cancel Row
+
+    private var cancelRow: some View {
+        HStack {
+            Button("Cancel") { onCancel() }
+                .keyboardShortcut(.escape, modifiers: [])
+            Spacer()
         }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+    }
+
+    // MARK: - Helpers
+
+    private func permissionBinding(for agent: AgentDefinition) -> Binding<ClaudePermissionMode> {
+        Binding(
+            get: { permissionModes[agent.id] ?? .default },
+            set: { permissionModes[agent.id] = $0 }
+        )
+    }
+
+    private func launch(_ agent: AgentDefinition) {
+        let permission: ClaudePermissionMode = agent.hookCapability == .full
+            ? (permissionModes[agent.id] ?? .default)
+            : .default
+        onLaunch(agent, location, permission)
     }
 }
 
+// MARK: - AgentRow
+
 private struct AgentRow: View {
     let agent: AgentDefinition
+    @Binding var permissionMode: ClaudePermissionMode
+    let onLaunch: () -> Void
     @State private var hovered = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            AgentIconBadge(agent: agent)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(agent.name).font(.system(size: 13))
-                Text(agent.command).font(.system(size: 11)).foregroundStyle(.secondary)
+        HStack(spacing: 0) {
+            // 可点击的启动区域
+            Button(action: onLaunch) {
+                HStack(spacing: 10) {
+                    AgentIconBadge(agent: agent)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(agent.name).font(.system(size: 13))
+                        Text(agent.command).font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if agent.hookCapability != .full {
+                        hookBadge
+                    }
+                }
+                .padding(.leading, 12).padding(.trailing, agent.hookCapability == .full ? 6 : 12)
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Spacer()
-            hookBadge
+            .buttonStyle(.plain)
+
+            // Permission 下拉框（仅 .full hook agent）
+            if agent.hookCapability == .full {
+                Picker("", selection: $permissionMode) {
+                    ForEach(ClaudePermissionMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+                .font(.system(size: 10))
+                .foregroundStyle(permissionModeColor(permissionMode))
+                .fixedSize()
+                .padding(.trailing, 12)
+            }
         }
-        .padding(.horizontal, 12).padding(.vertical, 7)
         .background(hovered ? Color(.selectedContentBackgroundColor).opacity(0.3) : .clear)
         .onHover { hovered = $0 }
     }
 
     @ViewBuilder private var hookBadge: some View {
         switch agent.hookCapability {
-        case .full:
-            Text("hooks").font(.system(size: 10)).padding(.horizontal, 5).padding(.vertical, 2)
-                .background(Color.green.opacity(0.15)).foregroundStyle(.green)
-                .clipShape(RoundedRectangle(cornerRadius: 3))
         case .commandOnly:
             Text("cmd").font(.system(size: 10)).padding(.horizontal, 5).padding(.vertical, 2)
                 .background(Color.yellow.opacity(0.15)).foregroundStyle(.yellow)
                 .clipShape(RoundedRectangle(cornerRadius: 3))
-        case .none:
+        default:
             EmptyView()
+        }
+    }
+
+    private func permissionModeColor(_ mode: ClaudePermissionMode) -> Color {
+        switch mode {
+        case .auto:              return .orange
+        case .bypassPermissions: return .red
+        default:                 return .secondary
         }
     }
 }
