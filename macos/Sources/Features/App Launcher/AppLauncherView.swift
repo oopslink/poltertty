@@ -1,5 +1,28 @@
 // macos/Sources/Features/App Launcher/AppLauncherView.swift
 import SwiftUI
+import AppKit
+
+/// 从 ScrollView 内部向上遍历 NSView 层级，找到 NSScrollView 并清零 content insets。
+/// macOS NSScrollView 默认 automaticallyAdjustsContentInsets = true，
+/// 会将窗口 titlebar 高度作为顶部内容缩进，导致结果列表顶部出现空白。
+private struct ScrollInsetRemover: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { [weak view] in
+            var v: NSView? = view
+            while let current = v {
+                if let scrollView = current as? NSScrollView {
+                    scrollView.automaticallyAdjustsContentInsets = false
+                    scrollView.contentInsets = NSEdgeInsets(top: 2, left: 0, bottom: 0, right: 0)
+                    break
+                }
+                v = current.superview
+            }
+        }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
 
 extension Notification.Name {
     /// App Launcher 触发通知。由 ShiftDoubleTapDetector post（object: NSApp.keyWindow）。
@@ -67,18 +90,34 @@ struct AppLauncherView: View {
             // 输入框
             inputField
 
-            // 结果列表
+            // 结果列表（内联实现避免 CommandTable 内 NSScrollView safe area inset 问题）
             if !filteredOptions.isEmpty {
                 Divider()
-                CommandTable(
-                    options: filteredOptions,
-                    selectedIndex: $selectedIndex,
-                    hoveredOptionID: $hoveredOptionID
-                ) { option in
-                    dismiss()
-                    option.action()
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(filteredOptions.enumerated()), id: \.1.id) { index, option in
+                                CommandRow(
+                                    option: option,
+                                    isSelected: selectedIndex == UInt(index),
+                                    hoveredID: $hoveredOptionID
+                                ) {
+                                    dismiss()
+                                    option.action()
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, 6)
+                        .background(ScrollInsetRemover())
+                    }
+                    .frame(maxHeight: 302)
+                    .onChange(of: selectedIndex) { _ in
+                        guard let idx = selectedIndex,
+                              Int(idx) < filteredOptions.count else { return }
+                        proxy.scrollTo(filteredOptions[Int(idx)].id)
+                    }
                 }
-                .frame(maxHeight: 302)
             }
         }
         .background(

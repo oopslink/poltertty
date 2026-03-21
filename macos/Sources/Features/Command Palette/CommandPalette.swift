@@ -320,6 +320,7 @@ struct CommandTable: View {
                     .padding(.horizontal, 10)
                     .padding(.bottom, 10)
                 }
+                .ignoresSafeArea(.all, edges: .top)
                 .frame(maxHeight: 200)
                 .onChange(of: selectedIndex) { _ in
                     guard let selectedIndex,
@@ -384,6 +385,7 @@ struct CommandRow: View {
                 }
             }
             .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .background(
                 isSelected
