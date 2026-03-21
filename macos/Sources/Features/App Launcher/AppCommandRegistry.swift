@@ -23,19 +23,21 @@ final class AppCommandRegistry: ObservableObject {
 
     private func scanMenuItems() -> [CommandOption] {
         guard let mainMenu = NSApp.mainMenu else { return [] }
-        return collectItems(from: mainMenu)
+        return collectItems(from: mainMenu, path: [])
     }
 
-    private func collectItems(from menu: NSMenu) -> [CommandOption] {
+    private func collectItems(from menu: NSMenu, path: [String]) -> [CommandOption] {
         var result: [CommandOption] = []
         for item in menu.items {
-            guard !item.isSeparatorItem else { continue }
+            guard !item.isSeparatorItem, !item.title.isEmpty else { continue }
             if let submenu = item.submenu {
-                result += collectItems(from: submenu)
+                result += collectItems(from: submenu, path: path + [item.title])
             } else if let action = item.action, item.isEnabled {
                 let symbols = keyEquivalentSymbols(for: item)
+                let subtitle = path.isEmpty ? nil : path.joined(separator: " › ")
                 result.append(CommandOption(
                     title: item.title,
+                    subtitle: subtitle,
                     symbols: symbols.isEmpty ? nil : symbols,
                     leadingIcon: "menubar.rectangle",
                     action: {
