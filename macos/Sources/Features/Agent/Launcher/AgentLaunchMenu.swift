@@ -3,8 +3,6 @@ import SwiftUI
 
 struct AgentLaunchMenu: View {
     @ObservedObject private var registry = AgentRegistry.shared
-    @State private var step: Step = .selectAgent
-    @State private var selectedAgent: AgentDefinition?
     @State private var location: AgentLaunchLocation = .newTab
     @State private var permissionMode: ClaudePermissionMode = .default
     @State private var searchText = ""
@@ -14,8 +12,6 @@ struct AgentLaunchMenu: View {
     let onLaunch: (AgentDefinition, AgentLaunchLocation, ClaudePermissionMode) -> Void
     let onCancel: () -> Void
 
-    enum Step { case selectAgent, selectLocation }
-
     private var filtered: [AgentDefinition] {
         guard !searchText.isEmpty else { return registry.definitions }
         return registry.definitions.filter {
@@ -24,12 +20,20 @@ struct AgentLaunchMenu: View {
         }
     }
 
+    /// 是否存在支持 hooks 的 agent（用于决定是否显示 Permission 选项）
+    private var hasFullHookAgents: Bool {
+        registry.definitions.contains { $0.hookCapability == .full }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            switch step {
-            case .selectAgent:    agentSelection
-            case .selectLocation: locationSelection
-            }
+            controlsHeader
+            Divider()
+            searchBar
+            Divider()
+            agentList
+            Divider()
+            cancelRow
         }
         .frame(width: 340)
         .background(.regularMaterial)
@@ -37,54 +41,10 @@ struct AgentLaunchMenu: View {
         .shadow(radius: 16)
     }
 
-    // MARK: - Step 1
+    // MARK: - Controls Header
 
-    private var agentSelection: some View {
+    private var controlsHeader: some View {
         VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Search agents...", text: $searchText).textFieldStyle(.plain)
-            }
-            .padding(10)
-            Divider()
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(filtered) { agent in
-                        AgentRow(agent: agent).contentShape(Rectangle())
-                            .onTapGesture { pick(agent) }
-                    }
-                }
-            }
-            .frame(maxHeight: 220)
-        }
-    }
-
-    private func pick(_ agent: AgentDefinition) {
-        selectedAgent = agent
-        permissionMode = .default
-        if registry.definitions.count == 1 {
-            onLaunch(agent, location, permissionMode)
-        } else {
-            step = .selectLocation
-        }
-    }
-
-    // MARK: - Step 2
-
-    private var locationSelection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
-            HStack {
-                Button { step = .selectAgent } label: {
-                    Image(systemName: "chevron.left")
-                }
-                .buttonStyle(.plain)
-                Text("Launch \(selectedAgent?.name ?? "")").font(.system(size: 13, weight: .semibold))
-            }
-            .padding(12)
-            Divider()
-
-            // Location
             HStack {
                 Text("Location").font(.system(size: 11)).foregroundStyle(.secondary)
                 Spacer()
@@ -99,8 +59,7 @@ struct AgentLaunchMenu: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 7)
 
-            // Permission（仅 .full agent）
-            if selectedAgent?.hookCapability == .full {
+            if hasFullHookAgents {
                 Divider()
                 HStack {
                     Text("Permission").font(.system(size: 11)).foregroundStyle(.secondary)
@@ -117,29 +76,56 @@ struct AgentLaunchMenu: View {
                 }
                 .padding(.horizontal, 12).padding(.vertical, 7)
             }
-
-            Divider()
-            HStack {
-                Button("Cancel") { onCancel() }.keyboardShortcut(.escape, modifiers: [])
-                Spacer()
-                Button("Launch") {
-                    if let a = selectedAgent { onLaunch(a, location, permissionMode) }
-                }
-                .keyboardShortcut(.return, modifiers: [])
-                .buttonStyle(.borderedProminent)
-            }
-            .padding(12)
         }
+    }
+
+    // MARK: - Search Bar
+
+    private var searchBar: some View {
+        HStack {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("Search agents...", text: $searchText).textFieldStyle(.plain)
+        }
+        .padding(10)
+    }
+
+    // MARK: - Agent List
+
+    private var agentList: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(filtered) { agent in
+                    AgentRow(agent: agent).contentShape(Rectangle())
+                        .onTapGesture { launch(agent) }
+                }
+            }
+        }
+        .frame(maxHeight: 220)
+    }
+
+    // MARK: - Cancel Row
+
+    private var cancelRow: some View {
+        HStack {
+            Button("Cancel") { onCancel() }
+                .keyboardShortcut(.escape, modifiers: [])
+            Spacer()
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+    }
+
+    // MARK: - Actions
+
+    private func launch(_ agent: AgentDefinition) {
+        let effectivePermission = agent.hookCapability == .full ? permissionMode : .default
+        onLaunch(agent, location, effectivePermission)
     }
 
     private func permissionModeColor(_ mode: ClaudePermissionMode) -> Color {
         switch mode {
-        case .default:          return .accentColor
-        case .acceptEdits:      return .accentColor
-        case .dontAsk:          return .accentColor
-        case .plan:             return .accentColor
         case .auto:             return .orange
         case .bypassPermissions: return .red
+        default:                return .accentColor
         }
     }
 }
