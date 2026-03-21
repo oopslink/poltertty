@@ -218,7 +218,7 @@ extension Ghostty {
         var notificationIdentifiers: Set<String> = []
 
         private var markedText: NSMutableAttributedString
-        private(set) var focused: Bool = true
+        private(set) var focused: Bool = false
         private var prevPressureStage: Int = 0
         private var appearanceObserver: NSKeyValueObservation?
 
