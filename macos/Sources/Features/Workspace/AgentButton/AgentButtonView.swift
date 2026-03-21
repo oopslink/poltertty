@@ -8,6 +8,7 @@ struct AgentButtonView: View {
 
     @ObservedObject private var sessionManager = AgentService.shared.sessionManager
     @State private var showPopover = false
+    @State private var pulse = false
 
     private var session: AgentSession? {
         sessionManager.sessions[surfaceId]
@@ -37,12 +38,15 @@ struct AgentButtonView: View {
         let color = session.definition.iconColor.flatMap { Color(hex: $0) } ?? .secondary
         Text(session.definition.icon)
             .foregroundColor(color)
-            .opacity(session.state == .working ? 1.0 : (session.state.isActive ? 0.8 : 0.4))
+            .opacity(session.state == .working ? (pulse ? 1.0 : 0.4) : (session.state.isActive ? 0.8 : 0.4))
+            .onChange(of: session.state == .working) { isWorking in
+                pulse = isWorking
+            }
             .animation(
                 session.state == .working
                     ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true)
                     : .default,
-                value: session.state == .working
+                value: pulse
             )
     }
 }

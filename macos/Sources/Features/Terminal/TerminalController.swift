@@ -185,12 +185,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                   let def = AgentRegistry.shared.definitions.first(where: { $0.id == defId })
             else { return }
 
-            // 确保焦点在目标 surface
-            if let targetSurface = self.surfaceTree.first(where: { $0.id == surfaceId }) {
-                self.focusSurface(targetSurface)
-            }
+            // surfaceId 必须属于当前 controller 的 surfaceTree
+            guard let targetSurface = self.surfaceTree.first(where: { $0.id == surfaceId })
+            else { return }
 
-            let cwd = self.surfaceTree.first(where: { $0.id == surfaceId })?.pwd ?? "~"
+            self.focusSurface(targetSurface)
+            let cwd = targetSurface.pwd ?? "~"
             AgentLauncher(terminalController: self).launch(
                 definition: def,
                 location: .currentPane,

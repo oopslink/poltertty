@@ -56,7 +56,7 @@ struct AgentSessionPopover: View {
         case .launching: return "Launching"
         case .working:   return "Working"
         case .idle:      return "Idle"
-        case .done:      return "Done"
+        case .done(let code): return code == 0 ? "Done" : "Done (exit \(code))"
         case .error(let msg): return "Error: \(msg)"
         }
     }
