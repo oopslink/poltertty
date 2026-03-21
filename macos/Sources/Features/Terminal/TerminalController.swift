@@ -1807,6 +1807,13 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     @IBAction func closeTab(_ sender: Any?) {
+        // Poltertty 自定义 tab：优先用 tabBarViewModel 判断，避免误关整个 window
+        if tabBarViewModel.tabs.count > 1,
+           let activeTabId = tabBarViewModel.activeTabId {
+            closePolterttyTab(activeTabId)
+            return
+        }
+
         guard let window = window else { return }
         guard window.tabGroup?.windows.count ?? 0 > 1 else {
             closeWindow(sender)
