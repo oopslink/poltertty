@@ -1,5 +1,5 @@
 import AppKit
-import SwiftUI
+import Combine
 
 /// 收集所有可用命令，供 AppLauncherView 使用。
 /// 每次调用 refresh() 时重新扫描菜单（须在 @MainActor 执行）。
