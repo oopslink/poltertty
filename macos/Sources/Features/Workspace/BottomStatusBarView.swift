@@ -20,8 +20,11 @@ struct BottomStatusBarView: View {
                     .truncationMode(.head)
                     .foregroundColor(.secondary)
                 Spacer()
-                // 右：git 状态（非 git 仓库时不显示）
+                // 右：agent 按钮 | git 状态
+                AgentButtonView(surfaceId: surfaceId)
                 if status.isGitRepo {
+                    Text("|")
+                        .foregroundColor(.secondary)
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.branch")
                             .foregroundColor(.secondary)
@@ -37,7 +40,6 @@ struct BottomStatusBarView: View {
                         }
                     }
                 }
-                AgentButtonView(surfaceId: surfaceId)
             }
             .padding(.horizontal, 8)
             .frame(height: 22)
