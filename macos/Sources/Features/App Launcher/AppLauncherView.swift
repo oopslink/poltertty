@@ -50,7 +50,9 @@ struct AppLauncherView: View {
             }
         }
         .environment(\.colorScheme, scheme)
-        .task {
+        .task { @MainActor in
+            // 在 TextField 获焦前完成菜单扫描，避免焦点切换导致菜单项 isEnabled 状态改变
+            registry.refresh()
             isTextFieldFocused = true
         }
         .onChange(of: isPresented) { newValue in
@@ -76,6 +78,7 @@ struct AppLauncherView: View {
                     dismiss()
                     option.action()
                 }
+                .frame(maxHeight: 302)
             }
         }
         .background(
@@ -92,11 +95,6 @@ struct AppLauncherView: View {
         )
         .shadow(radius: 32, x: 0, y: 12)
         .padding(.horizontal)
-        .onAppear {
-            Task { @MainActor in
-                registry.refresh()
-            }
-        }
         .onChange(of: query) { newValue in
             if !newValue.isEmpty {
                 if selectedIndex == nil { selectedIndex = 0 }
@@ -165,6 +163,6 @@ struct AppLauncherView: View {
 
     private func dismiss() {
         isPresented = false
-        query = ""
+        // query 由 onChange(of: isPresented) 统一清理
     }
 }
