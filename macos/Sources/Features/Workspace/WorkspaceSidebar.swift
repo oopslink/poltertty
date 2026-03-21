@@ -4,6 +4,7 @@ import SwiftUI
 
 struct WorkspaceSidebar: View {
     @ObservedObject var manager = WorkspaceManager.shared
+    @ObservedObject var notificationStore = AgentNotificationStore.shared
     let currentWorkspaceId: UUID?
     let onSwitch: (UUID) -> Void
     let onClose: (UUID) -> Void
@@ -134,6 +135,7 @@ struct WorkspaceSidebar: View {
                                 workspace: workspace,
                                 isActive: workspace.id == currentWorkspaceId,
                                 isOpen: manager.windowForWorkspace(workspace.id) != nil,
+                                unreadCount: notificationStore.unreadCount(for: workspace.id),
                                 onTap: { onSwitch(workspace.id) },
                                 onClose: { onClose(workspace.id) },
                                 onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
@@ -173,6 +175,7 @@ struct WorkspaceSidebar: View {
                                             workspace: workspace,
                                             isActive: workspace.id == currentWorkspaceId,
                                             isOpen: manager.windowForWorkspace(workspace.id) != nil,
+                                            unreadCount: notificationStore.unreadCount(for: workspace.id),
                                             onTap: { onSwitch(workspace.id) },
                                             onClose: { onClose(workspace.id) },
                                             onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
@@ -196,6 +199,7 @@ struct WorkspaceSidebar: View {
                                     workspace: workspace,
                                     isActive: workspace.id == currentWorkspaceId,
                                     isOpen: manager.windowForWorkspace(workspace.id) != nil,
+                                    unreadCount: notificationStore.unreadCount(for: workspace.id),
                                     onTap: { onSwitch(workspace.id) },
                                     onClose: { onClose(workspace.id) },
                                     onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
@@ -238,6 +242,7 @@ struct WorkspaceSidebar: View {
                     workspace: workspace,
                     isActive: workspace.id == currentWorkspaceId,
                     isOpen: manager.windowForWorkspace(workspace.id) != nil,
+                    unreadCount: notificationStore.unreadCount(for: workspace.id),
                     animationNamespace: sidebarAnimation,
                     onTap: { onSwitch(workspace.id) },
                     onClose: { onClose(workspace.id) },
@@ -321,6 +326,7 @@ struct WorkspaceSidebar: View {
                                         workspace: workspace,
                                         isActive: workspace.id == currentWorkspaceId,
                                         isOpen: manager.windowForWorkspace(workspace.id) != nil,
+                                        unreadCount: notificationStore.unreadCount(for: workspace.id),
                                         animationNamespace: sidebarAnimation,
                                         onTap: { onSwitch(workspace.id) },
                                         onClose: { onClose(workspace.id) },
@@ -355,6 +361,7 @@ struct WorkspaceSidebar: View {
                                     workspace: workspace,
                                     isActive: workspace.id == currentWorkspaceId,
                                     isOpen: manager.windowForWorkspace(workspace.id) != nil,
+                                    unreadCount: notificationStore.unreadCount(for: workspace.id),
                                     animationNamespace: sidebarAnimation,
                                     onTap: { onSwitch(workspace.id) },
                                     onClose: { onClose(workspace.id) },
@@ -463,6 +470,7 @@ struct CollapsedWorkspaceIcon: View {
     let workspace: WorkspaceModel
     let isActive: Bool
     let isOpen: Bool
+    var unreadCount: Int = 0
     let onTap: () -> Void
     let onClose: () -> Void
     let onDelete: () -> Void
@@ -522,6 +530,17 @@ struct CollapsedWorkspaceIcon: View {
                     .foregroundColor(iconTextColor)
             }
             .frame(width: 32, height: 32)
+            .overlay(alignment: .topTrailing) {
+                if unreadCount > 0 {
+                    Text("\(min(unreadCount, 99))")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Color.red))
+                        .offset(x: 4, y: -4)
+                }
+            }
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
@@ -558,6 +577,7 @@ struct ExpandedWorkspaceItem: View {
     let workspace: WorkspaceModel
     let isActive: Bool
     let isOpen: Bool
+    var unreadCount: Int = 0
     let animationNamespace: Namespace.ID
     let onTap: () -> Void
     let onClose: () -> Void
@@ -599,6 +619,15 @@ struct ExpandedWorkspaceItem: View {
                         Circle()
                             .fill(Color.green)
                             .frame(width: 5, height: 5)
+                    }
+
+                    if unreadCount > 0 {
+                        Text("\(unreadCount)")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.red))
                     }
                 }
 

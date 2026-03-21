@@ -7,11 +7,13 @@ final class ExternalSessionDiscovery: ObservableObject {
     @Published private(set) var sessions: [ExternalSessionRecord] = []
 
     private let workspaceDir: String
+    private let workspaceId: UUID?
     private let providers: [any ExternalAgentProvider]
     private var refreshTimer: Timer?
 
-    init(workspaceRootDir: String) {
+    init(workspaceRootDir: String, workspaceId: UUID? = nil) {
         self.workspaceDir = workspaceRootDir
+        self.workspaceId = workspaceId
         self.providers = [
             ClaudeSessionProvider(workspaceDir: workspaceRootDir),
             OpenCodeSessionProvider(workspaceDir: workspaceRootDir),
@@ -42,6 +44,52 @@ final class ExternalSessionDiscovery: ObservableObject {
     }
 
     private func refresh() {
-        sessions = providers.flatMap { $0.currentSessions() }
+        let newSessions = providers.flatMap { $0.currentSessions() }
+        let oldMap = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
+
+        // Delta 检测：生成通知
+        if let wsId = workspaceId {
+            for newRecord in newSessions {
+                if let oldRecord = oldMap[newRecord.id] {
+                    // 已有会话：检测 isAlive 变化
+                    if oldRecord.isAlive && !newRecord.isAlive {
+                        emitNotification(
+                            workspaceId: wsId, record: newRecord,
+                            type: .done,
+                            title: "\(newRecord.toolType.badge) 会话结束"
+                        )
+                    }
+                } else if newRecord.isAlive {
+                    // 新出现的活跃会话
+                    emitNotification(
+                        workspaceId: wsId, record: newRecord,
+                        type: .info,
+                        title: "\(newRecord.toolType.badge) 新会话启动"
+                    )
+                }
+            }
+        }
+
+        sessions = newSessions
+    }
+
+    private func emitNotification(
+        workspaceId: UUID,
+        record: ExternalSessionRecord,
+        type: AgentNotificationType,
+        title: String
+    ) {
+        AgentNotificationStore.shared.insert(AgentNotification(
+            id: UUID(),
+            timestamp: Date(),
+            workspaceId: workspaceId,
+            surfaceId: nil,
+            agentDefinitionId: record.toolType.rawValue,
+            sessionId: record.id,
+            type: type,
+            title: title,
+            body: record.lastMessage?.text.prefix(100).description,
+            priority: type == .error ? .high : .normal
+        ))
     }
 }

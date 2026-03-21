@@ -1133,6 +1133,14 @@ class AppDelegate: NSObject,
         toggleAgentMonitor.keyEquivalentModifierMask = [.command, .shift]
         agentMenu.addItem(toggleAgentMonitor)
 
+        let toggleNotificationCenter = NSMenuItem(title: "Toggle Notification Center", action: #selector(toggleNotificationCenter(_:)), keyEquivalent: "n")
+        toggleNotificationCenter.keyEquivalentModifierMask = [.command, .shift]
+        agentMenu.addItem(toggleNotificationCenter)
+
+        let jumpToUnread = NSMenuItem(title: "Jump to Highest Priority Unread", action: #selector(jumpToHighestPriorityUnread(_:)), keyEquivalent: "u")
+        jumpToUnread.keyEquivalentModifierMask = [.command, .shift]
+        agentMenu.addItem(jumpToUnread)
+
         let agentMenuItem = NSMenuItem(title: "Agent", action: nil, keyEquivalent: "")
         agentMenuItem.submenu = agentMenu
 
@@ -1172,6 +1180,14 @@ class AppDelegate: NSObject,
 
     @objc func toggleAgentMonitor(_ sender: Any?) {
         NotificationCenter.default.post(name: .toggleAgentMonitor, object: nil)
+    }
+
+    @objc func toggleNotificationCenter(_ sender: Any?) {
+        NotificationCenter.default.post(name: .toggleNotificationCenter, object: nil)
+    }
+
+    @objc func jumpToHighestPriorityUnread(_ sender: Any?) {
+        NotificationCenter.default.post(name: .jumpToHighestPriorityUnread, object: nil)
     }
 
     @objc func newTabWithTmuxSession(_ sender: Any?) {

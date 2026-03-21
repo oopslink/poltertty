@@ -1,6 +1,7 @@
 // macos/Sources/Features/Agent/AgentService.swift
 import Foundation
 import OSLog
+import UserNotifications
 
 @MainActor
 final class AgentService {
@@ -26,7 +27,20 @@ final class AgentService {
         hookServer = HookServer(sessionManager: sessionManager)
         hookServer?.start()
         tokenTracker = TokenTracker(sessionManager: sessionManager)
+        // 初始化通知中心（加载磁盘数据）+ 请求系统通知权限
+        _ = AgentNotificationStore.shared
+        requestNotificationPermission()
         Self.logger.info("AgentService started")
+    }
+
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if let error {
+                Self.logger.warning("Notification permission request failed: \(error.localizedDescription)")
+            } else {
+                Self.logger.info("Notification permission granted: \(granted)")
+            }
+        }
     }
 
     func cleanupForWorkspace(id: UUID) {
