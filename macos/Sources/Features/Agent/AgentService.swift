@@ -20,16 +20,35 @@ final class AgentService {
     var hookServer: HookServer? = nil
     var tokenTracker: TokenTracker? = nil
 
+    private var cleanupTimer: Timer?
+
     private init() {}
 
     func start() {
         Self.logger.info("AgentService starting")
+
+        // 部署 wrapper / shell integration 到 ~/.poltertty/
+        AgentBootstrap.deploy()
+
+        // 加载持久化的 wrapper session 并清理过期数据
+        HookSessionStore.shared.loadFromDisk()
+        HookSessionStore.shared.cleanupStale()
+
         hookServer = HookServer(sessionManager: sessionManager)
         hookServer?.start()
         tokenTracker = TokenTracker(sessionManager: sessionManager)
         // 初始化通知中心（加载磁盘数据）+ 请求系统通知权限
         _ = AgentNotificationStore.shared
         requestNotificationPermission()
+
+        // 定期清理 stale session（每 30 秒）
+        cleanupTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard self != nil else { return }
+                HookSessionStore.shared.cleanupStale()
+            }
+        }
+
         Self.logger.info("AgentService started")
     }
 
@@ -54,6 +73,8 @@ final class AgentService {
 
     func shutdown() {
         Self.logger.info("AgentService shutting down")
+        cleanupTimer?.invalidate()
+        cleanupTimer = nil
         hookServer?.stop()
     }
 
