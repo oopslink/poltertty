@@ -149,6 +149,7 @@ final class HookServer {
             )
 
             // wrapper 启动的会话注册为本地 AgentSession（仅当该 surface 尚未有活跃会话时）
+            Self.logger.warning("prepare-session: agent=\(req.agent) agentSessionId=\(req.agentSessionId) surfaceId=\(req.surfaceId) workspaceId=\(req.workspaceId)")
             if let surfaceUUID = UUID(uuidString: req.surfaceId),
                let workspaceUUID = UUID(uuidString: req.workspaceId),
                self.sessionManager.session(for: surfaceUUID) == nil {
@@ -162,6 +163,7 @@ final class HookServer {
                     cwd: req.cwd
                 )
                 self.sessionManager.register(agentSession)
+                Self.logger.warning("prepare-session: registered AgentSession surfaceId=\(surfaceUUID) agentSessionId=\(req.agentSessionId)")
                 // 预绑定 claude session ID，使后续 hook 事件能直接命中
                 if req.agentSessionId != "unknown" {
                     self.sessionManager.bindClaudeSession(
@@ -169,6 +171,8 @@ final class HookServer {
                         claudeSessionId: req.agentSessionId
                     )
                 }
+            } else {
+                Self.logger.warning("prepare-session: skipped registration (surface already has session or invalid UUIDs)")
             }
 
             let sessionDir = "\(NSHomeDirectory())/.poltertty/sessions/\(req.sessionId)"

@@ -45,6 +45,20 @@ if [[ "$MODE" == "dev" ]]; then
     ACTUAL_OUTPUT=$(find "$OUTPUT_DIR" -name "Poltertty.app" -path "*/Debug/Poltertty.app" 2>/dev/null | head -n 1)
 
     if [[ -n "$ACTUAL_OUTPUT" ]]; then
+        # 编译 poltertty-cli 并放入 app bundle
+        echo "==> swiftc poltertty-cli"
+        CLI_SRC="$REPO_ROOT/macos/PolterttyCLI"
+        CLI_DST="$ACTUAL_OUTPUT/Contents/Resources/poltertty-cli"
+        swiftc \
+            "$CLI_SRC/main.swift" \
+            "$CLI_SRC/Utils.swift" \
+            "$CLI_SRC/Commands/PingCommand.swift" \
+            "$CLI_SRC/Commands/PrepareSessionCommand.swift" \
+            "$CLI_SRC/Commands/HookCommand.swift" \
+            "$CLI_SRC/Commands/ExtractFlagCommand.swift" \
+            -O -o "$CLI_DST"
+        chmod 755 "$CLI_DST"
+
         echo "==> done: $ACTUAL_OUTPUT"
         "$ACTUAL_OUTPUT/Contents/MacOS/ghostty" --version 2>&1 | grep "build mode\|version:" || true
     else
