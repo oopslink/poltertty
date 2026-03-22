@@ -128,9 +128,14 @@ final class ClaudeSessionProvider: ExternalAgentProvider {
             let path = "\(sessionsDir)/\(file)"
             guard let content = try? String(contentsOfFile: path, encoding: .utf8),
                   let entry   = try? ClaudeSessionFileParser.parse(json: content),
-                  entry.cwd == workspaceDir,
-                  !localSessionIds.contains(entry.sessionId)
+                  entry.cwd == workspaceDir
             else { continue }
+
+            if localSessionIds.contains(entry.sessionId) {
+                NSLog("[ClaudeSessionProvider] filtering local session: \(entry.sessionId)")
+                continue
+            }
+            NSLog("[ClaudeSessionProvider] external session detected: \(entry.sessionId), localIds=\(localSessionIds)")
 
             let alive = kill(Int32(entry.pid), 0) == 0
             found.insert(entry.sessionId)

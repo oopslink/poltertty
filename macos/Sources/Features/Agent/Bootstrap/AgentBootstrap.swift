@@ -28,8 +28,8 @@ enum AgentBootstrap {
         do {
             try createDirectories()
             try deployWrapper()
+            try deployCLI()
             try deployShellIntegration()
-            // TODO: poltertty-cli 的部署（需要等 Task 8 的 Xcode target 配置）
             logger.info("AgentBootstrap deploy completed")
         } catch {
             logger.error("AgentBootstrap deploy failed: \(error.localizedDescription)")
@@ -72,6 +72,22 @@ enum AgentBootstrap {
             try fm.createSymbolicLink(atPath: linkPath, withDestinationPath: "poltertty-agent-wrapper")
             logger.info("Created symlink \(agent) → poltertty-agent-wrapper")
         }
+    }
+
+    /// 从 App bundle 复制 poltertty-cli 二进制
+    private static func deployCLI() throws {
+        guard let srcPath = Bundle.main.path(forResource: "poltertty-cli", ofType: nil) else {
+            logger.warning("poltertty-cli not found in app bundle, skipping CLI deploy")
+            return
+        }
+        let dstPath = "\(binDir)/poltertty-cli"
+        let fm = FileManager.default
+        if fm.fileExists(atPath: dstPath) {
+            try fm.removeItem(atPath: dstPath)
+        }
+        try fm.copyItem(atPath: srcPath, toPath: dstPath)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dstPath)
+        logger.info("Deployed poltertty-cli to \(dstPath)")
     }
 
     /// 从 App bundle 复制 shell integration 脚本
