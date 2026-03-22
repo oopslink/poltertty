@@ -5,9 +5,14 @@ import AppKit
 
 struct BottomStatusBarView: View {
     @ObservedObject var monitor: GitStatusMonitor
+    @EnvironmentObject var tabBarVM: TabBarViewModel
     let pwd: String
     let isFocused: Bool
     let surfaceId: UUID
+
+    private var hasTmuxAttached: Bool {
+        tabBarVM.tmuxStates[surfaceId] != nil
+    }
 
     var body: some View {
         let status = monitor.status
@@ -20,7 +25,23 @@ struct BottomStatusBarView: View {
                     .truncationMode(.head)
                     .foregroundColor(.secondary)
                 Spacer()
-                // 右：agent 按钮 | git 状态
+                // 右：tmux 按钮 | agent 按钮 | git 状态
+                if !hasTmuxAttached {
+                    Button(action: {
+                        NotificationCenter.default.post(
+                            name: .showTmuxSessionPicker,
+                            object: nil,
+                            userInfo: ["attachInCurrentPane": true]
+                        )
+                    }) {
+                        Image("TmuxIcon")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 14, height: 14)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Attach tmux session")
+                }
                 AgentButtonView(surfaceId: surfaceId)
                 if status.isGitRepo {
                     Text("|")
