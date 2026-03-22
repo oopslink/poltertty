@@ -1,7 +1,7 @@
 # Agent 通知系统设计文档
 
 **日期：** 2026-03-22
-**状态：** 草稿 v3（review 修订）
+**状态：** 草稿 v4（实现同步修订）
 
 ---
 
@@ -86,35 +86,43 @@
 
 ### PATH 注入机制（双保险）
 
-**第一层：PTY spawn 时设置**
+**第一层：PTY spawn 时通过 SurfaceConfiguration 注入**
+
+利用 Ghostty 已有的 `SurfaceConfiguration.environmentVariables` 机制，在 `SurfaceView.init` 中（`ghostty_surface_new` 调用之前）注入环境变量。不需要修改 Zig 层。
 
 ```swift
-func configureShellEnvironment(for surface: Surface) {
-    var env = ProcessInfo.processInfo.environment
-    let home = NSHomeDirectory()
-    let binDir = "\(home)/.poltertty/bin"
+// SurfaceView_AppKit.swift — init 中 ghostty_surface_new 调用之前
+var surface_cfg = baseConfig ?? SurfaceConfiguration()
+let home = NSHomeDirectory()
+let port = AgentService.shared.hookServer?.port ?? 0
 
-    env["PATH"] = binDir + ":" + (env["PATH"] ?? "")
-    env["POLTERTTY_BIN_DIR"] = binDir
-    env["POLTERTTY_WORKSPACE_ID"] = surface.tab.workspace.id.uuidString
-    env["POLTERTTY_SURFACE_ID"] = surface.id.uuidString
-    env["POLTERTTY_HTTP_PORT"] = String(hookServer.port)
-
-    // shell integration 脚本路径，供 ghostty shell integration 加载
-    let shell = surface.terminal.shellType  // bash / zsh / fish
-    env["POLTERTTY_SHELL_INTEGRATION"] = "\(home)/.poltertty/shell/poltertty.\(shell)"
-
-    surface.terminal.spawn(environment: env)
-}
+surface_cfg.environmentVariables["POLTERTTY_BIN_DIR"] = "\(home)/.poltertty/bin"
+surface_cfg.environmentVariables["POLTERTTY_WORKSPACE_ID"] = workspaceId.uuidString
+surface_cfg.environmentVariables["POLTERTTY_SURFACE_ID"] = self.id.uuidString
+surface_cfg.environmentVariables["POLTERTTY_HTTP_PORT"] = String(port)
 ```
+
+PATH 前置在 shell integration 脚本中完成（第二层）。
 
 **第二层：Shell Integration 脚本补强**
 
-Ghostty 的 shell integration 脚本末尾加一行（fork diff，每种 shell 各一行，最小上游冲突面）：
+Ghostty 的 shell integration 脚本末尾加一行（fork diff，每种 shell 各一行，最小上游冲突面）。使用硬编码路径，不依赖额外环境变量：
 
 ```bash
 # ghostty shell integration 尾部追加（zsh 版）
-[[ -f "$POLTERTTY_SHELL_INTEGRATION" ]] && source "$POLTERTTY_SHELL_INTEGRATION"
+[[ -f "$HOME/.poltertty/shell/poltertty.zsh" ]] && source "$HOME/.poltertty/shell/poltertty.zsh"
+```
+
+```bash
+# bash 版
+[[ -f "$HOME/.poltertty/shell/poltertty.bash" ]] && source "$HOME/.poltertty/shell/poltertty.bash"
+```
+
+```fish
+# fish 版
+if test -f "$HOME/.poltertty/shell/poltertty.fish"
+    source "$HOME/.poltertty/shell/poltertty.fish"
+end
 ```
 
 `~/.poltertty/shell/poltertty.zsh` 内容：
@@ -540,14 +548,13 @@ Poltertty 在每个 shell session 初始化时注入：
 
 | 变量 | 用途 | 注入方式 |
 |------|------|---------|
-| `POLTERTTY_WORKSPACE_ID` | 当前 workspace/tab 标识 | PTY spawn |
-| `POLTERTTY_SURFACE_ID` | 当前 pane/surface 标识 | PTY spawn |
-| `POLTERTTY_HTTP_PORT` | HookServer 端口 | PTY spawn |
-| `POLTERTTY_BIN_DIR` | wrapper 目录，shell integration 用于 PATH 补强 | PTY spawn |
-| `POLTERTTY_SHELL_INTEGRATION` | shell integration 脚本绝对路径 | PTY spawn |
+| `POLTERTTY_WORKSPACE_ID` | 当前 workspace/tab 标识 | SurfaceConfiguration |
+| `POLTERTTY_SURFACE_ID` | 当前 pane/surface 标识 | SurfaceConfiguration |
+| `POLTERTTY_HTTP_PORT` | HookServer 端口 | SurfaceConfiguration |
+| `POLTERTTY_BIN_DIR` | wrapper 目录，shell integration 用于 PATH 补强 | SurfaceConfiguration |
 | `POLTERTTY_SESSION_ID` | Wrapper 创建后设置，用于嵌套检测 | Wrapper export |
 | `POLTERTTY_AGENT_PID` | exec 后即 agent 进程 PID | Wrapper export |
-| `POLTERTTY_HOOKS_DISABLED` | 为 1 时 wrapper 直接透传 | PTY spawn（用户开关） |
+| `POLTERTTY_HOOKS_DISABLED` | 为 1 时 wrapper 直接透传 | SurfaceConfiguration（用户开关） |
 
 ---
 
