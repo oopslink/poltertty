@@ -59,8 +59,7 @@ final class AgentNotificationStore: ObservableObject {
     // MARK: - 查询
 
     func unreadCount(for workspaceId: UUID) -> Int {
-        // nil workspaceId 的通知计入所有工作区
-        notifications.count { !$0.isRead && ($0.workspaceId == workspaceId || $0.workspaceId == nil) }
+        notifications.count { !$0.isRead && $0.workspaceId == workspaceId }
     }
 
     func totalUnreadCount() -> Int {
@@ -69,8 +68,7 @@ final class AgentNotificationStore: ObservableObject {
 
     func filtered(workspace: UUID? = nil, type: AgentNotificationType? = nil) -> [AgentNotification] {
         notifications.filter { n in
-            // workspace 为 nil 时返回全部；否则匹配指定工作区或 nil workspaceId（全局通知）
-            (workspace == nil || n.workspaceId == workspace || n.workspaceId == nil) &&
+            (workspace == nil || n.workspaceId == workspace) &&
             (type == nil || n.type == type)
         }
     }

@@ -10,6 +10,7 @@ final class ExternalSessionDiscovery: ObservableObject {
     private let workspaceId: UUID?
     private let providers: [any ExternalAgentProvider]
     private var refreshTimer: Timer?
+    private var isFirstRefresh = true
 
     init(workspaceRootDir: String, workspaceId: UUID? = nil) {
         self.workspaceDir = workspaceRootDir
@@ -47,8 +48,8 @@ final class ExternalSessionDiscovery: ObservableObject {
         let newSessions = providers.flatMap { $0.currentSessions() }
         let oldMap = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
 
-        // Delta 检测：生成通知
-        if let wsId = workspaceId {
+        // Delta 检测：生成通知（首次启动跳过，避免对已有会话误报）
+        if !isFirstRefresh, let wsId = workspaceId {
             for newRecord in newSessions {
                 if let oldRecord = oldMap[newRecord.id] {
                     // 已有会话：检测 isAlive 变化
@@ -59,16 +60,10 @@ final class ExternalSessionDiscovery: ObservableObject {
                             title: "\(newRecord.toolType.badge) 会话结束"
                         )
                     }
-                } else if newRecord.isAlive {
-                    // 新出现的活跃会话
-                    emitNotification(
-                        workspaceId: wsId, record: newRecord,
-                        type: .info,
-                        title: "\(newRecord.toolType.badge) 新会话启动"
-                    )
                 }
             }
         }
+        isFirstRefresh = false
 
         sessions = newSessions
     }

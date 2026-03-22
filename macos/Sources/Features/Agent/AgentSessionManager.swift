@@ -243,16 +243,6 @@ final class AgentSessionManager: ObservableObject {
         case .stop:
             guard let sid else { return }
             updateFromClaudeSession(sid) { $0.state = .idle }
-            // 通知中心：轮次完成
-            if let session = session(forClaudeSessionId: sid) {
-                AgentNotificationStore.shared.insert(AgentNotification(
-                    id: UUID(), timestamp: Date(),
-                    workspaceId: session.workspaceId, surfaceId: claudeSessionIndex[sid],
-                    agentDefinitionId: session.definition.id, sessionId: sid,
-                    type: .done, title: "\(session.definition.name) 轮次完成",
-                    body: nil, priority: .low
-                ))
-            }
             if let surfaceId = claudeSessionIndex[sid],
                let path = payload.transcriptPath {
                 AgentService.shared.tokenTracker?.processStopEvent(
