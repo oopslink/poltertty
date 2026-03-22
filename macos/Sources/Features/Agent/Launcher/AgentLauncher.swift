@@ -100,10 +100,10 @@ final class AgentLauncher {
         )
         AgentService.shared.sessionManager.register(session)
 
-        // 3. 注入 hooks（仅 .full capability）
-        if definition.hookCapability == .full {
-            AgentService.shared.injectHooks(for: normalizedCwd)
-        }
+        // [已迁移] hook 注入现在由 poltertty-agent-wrapper 通过 --settings 参数完成
+        // if definition.hookCapability == .full {
+        //     AgentService.shared.injectHooks(for: normalizedCwd)
+        // }
 
         // 4. 写入启动命令
         let command = buildLaunchCommand(
