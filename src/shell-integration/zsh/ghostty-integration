@@ -458,4 +458,4 @@ _ghostty_deferred_init() {
 _entrypoint
 
 # Poltertty shell integration (fork addition)
-[[ -f "$POLTERTTY_SHELL_INTEGRATION" ]] && source "$POLTERTTY_SHELL_INTEGRATION"
+[[ -f "$HOME/.poltertty/shell/poltertty.zsh" ]] && source "$HOME/.poltertty/shell/poltertty.zsh"

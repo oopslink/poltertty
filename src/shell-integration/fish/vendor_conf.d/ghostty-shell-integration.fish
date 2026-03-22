@@ -246,6 +246,6 @@ end
 ghostty_exit
 
 # Poltertty shell integration (fork addition)
-if set -q POLTERTTY_SHELL_INTEGRATION; and test -f "$POLTERTTY_SHELL_INTEGRATION"
-    source "$POLTERTTY_SHELL_INTEGRATION"
+if test -f "$HOME/.poltertty/shell/poltertty.fish"
+    source "$HOME/.poltertty/shell/poltertty.fish"
 end

@@ -315,4 +315,4 @@ else
 fi
 
 # Poltertty shell integration (fork addition)
-[[ -f "$POLTERTTY_SHELL_INTEGRATION" ]] && source "$POLTERTTY_SHELL_INTEGRATION"
+[[ -f "$HOME/.poltertty/shell/poltertty.bash" ]] && source "$HOME/.poltertty/shell/poltertty.bash"
