@@ -180,10 +180,65 @@ final class HookServer {
         }
     }
 
+    // MARK: - prepare-session
+
+    private struct PrepareRequest: Decodable {
+        let sessionId: String
+        let agent: String
+        let agentSessionId: String
+        let cwd: String
+        let workspaceId: String
+        let surfaceId: String
+        let port: UInt16
+        let pid: Int32
+        let userSettings: String?
+    }
+
+    private func handlePrepareSession(bodyData: Data.SubSequence, connection: NWConnection) {
+        let rawBodyData = Data(bodyData)
+        guard let req = try? decoder.decode(PrepareRequest.self, from: rawBodyData) else {
+            Self.logger.warning("HookServer: failed to decode prepare-session request")
+            sendResponse(connection, status: 400, body: #"{"error":"invalid json"}"#)
+            return
+        }
+
+        let serverPort = self.port
+        Task { @MainActor in
+            let session = HookSessionStore.shared.create(
+                sessionId: req.sessionId,
+                agentSessionId: req.agentSessionId,
+                agentType: req.agent,
+                workspaceId: req.workspaceId,
+                surfaceId: req.surfaceId,
+                pid: req.pid,
+                cwd: req.cwd,
+                port: serverPort
+            )
+
+            let sessionDir = "\(NSHomeDirectory())/.poltertty/sessions/\(req.sessionId)"
+            let cliPath = "\(NSHomeDirectory())/.poltertty/bin/poltertty-cli"
+
+            SettingsMerger.mergeAndWrite(
+                sessionId: req.sessionId,
+                sessionDir: sessionDir,
+                cwd: req.cwd,
+                cliPath: cliPath,
+                userSettingsPath: req.userSettings
+            )
+
+            let responseBody = #"{"sessionDir":"\#(sessionDir)","token":"\#(session.token)"}"#
+            self.sendResponse(connection, status: 200, body: responseBody)
+        }
+    }
+
     private func processRequest(firstLine: String, bodyData: Data.SubSequence, connection: NWConnection) {
         // 匹配 "GET /health" 或 "GET http://localhost:.../health"
         if firstLine.hasPrefix("GET") && firstLine.contains("/health") {
             sendResponse(connection, status: 200, body: "{}"); return
+        }
+        // 匹配 "POST /hooks/prepare-session"
+        if firstLine.hasPrefix("POST") && firstLine.contains("/hooks/prepare-session") {
+            handlePrepareSession(bodyData: bodyData, connection: connection); return
         }
         // 匹配 "POST /hook" 或 "POST http://localhost:.../hook"
         guard firstLine.hasPrefix("POST") && firstLine.contains("/hook") else {

@@ -90,7 +90,10 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // Setup our initial derived config based on the current app config
         self.derivedConfig = DerivedConfig(ghostty.config)
 
-        super.init(ghostty, baseConfig: base, surfaceTree: tree)
+        // Poltertty: 将 workspaceId 注入到 baseConfig，供 SurfaceView 注入环境变量
+        var config = base ?? Ghostty.SurfaceConfiguration()
+        config.workspaceId = workspaceId
+        super.init(ghostty, baseConfig: config, surfaceTree: tree)
 
         // Setup our notifications for behaviors
         let center = NotificationCenter.default
@@ -928,6 +931,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
 
         var config = Ghostty.SurfaceConfiguration()
+        config.workspaceId = workspaceId
         if let wsId = workspaceId,
            let workspace = WorkspaceManager.shared.workspace(for: wsId) {
             config.workingDirectory = workspace.rootDirExpanded

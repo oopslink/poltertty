@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AGENT_NAME="$(basename "$0")"
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Find the real binary (skip our own directory)
+find_real_binary() {
+    local IFS=':'
+    for dir in $PATH; do
+        [[ "$dir" == "$SELF_DIR" ]] && continue
+        [[ -x "$dir/$AGENT_NAME" ]] && echo "$dir/$AGENT_NAME" && return 0
+    done
+    echo "poltertty-wrapper: $AGENT_NAME not found in PATH" >&2
+    exit 127
+}
+
+REAL_BINARY="$(find_real_binary)"
+
+# Pass-through subcommands
+case "${1:-}" in
+    mcp|config|doctor|update|--help|--version|-v)
+        exec "$REAL_BINARY" "$@" ;;
+esac
+
+# Fallback conditions: no surface, hooks disabled, or already inside a poltertty session
+if [[ -z "${POLTERTTY_SURFACE_ID:-}" ]] \
+    || [[ "${POLTERTTY_HOOKS_DISABLED:-}" == "1" ]] \
+    || [[ -n "${POLTERTTY_SESSION_ID:-}" ]]; then
+    exec "$REAL_BINARY" "$@"
+fi
+
+# Check HTTP server is alive (750ms timeout)
+if ! poltertty-cli ping \
+        --port "${POLTERTTY_HTTP_PORT:-}" \
+        --timeout 750 2>/dev/null; then
+    exec "$REAL_BINARY" "$@"
+fi
+
+# Extract and remove user's --settings flag (will be merged)
+USER_SETTINGS_FLAG=""
+FILTERED_ARGS=()
+SKIP_NEXT=false
+for arg in "$@"; do
+    if $SKIP_NEXT; then
+        USER_SETTINGS_FLAG="$arg"
+        SKIP_NEXT=false
+        continue
+    fi
+    if [[ "$arg" == "--settings" ]]; then
+        SKIP_NEXT=true
+        continue
+    fi
+    FILTERED_ARGS+=("$arg")
+done
+set -- "${FILTERED_ARGS[@]}"
+
+# Resolve Claude Code session id
+CC_SESSION_ARGS=()
+CC_SID=""
+if [[ " $* " == *" --resume "* ]]; then
+    : # user passed --resume, let CC pick the session
+elif CC_SID=$(poltertty-cli extract-flag --session-id "$@") \
+        && [[ -n "$CC_SID" ]]; then
+    : # user supplied --session-id, respect it
+else
+    CC_SID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
+    CC_SESSION_ARGS=("--session-id" "$CC_SID")
+fi
+
+# Call App via HTTP to create session (merged step):
+#   - App generates token
+#   - App merges 4 layers of claude settings + user --settings, injects hooks
+#   - App creates session dir with meta.json + settings.json
+#   - App returns session dir path
+PTS_ID="pts-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+PREPARE_ARGS=(
+    --session-id       "$PTS_ID"
+    --agent            "$AGENT_NAME"
+    --agent-session-id "${CC_SID:-unknown}"
+    --cwd              "$(pwd)"
+    --workspace-id     "$POLTERTTY_WORKSPACE_ID"
+    --surface-id       "$POLTERTTY_SURFACE_ID"
+    --port             "$POLTERTTY_HTTP_PORT"
+    --pid              $$
+)
+if [[ -n "$USER_SETTINGS_FLAG" ]]; then
+    PREPARE_ARGS+=(--user-settings "$USER_SETTINGS_FLAG")
+fi
+
+SESSION_DIR=$(poltertty-cli prepare-session "${PREPARE_ARGS[@]}") || {
+    # prepare failed, fall back to pass-through
+    exec "$REAL_BINARY" "$@"
+}
+
+# Exec agent
+export POLTERTTY_SESSION_ID="$PTS_ID"
+export POLTERTTY_AGENT_PID=$$
+unset CLAUDECODE 2>/dev/null || true   # prevent CC from treating this as a nested session
+
+exec "$REAL_BINARY" \
+    "${CC_SESSION_ARGS[@]}" \
+    --settings "$SESSION_DIR/settings.json" \
+    "$@"

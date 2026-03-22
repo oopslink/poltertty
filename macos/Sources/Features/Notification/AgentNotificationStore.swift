@@ -1,4 +1,5 @@
 // macos/Sources/Features/Notification/AgentNotificationStore.swift
+import AppKit
 import Foundation
 import Combine
 import OSLog
@@ -128,12 +129,19 @@ final class AgentNotificationStore: ObservableObject {
     // MARK: - macOS 系统通知
 
     private func sendSystemNotification(_ notification: AgentNotification) {
+        // 通知抑制：用户正在看目标 pane 时跳过系统通知
+        if shouldSuppressNotification(notification) {
+            logger.debug("Notification suppressed (user viewing target pane)")
+            return
+        }
+
         let content = UNMutableNotificationContent()
         content.title = notification.title
         if let body = notification.body { content.body = body }
         content.sound = .default
         content.userInfo = [
             "workspaceId": notification.workspaceId?.uuidString ?? "",
+            "surfaceId": notification.surfaceId?.uuidString ?? "",
             "notificationId": notification.id.uuidString,
         ]
         let request = UNNotificationRequest(
@@ -146,5 +154,17 @@ final class AgentNotificationStore: ObservableObject {
                 logger.warning("Failed to deliver system notification: \(error.localizedDescription)")
             }
         }
+    }
+
+    /// 判断是否应抑制系统通知（用户正在查看目标 pane 时无需弹出）
+    private func shouldSuppressNotification(_ notification: AgentNotification) -> Bool {
+        // App 没有焦点 → 不抑制（需要通知用户）
+        guard NSApp.isActive else { return false }
+        // 没有关联 workspace → 不抑制
+        guard notification.workspaceId != nil else { return false }
+        // TODO: 后续通过 TabBarViewModel 或 TerminalController 检查
+        // 当前 focused surface 是否匹配 notification.surfaceId
+        // 暂时返回 false（不抑制），等 UI 层集成后完善
+        return false
     }
 }

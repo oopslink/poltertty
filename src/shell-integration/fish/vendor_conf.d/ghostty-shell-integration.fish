@@ -244,3 +244,8 @@ function __ghostty_setup --on-event fish_prompt -d "Setup ghostty integration"
 end
 
 ghostty_exit
+
+# Poltertty shell integration (fork addition)
+if test -f "$HOME/.poltertty/shell/poltertty.fish"
+    source "$HOME/.poltertty/shell/poltertty.fish"
+end

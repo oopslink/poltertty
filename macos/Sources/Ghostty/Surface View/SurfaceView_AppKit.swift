@@ -390,7 +390,11 @@ extension Ghostty {
             ) { [weak self] event in self?.localEventHandler(event) }
 
             // Setup our surface. This will also initialize all the terminal IO.
-            let surface_cfg = baseConfig ?? SurfaceConfiguration()
+            var surface_cfg = baseConfig ?? SurfaceConfiguration()
+
+            // Poltertty: 注入 agent notification 环境变量到 PTY
+            Self.injectPolterttyEnvironment(into: &surface_cfg, surfaceId: self.id)
+
             let surface = surface_cfg.withCValue(view: self) { surface_cfg_c in
                 ghostty_surface_new(app, &surface_cfg_c)
             }
@@ -409,6 +413,27 @@ extension Ghostty {
 
         required init?(coder: NSCoder) {
             fatalError("init(coder:) is not supported for this view")
+        }
+
+        // MARK: - Poltertty Environment Injection
+
+        /// 将 Poltertty agent notification 环境变量注入到 SurfaceConfiguration 中。
+        /// 在 ghostty_surface_new 之前调用，确保 PTY 进程继承这些变量。
+        private static func injectPolterttyEnvironment(
+            into config: inout SurfaceConfiguration,
+            surfaceId: UUID
+        ) {
+            let home = NSHomeDirectory()
+            let port = AgentService.shared.hookServer?.port ?? 0
+
+            config.environmentVariables["POLTERTTY_WORKSPACE_ID"] =
+                config.workspaceId?.uuidString ?? ""
+            config.environmentVariables["POLTERTTY_SURFACE_ID"] =
+                surfaceId.uuidString
+            config.environmentVariables["POLTERTTY_HTTP_PORT"] =
+                String(port)
+            config.environmentVariables["POLTERTTY_BIN_DIR"] =
+                "\(home)/.poltertty/bin"
         }
 
         deinit {

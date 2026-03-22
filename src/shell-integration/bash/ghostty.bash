@@ -313,3 +313,6 @@ else
   preexec_functions+=(__ghostty_preexec)
   precmd_functions+=(__ghostty_precmd)
 fi
+
+# Poltertty shell integration (fork addition)
+[[ -f "$HOME/.poltertty/shell/poltertty.bash" ]] && source "$HOME/.poltertty/shell/poltertty.bash"

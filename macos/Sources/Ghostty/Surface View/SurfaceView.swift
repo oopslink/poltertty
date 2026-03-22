@@ -662,6 +662,9 @@ extension Ghostty {
         /// Context for surface creation
         var context: ghostty_surface_context_e = GHOSTTY_SURFACE_CONTEXT_WINDOW
 
+        /// Poltertty: 所属 workspace 的 ID，用于注入 POLTERTTY_WORKSPACE_ID 环境变量
+        var workspaceId: UUID?
+
         init() {}
 
         init(from config: ghostty_surface_config_s) {

@@ -243,7 +243,13 @@ class BaseTerminalController: NSWindowController,
 
         // Create a new surface view
         guard let ghostty_app = ghostty.app else { return nil }
-        let newView = Ghostty.SurfaceView(ghostty_app, baseConfig: config)
+
+        // Poltertty: 将 workspaceId 注入到 split 的 baseConfig
+        var splitConfig = config ?? Ghostty.SurfaceConfiguration()
+        if let tc = self as? TerminalController {
+            splitConfig.workspaceId = tc.workspaceId
+        }
+        let newView = Ghostty.SurfaceView(ghostty_app, baseConfig: splitConfig)
 
         // Do the split
         let newTree: SplitTree<Ghostty.SurfaceView>
