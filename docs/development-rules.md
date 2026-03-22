@@ -33,6 +33,12 @@
 - 任何修改 `SurfaceScrollView` 视图层级（superview 深度）的变更，必须同步更新 `localEventLeftMouseDown` 中的 superview 链长度
 - 新增 event monitor 或 mouse 事件处理时，检查是否绕过了上述 bounds 检查
 
+## TODO 管理
+
+- 所有 TODO 统一存放在项目根目录 `todos/` 下，禁止在其他位置创建 TODO 文件
+- 每个 TODO 主题一个独立 `.md` 文件，命名用英文短横线分隔（如 `agent-ctrl-api.md`）
+- 完成的条目标记为 `[x]`，全部完成后删除文件或移至 `todos/done/`
+
 ## 相关文档
 
 - [构建和发布规则](build-rules.md)
