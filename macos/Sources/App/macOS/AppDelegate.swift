@@ -1124,7 +1124,7 @@ class AppDelegate: NSObject,
         let agentMenu = NSMenu(title: "Agent")
 
         let launchAgent = NSMenuItem(title: "Launch Agent", action: #selector(TerminalController.launchAgentAction), keyEquivalent: "a")
-        launchAgent.keyEquivalentModifierMask = [.command, .shift]
+        launchAgent.keyEquivalentModifierMask = [.command, .option]
         agentMenu.addItem(launchAgent)
 
         agentMenu.addItem(.separator())
