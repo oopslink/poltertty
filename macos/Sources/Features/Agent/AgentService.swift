@@ -18,6 +18,7 @@ final class AgentService {
 
     // 后续 Phase 填充（声明为可选，Phase 2/5/6 取消注释）
     var hookServer: HookServer? = nil
+    var ctrlServer: CtrlServer? = nil
     var tokenTracker: TokenTracker? = nil
 
     private var cleanupTimer: Timer?
@@ -36,6 +37,8 @@ final class AgentService {
 
         hookServer = HookServer(sessionManager: sessionManager)
         hookServer?.start()
+        ctrlServer = CtrlServer()
+        ctrlServer?.start()
         tokenTracker = TokenTracker(sessionManager: sessionManager)
         // 初始化通知中心（加载磁盘数据）+ 请求系统通知权限
         _ = AgentNotificationStore.shared
@@ -76,6 +79,7 @@ final class AgentService {
         cleanupTimer?.invalidate()
         cleanupTimer = nil
         hookServer?.stop()
+        ctrlServer?.stop()
     }
 
     func injectHooks(for cwd: String) {

@@ -29,7 +29,8 @@ final class SettingsMerger {
         sessionDir: String,
         cwd: String,
         cliPath: String,
-        userSettingsPath: String?
+        userSettingsPath: String?,
+        ctrlPort: UInt16 = 0
     ) {
         // 1. 四层 settings 文件路径
         let home = NSHomeDirectory()
@@ -68,8 +69,16 @@ final class SettingsMerger {
             mergedHooks[spec.event, default: []].append(entry)
         }
 
-        // 4. 写 settings.json（仅 hooks 字段）
-        let settings: [String: Any] = ["hooks": mergedHooks]
+        // 4. 组装 settings（hooks + 可选 mcpServers）
+        var settings: [String: Any] = ["hooks": mergedHooks]
+        if ctrlPort > 0 {
+            settings["mcpServers"] = [
+                "poltertty": [
+                    "type": "http",
+                    "url": "http://localhost:\(ctrlPort)/mcp"
+                ]
+            ]
+        }
         let settingsURL = URL(fileURLWithPath: sessionDir).appendingPathComponent("settings.json")
         if let data = try? JSONSerialization.data(withJSONObject: settings, options: .prettyPrinted) {
             try? data.write(to: settingsURL, options: .atomic)

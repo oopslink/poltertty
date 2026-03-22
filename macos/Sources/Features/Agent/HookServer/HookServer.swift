@@ -183,7 +183,8 @@ final class HookServer {
                 sessionDir: sessionDir,
                 cwd: req.cwd,
                 cliPath: cliPath,
-                userSettingsPath: req.userSettings
+                userSettingsPath: req.userSettings,
+                ctrlPort: AgentService.shared.ctrlServer?.port ?? 0
             )
 
             let responseBody = #"{"sessionDir":"\#(sessionDir)","token":"\#(session.token)"}"#
