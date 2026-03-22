@@ -51,16 +51,7 @@ struct AgentSessionGroup: View {
                 .background(Color(hex: "#1a2e1a") ?? Color(.separatorColor))
                 .clipShape(Capsule())
             } else {
-                HStack(spacing: 3) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 7, weight: .semibold))
-                    Text("done")
-                        .font(.system(size: 8))
-                }
-                .padding(.horizontal, 5).padding(.vertical, 1)
-                .background((Color(hex: "#1a2e1a") ?? Color(.separatorColor)).opacity(0.8))
-                .foregroundStyle((Color(hex: "#4caf50") ?? .green).opacity(0.7))
-                .clipShape(Capsule())
+                sessionStateBadge
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
@@ -104,6 +95,72 @@ struct AgentSessionGroup: View {
         .onTapGesture {
             // 打开统一视图，预选此 subagent
             viewModel.selectSubagentInSidebar(sub, in: session)
+        }
+    }
+
+    // MARK: - Session state badge
+
+    @ViewBuilder
+    private var sessionStateBadge: some View {
+        switch session.state {
+        case .working:
+            HStack(spacing: 3) {
+                Circle()
+                    .fill(Color(hex: "#ff9800") ?? .orange)
+                    .frame(width: 5, height: 5)
+                Text("running")
+                    .font(.system(size: 8))
+            }
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(Color(hex: "#1a2535") ?? Color(.separatorColor))
+            .foregroundStyle(Color(hex: "#90bfff") ?? .blue)
+            .clipShape(Capsule())
+        case .idle:
+            HStack(spacing: 3) {
+                Circle()
+                    .fill(Color.yellow)
+                    .frame(width: 5, height: 5)
+                Text("idle")
+                    .font(.system(size: 8))
+            }
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(Color(.separatorColor).opacity(0.4))
+            .foregroundStyle(.secondary)
+            .clipShape(Capsule())
+        case .launching:
+            HStack(spacing: 3) {
+                Circle()
+                    .fill(Color.blue)
+                    .frame(width: 5, height: 5)
+                Text("starting")
+                    .font(.system(size: 8))
+            }
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(Color(hex: "#1a2535") ?? Color(.separatorColor))
+            .foregroundStyle(Color(hex: "#90bfff") ?? .blue)
+            .clipShape(Capsule())
+        case .done:
+            HStack(spacing: 3) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 7, weight: .semibold))
+                Text("done")
+                    .font(.system(size: 8))
+            }
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background((Color(hex: "#1a2e1a") ?? Color(.separatorColor)).opacity(0.8))
+            .foregroundStyle((Color(hex: "#4caf50") ?? .green).opacity(0.7))
+            .clipShape(Capsule())
+        case .error:
+            HStack(spacing: 3) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 7, weight: .semibold))
+                Text("error")
+                    .font(.system(size: 8))
+            }
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(Color(hex: "#2e1a1a") ?? Color(.separatorColor))
+            .foregroundStyle(Color(hex: "#f44336") ?? .red)
+            .clipShape(Capsule())
         }
     }
 

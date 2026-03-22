@@ -281,6 +281,23 @@ final class AgentSessionManager: ObservableObject {
             bindClaudeSession(surfaceId: surfaceId, claudeSessionId: sessionId)
             updateState(.working, surfaceId: surfaceId)
             Self.logger.warning("bindOrCreateSession: BOUND sid=\(sessionId) to surface=\(surfaceId)")
+            return
+        }
+
+        // 回退：prepare-session 预绑定的 claudeSessionId 可能与实际 hook session_id 不同
+        // 查找 cwd 匹配的活跃 session 并 rebind
+        let expandedCwd = Self.realPath(cwd)
+        if let match = sessions.first(where: {
+            Self.realPath($0.value.cwd) == expandedCwd
+            && $0.value.state.isActive
+            && $0.value.claudeSessionId != nil
+            && $0.value.subagents.isEmpty
+        }) {
+            let oldSid = match.value.claudeSessionId!
+            claudeSessionIndex.removeValue(forKey: oldSid)
+            bindClaudeSession(surfaceId: match.key, claudeSessionId: sessionId)
+            updateState(.working, surfaceId: match.key)
+            Self.logger.warning("bindOrCreateSession: REBOUND sid=\(sessionId) (was \(oldSid)) to surface=\(match.key)")
         } else {
             let sessionCount = self.sessions.count
             let cwds = self.sessions.values.map { $0.cwd }
