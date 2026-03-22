@@ -4,8 +4,9 @@ import Foundation
 enum HookEventType: String, Decodable {
     case sessionStart   = "SessionStart"
     case sessionEnd     = "SessionEnd"
-    case notification   = "Notification"
-    case preToolUse     = "PreToolUse"
+    case notification       = "Notification"
+    case userPromptSubmit   = "UserPromptSubmit"
+    case preToolUse         = "PreToolUse"
     case postToolUse    = "PostToolUse"
     case stop           = "Stop"
     case subagentStart  = "SubagentStart"

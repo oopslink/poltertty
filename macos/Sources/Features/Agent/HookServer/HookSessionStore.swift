@@ -150,6 +150,6 @@ final class HookSessionStore {
                   let session = try? decoder.decode(WrapperSession.self, from: data) else { continue }
             sessions[session.polterttySessionId] = session
         }
-        logger.info("Loaded \(sessions.count) wrapper sessions from disk")
+        logger.info("Loaded \(self.sessions.count) wrapper sessions from disk")
     }
 }
