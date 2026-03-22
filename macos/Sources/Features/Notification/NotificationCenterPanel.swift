@@ -5,6 +5,7 @@ struct NotificationCenterPanel: View {
     @ObservedObject var store = AgentNotificationStore.shared
     let workspaceId: UUID?
     let onJumpToSurface: (UUID) -> Void
+    let onClose: () -> Void
 
     @State private var typeFilter: AgentNotificationType? = nil
 
@@ -23,6 +24,7 @@ struct NotificationCenterPanel: View {
         }
         .frame(minWidth: 240, idealWidth: 280, maxWidth: 320)
         .background(Color(nsColor: .controlBackgroundColor))
+        .backport.onKeyPress(.escape) { _ in onClose(); return .handled }
     }
 
     // MARK: - Header
@@ -40,6 +42,12 @@ struct NotificationCenterPanel: View {
                 .buttonStyle(.plain)
                 .foregroundColor(.secondary)
             }
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

@@ -237,6 +237,9 @@ struct PolterttyRootView<TerminalContent: View>: View {
                             workspaceId: workspaceId,
                             onJumpToSurface: { surfaceId in
                                 onSwitchTab?(surfaceId)
+                            },
+                            onClose: {
+                                notificationCenterVisible = false
                             }
                         )
                     }
