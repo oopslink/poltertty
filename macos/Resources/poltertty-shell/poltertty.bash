@@ -1,5 +1,6 @@
-# Poltertty shell integration — PATH 补强 (bash)
-# 防止用户 source ~/.bashrc 后 PATH 被重置导致 wrapper 失效
-if [[ -n "$POLTERTTY_BIN_DIR" ]] && [[ ":$PATH:" != *":$POLTERTTY_BIN_DIR:"* ]]; then
-    export PATH="$POLTERTTY_BIN_DIR:$PATH"
+# Poltertty shell integration — PATH (bash)
+# Always prepend POLTERTTY_BIN_DIR to PATH so the wrapper takes priority over system claude.
+if [[ -n "$POLTERTTY_BIN_DIR" ]]; then
+    PATH="${POLTERTTY_BIN_DIR}:${PATH//:$POLTERTTY_BIN_DIR/}"
+    export PATH
 fi

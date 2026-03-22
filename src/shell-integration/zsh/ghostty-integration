@@ -453,9 +453,10 @@ _ghostty_deferred_init() {
     # ghostty-integration though because decent public functions aren't supposed to
     # to unfunction themselves when invoked. Unfunctioning is done by calling code.
     builtin unfunction _ghostty_deferred_init
+
+    # Poltertty shell integration (fork addition)
+    # Runs inside _ghostty_deferred_init so it executes after .zshrc and other startup files.
+    [[ -f "$HOME/.poltertty/shell/poltertty.zsh" ]] && builtin source "$HOME/.poltertty/shell/poltertty.zsh"
 }
 
 _entrypoint
-
-# Poltertty shell integration (fork addition)
-[[ -f "$HOME/.poltertty/shell/poltertty.zsh" ]] && source "$HOME/.poltertty/shell/poltertty.zsh"

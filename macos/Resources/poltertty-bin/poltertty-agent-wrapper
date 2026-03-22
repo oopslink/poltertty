@@ -4,7 +4,7 @@ set -euo pipefail
 AGENT_NAME="$(basename "$0")"
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# ── 找到真实 binary（跳过自身目录）──
+# Find the real binary (skip our own directory)
 find_real_binary() {
     local IFS=':'
     for dir in $PATH; do
@@ -17,27 +17,27 @@ find_real_binary() {
 
 REAL_BINARY="$(find_real_binary)"
 
-# ── 子命令白名单：直接透传 ──
+# Pass-through subcommands
 case "${1:-}" in
     mcp|config|doctor|update|--help|--version|-v)
         exec "$REAL_BINARY" "$@" ;;
 esac
 
-# ── 降级条件 ──
+# Fallback conditions: no surface, hooks disabled, or already inside a poltertty session
 if [[ -z "${POLTERTTY_SURFACE_ID:-}" ]] \
     || [[ "${POLTERTTY_HOOKS_DISABLED:-}" == "1" ]] \
     || [[ -n "${POLTERTTY_SESSION_ID:-}" ]]; then
     exec "$REAL_BINARY" "$@"
 fi
 
-# ── HTTP server 存活检测（750ms 超时）──
+# Check HTTP server is alive (750ms timeout)
 if ! poltertty-cli ping \
         --port "${POLTERTTY_HTTP_PORT:-}" \
         --timeout 750 2>/dev/null; then
     exec "$REAL_BINARY" "$@"
 fi
 
-# ── 提取并移除用户的 --settings（纳入 merge）──
+# Extract and remove user's --settings flag (will be merged)
 USER_SETTINGS_FLAG=""
 FILTERED_ARGS=()
 SKIP_NEXT=false
@@ -55,25 +55,24 @@ for arg in "$@"; do
 done
 set -- "${FILTERED_ARGS[@]}"
 
-# ── 解析 Claude Code session id ──
+# Resolve Claude Code session id
 CC_SESSION_ARGS=()
 CC_SID=""
 if [[ " $* " == *" --resume "* ]]; then
-    : # 用户用 --resume，让 CC 自己选 session
+    : # user passed --resume, let CC pick the session
 elif CC_SID=$(poltertty-cli extract-flag --session-id "$@") \
         && [[ -n "$CC_SID" ]]; then
-    : # 用户自带 --session-id，尊重
+    : # user supplied --session-id, respect it
 else
     CC_SID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
     CC_SESSION_ARGS=("--session-id" "$CC_SID")
 fi
 
-# ── 通过 HTTP 调用 App 创建 session（合并步骤）──
-# prepare-session 向 App 发送 HTTP 请求：
-#   - App 生成 token
-#   - App 读取 4 层 claude settings + 用户 --settings，合并 hooks
-#   - App 创建 session 目录，写入 meta.json + settings.json
-#   - App 返回 session dir 路径
+# Call App via HTTP to create session (merged step):
+#   - App generates token
+#   - App merges 4 layers of claude settings + user --settings, injects hooks
+#   - App creates session dir with meta.json + settings.json
+#   - App returns session dir path
 PTS_ID="pts-$(uuidgen | tr '[:upper:]' '[:lower:]')"
 PREPARE_ARGS=(
     --session-id       "$PTS_ID"
@@ -90,14 +89,14 @@ if [[ -n "$USER_SETTINGS_FLAG" ]]; then
 fi
 
 SESSION_DIR=$(poltertty-cli prepare-session "${PREPARE_ARGS[@]}") || {
-    # prepare 失败，降级透传
+    # prepare failed, fall back to pass-through
     exec "$REAL_BINARY" "$@"
 }
 
-# ── exec agent ──
+# Exec agent
 export POLTERTTY_SESSION_ID="$PTS_ID"
 export POLTERTTY_AGENT_PID=$$
-unset CLAUDECODE 2>/dev/null || true   # 防止 CC 误判为嵌套 session（已验证变量名）
+unset CLAUDECODE 2>/dev/null || true   # prevent CC from treating this as a nested session
 
 exec "$REAL_BINARY" \
     "${CC_SESSION_ARGS[@]}" \

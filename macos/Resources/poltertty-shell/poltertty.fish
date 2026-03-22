@@ -1,5 +1,6 @@
-# Poltertty shell integration — PATH 补强 (fish)
-# 防止用户 source config.fish 后 PATH 被重置导致 wrapper 失效
-if set -q POLTERTTY_BIN_DIR; and not contains -- $POLTERTTY_BIN_DIR $PATH
+# Poltertty shell integration — PATH (fish)
+# Always prepend POLTERTTY_BIN_DIR to PATH so the wrapper takes priority over system claude.
+if set -q POLTERTTY_BIN_DIR
+    set -e PATH[(contains -i -- $POLTERTTY_BIN_DIR $PATH)]
     set -gx PATH $POLTERTTY_BIN_DIR $PATH
 end
