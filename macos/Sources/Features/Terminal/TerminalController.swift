@@ -66,6 +66,13 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// Custom tab bar view model — owns all SurfaceView instances for this window
     let tabBarViewModel = TabBarViewModel()
 
+    /// NSToolbar delegate（workspace 窗口），需要强引用防止释放
+    private var workspaceToolbarDelegate: WorkspaceToolbarDelegate?
+
+    /// toolbar item 的 leading 约束，全屏时动态调整
+    private var toolbarLeadingConstraint: NSLayoutConstraint?
+    private var closeButtonObservation: NSKeyValueObservation?
+
     /// Per-tab surface trees: tabId → SplitTree (supports splits within each tab)
     private var tabSurfaceTrees: [UUID: SplitTree<Ghostty.SurfaceView>] = [:]
 
@@ -1011,29 +1018,57 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             showTmuxCloseConfirmation(tabId: id, sessionName: tmux.sessionName) {
                 self.tabBarViewModel.tmuxStates.removeValue(forKey: tmux.surfaceId)
                 self.tabBarViewModel.tmuxMonitor.stopIfIdle()
-                if self.tabBarViewModel.tabs.count > 1 {
-                    self.tabBarViewModel.closeTab(id)
-                } else {
-                    self.window?.close()
-                }
+                self.performCloseTab(id)
             }
             return
         }
-        showTabCloseConfirmation {
-            guard self.tabBarViewModel.tabs.count > 1 else {
-                self.window?.close()
-                return
-            }
-            self.tabBarViewModel.closeTab(id)
+        let tabName = tabBarViewModel.tabs.first(where: { $0.id == id })?.title
+        showTabCloseConfirmation(tabName: tabName) {
+            self.performCloseTab(id)
         }
     }
 
+    /// 实际执行关闭 tab：先切换 surfaceTree，再移除 tab，最后清理映射
+    private func performCloseTab(_ id: UUID) {
+        guard tabBarViewModel.tabs.count > 1 else {
+            window?.close()
+            return
+        }
+
+        let isActiveTab = tabBarViewModel.activeTabId == id
+
+        // 1. 如果关闭的是当前 active tab，先用 switchToTab 切到邻居（正确 swap surfaceTree）
+        if isActiveTab {
+            if let idx = tabBarViewModel.tabs.firstIndex(where: { $0.id == id }) {
+                let nextIdx = idx > 0 ? idx - 1 : idx + 1
+                if nextIdx >= 0, nextIdx < tabBarViewModel.tabs.count {
+                    switchToTab(tabBarViewModel.tabs[nextIdx].id)
+                }
+            }
+        } else {
+            // 关闭非 active tab：确保当前 surfaceTree 保存到当前 active tab
+            if let currentId = tabBarViewModel.activeTabId {
+                tabSurfaceTrees[currentId] = surfaceTree
+            }
+        }
+
+        // 2. 从 viewModel 移除 tab（不再依赖 closeTab 内部的 selectTab）
+        tabBarViewModel.removeTabOnly(id)
+
+        // 3. 清理被关闭 tab 的 surfaceTree 映射
+        tabSurfaceTrees.removeValue(forKey: id)
+    }
+
     /// 显示关闭 tab 的通用确认对话框
-    private func showTabCloseConfirmation(onConfirm: @escaping () -> Void) {
+    private func showTabCloseConfirmation(tabName: String? = nil, onConfirm: @escaping () -> Void) {
         guard let window else { return }
         let alert = NSAlert()
         alert.messageText = "关闭标签页"
-        alert.informativeText = "确定要关闭该标签页吗？"
+        if let name = tabName, !name.isEmpty {
+            alert.informativeText = "确定要关闭「\(name)」吗？"
+        } else {
+            alert.informativeText = "确定要关闭该标签页吗？"
+        }
         alert.addButton(withTitle: "关闭")
         alert.addButton(withTitle: "取消")
         alert.buttons[0].hasDestructiveAction = true
@@ -1598,29 +1633,32 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             }
         }
 
-        // 注册自定义 titlebar tab bar（仅 workspace 窗口）
-        if workspaceId != nil {
-            let accentColor: Color = {
-                if let wsId = workspaceId,
-                   let workspace = WorkspaceManager.shared.workspace(for: wsId) {
-                    return Color(hex: workspace.colorHex) ?? .accentColor
-                }
-                return .accentColor
-            }()
-            let tabsAccessory = TitlebarTabsAccessory(
+        // workspace 窗口：通过 NSToolbar + .unifiedCompact 将 tab bar 合并进 titlebar
+        if let wsId = workspaceId,
+           let workspace = WorkspaceManager.shared.workspace(for: wsId) {
+            let accentColor = Color(hex: workspace.colorHex) ?? .accentColor
+            let delegate = WorkspaceToolbarDelegate(
                 tabBarViewModel: tabBarViewModel,
+                workspaceName: workspace.name,
                 accentColor: accentColor,
                 onNewTab: { [weak self] in self?.addNewTab() },
                 onCloseTab: { [weak self] id in self?.closePolterttyTab(id) },
                 onSwitchTab: { [weak self] id in self?.switchToTab(id) }
             )
-            window.addTitlebarAccessoryViewController(tabsAccessory)
-        }
+            self.workspaceToolbarDelegate = delegate
 
-        // 设置 titlebar 显示 workspace 名称
-        if let wsId = workspaceId,
-           let workspace = WorkspaceManager.shared.workspace(for: wsId) {
-            window.title = workspace.name
+            let toolbar = NSToolbar(identifier: "WorkspaceToolbar")
+            toolbar.delegate = delegate
+            toolbar.showsBaselineSeparator = false
+            window.toolbar = toolbar
+            window.toolbarStyle = .unifiedCompact
+            window.titleVisibility = .hidden
+
+            // toolbar item 默认按 intrinsicContentSize 定宽，需要用 auto layout 强制填满。
+            // 延迟一帧，等 toolbar view hierarchy 构建完成后再操作。
+            DispatchQueue.main.async { [weak self] in
+                self?.expandWorkspaceToolbarItem()
+            }
         }
 
         // Set window title for onboarding/restore modes
@@ -1734,6 +1772,95 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
         // We will always explicitly close the window using the above
         return false
+    }
+
+    @objc private func onFullScreenChange(_ notification: Notification) {
+        guard let window else { return }
+        let isFullScreen = window.styleMask.contains(.fullScreen)
+
+        if isFullScreen {
+            // 全屏：初始 0，延迟等全屏过渡完成后再监听红绿灯
+            toolbarLeadingConstraint?.constant = 0
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.observeTrafficLights()
+            }
+        } else {
+            // 非全屏：固定 78px，停止监听
+            closeButtonObservation?.invalidate()
+            closeButtonObservation = nil
+            toolbarLeadingConstraint?.constant = 78
+        }
+    }
+
+    /// 全屏时 KVO 监听红绿灯容器的 alphaValue 变化
+    private func observeTrafficLights() {
+        closeButtonObservation?.invalidate()
+        guard let buttonView = window?.standardWindowButton(.closeButton)?.superview else { return }
+        closeButtonObservation = buttonView.observe(\.alphaValue, options: [.new]) { [weak self] view, _ in
+            guard let self else { return }
+            let visible = view.alphaValue > 0.5
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.2
+                self.toolbarLeadingConstraint?.animator().constant = visible ? 78 : 0
+            }
+        }
+    }
+
+    /// toolbar item 默认按 intrinsicContentSize 定宽，无法自动填满 toolbar。
+    /// 参考 TitlebarTabsTahoeTerminalWindow 的做法，找到 NSToolbarView 后
+    /// 用 auto layout 约束把 item viewer 拉满整个 toolbar 宽度。
+    private func expandWorkspaceToolbarItem() {
+        guard let window,
+              let terminalWindow = window as? TerminalWindow,
+              let titlebarContainer = terminalWindow.titlebarContainer,
+              let toolbarView = titlebarContainer.firstDescendant(withClassName: "NSToolbarView")
+        else { return }
+
+        // 找到 NSToolbarItemViewer（toolbar item 的容器）
+        guard let itemViewer = toolbarView.subviews.first(where: {
+            $0.className == "NSToolbarItemViewer"
+        }) else { return }
+
+        // 让 item viewer 填满 toolbar
+        let isFullScreen = window.styleMask.contains(.fullScreen)
+        let leading = itemViewer.leadingAnchor.constraint(
+            equalTo: toolbarView.leadingAnchor,
+            constant: isFullScreen ? 0 : 78
+        )
+        self.toolbarLeadingConstraint = leading
+
+        itemViewer.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            leading,
+            itemViewer.trailingAnchor.constraint(equalTo: toolbarView.trailingAnchor),
+            itemViewer.topAnchor.constraint(equalTo: toolbarView.topAnchor),
+            itemViewer.bottomAnchor.constraint(equalTo: toolbarView.bottomAnchor),
+        ])
+
+        // 监听全屏切换，动态调整左边距
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(onFullScreenChange),
+            name: NSWindow.didEnterFullScreenNotification,
+            object: window
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(onFullScreenChange),
+            name: NSWindow.didExitFullScreenNotification,
+            object: window
+        )
+
+        // 同时让 hosting view 填满 item viewer
+        if let hostingView = itemViewer.subviews.first {
+            hostingView.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                hostingView.leadingAnchor.constraint(equalTo: itemViewer.leadingAnchor),
+                hostingView.trailingAnchor.constraint(equalTo: itemViewer.trailingAnchor),
+                hostingView.topAnchor.constraint(equalTo: itemViewer.topAnchor),
+                hostingView.bottomAnchor.constraint(equalTo: itemViewer.bottomAnchor),
+            ])
+        }
     }
 
     override func windowWillClose(_ notification: Notification) {

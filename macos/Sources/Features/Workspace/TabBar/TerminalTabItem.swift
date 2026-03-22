@@ -3,7 +3,7 @@ import SwiftUI
 struct TerminalTabItem: View {
     let tab: TabItem
     let accentColor: Color
-    let isLastTab: Bool        // 最后一个 tab 时不显示关闭按钮
+    let isLastTab: Bool
     let onSelect: () -> Void
     let onClose: () -> Void
     let onRename: (String) -> Void
@@ -16,19 +16,26 @@ struct TerminalTabItem: View {
     @FocusState private var renameFocused: Bool
     @State private var escapeMonitor: Any? = nil
 
+    private static let tabWidth: CGFloat = 96
+    private static let closeButtonWidth: CGFloat = 16
+
     var body: some View {
         ZStack(alignment: .bottom) {
-            HStack(spacing: 4) {
+            // 主内容区：固定宽度
+            ZStack {
                 if isRenaming {
                     TextField("", text: $renameText)
                         .font(.system(size: 12))
                         .textFieldStyle(.plain)
-                        .frame(minWidth: 40, maxWidth: 120)
+                        .padding(.horizontal, 8)
                         .focused($renameFocused)
                         .onSubmit { commitRename() }
+                        .onChange(of: renameFocused) { focused in
+                            if !focused && isRenaming { commitRename() }
+                        }
                         .onAppear {
                             escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                                if event.keyCode == 53 { // Escape key
+                                if event.keyCode == 53 {
                                     cancelRename()
                                     return nil
                                 }
@@ -42,37 +49,42 @@ struct TerminalTabItem: View {
                             }
                         }
                 } else {
-                    Text(tab.title)
-                        .font(.system(size: 12))
-                        .foregroundColor(tab.isActive ? .primary : .secondary)
-                        .lineLimit(1)
-                        // 正确的双击 + 单击共存模式
-                        .gesture(
-                            TapGesture(count: 2).onEnded { startRename() }
-                        )
-                        .simultaneousGesture(
-                            TapGesture(count: 1).onEnded { onSelect() }
-                        )
-                    if let state = agentState {
-                        AgentStateDot(state: state)
+                    HStack(spacing: 4) {
+                        if let state = agentState {
+                            AgentStateDot(state: state)
+                        }
+                        Text(tab.title)
+                            .font(.system(size: 12))
+                            .foregroundColor(tab.isActive ? .primary : .secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .help(tab.title)
                     }
+                    .padding(.leading, 8)
+                    .padding(.trailing, Self.closeButtonWidth + 4)
                 }
-
-                if isHovered && !isRenaming && !isLastTab {
+            }
+            .frame(width: Self.tabWidth, height: 28)
+            .background(Color.clear)
+            .contentShape(Rectangle())
+            // 双击重命名（count:2 要在 count:1 之前）
+            .onTapGesture(count: 2) { startRename() }
+            // 单击切换 tab（onTapGesture 不会穿透到 overlay 中的 Button）
+            .onTapGesture { onSelect() }
+            // x 按钮固定在 tab 右侧边缘（overlay 在 onTapGesture 之上，Button 自然拦截点击）
+            .overlay(alignment: .trailing) {
+                if !isLastTab && !isRenaming {
                     Button(action: onClose) {
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(tab.isActive ? .primary.opacity(0.6) : .secondary.opacity(0.5))
+                            .frame(width: Self.closeButtonWidth, height: Self.closeButtonWidth)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .frame(width: 14, height: 14)
-                    .transition(.opacity)
+                    .padding(.trailing, 4)
                 }
             }
-            .padding(.horizontal, 14)
-            .frame(height: 28)
-            .background(Color.clear)
-            .contentShape(Rectangle())
             .onHover { isHovered = $0 }
             .contextMenu {
                 Button("重命名") { startRename() }
@@ -84,15 +96,20 @@ struct TerminalTabItem: View {
             }
             .draggable(tab.id.uuidString)
 
-            // 底部 2px 指示条（选中时显示）
+            // 底部指示条：active = accent 色，hover 非 active = 浅色
             if tab.isActive {
                 Rectangle()
                     .fill(accentColor)
                     .frame(height: 2)
                     .transition(.opacity)
+            } else if isHovered {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.15))
+                    .frame(height: 2)
+                    .transition(.opacity)
             }
         }
-        .frame(minWidth: 60)
+        .frame(width: Self.tabWidth)
         .animation(.easeInOut(duration: 0.15), value: isHovered)
         .animation(.easeInOut(duration: 0.15), value: tab.isActive)
         .animation(.easeInOut(duration: 0.1), value: isRenaming)
@@ -113,7 +130,6 @@ struct TerminalTabItem: View {
     private func cancelRename() {
         isRenaming = false
         renameFocused = false
-        // 不调用 onRename，保持原标题
     }
 }
 

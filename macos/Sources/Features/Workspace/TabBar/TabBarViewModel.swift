@@ -77,6 +77,17 @@ final class TabBarViewModel: ObservableObject {
         return surfaceId
     }
 
+    /// 仅移除 tab 和 surface 引用，不触发 selectTab。
+    /// 由 TerminalController.performCloseTab 调用，tab 切换由调用方管理。
+    @discardableResult
+    func removeTabOnly(_ id: UUID) -> UUID? {
+        guard let idx = tabs.firstIndex(where: { $0.id == id }) else { return nil }
+        let surfaceId = tabs[idx].surfaceId
+        tabs.remove(at: idx)
+        surfaces.removeValue(forKey: surfaceId)
+        return surfaceId
+    }
+
     /// 移动 tab（拖拽重排）
     func moveTab(from source: IndexSet, to destination: Int) {
         tabs.move(fromOffsets: source, toOffset: destination)
