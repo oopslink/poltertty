@@ -1130,15 +1130,15 @@ class AppDelegate: NSObject,
         agentMenu.addItem(.separator())
 
         let toggleAgentMonitor = NSMenuItem(title: "Toggle Agent Monitor", action: #selector(toggleAgentMonitor(_:)), keyEquivalent: "m")
-        toggleAgentMonitor.keyEquivalentModifierMask = [.command, .shift]
+        toggleAgentMonitor.keyEquivalentModifierMask = [.command, .option]
         agentMenu.addItem(toggleAgentMonitor)
 
         let toggleNotificationCenter = NSMenuItem(title: "Toggle Notification Center", action: #selector(toggleNotificationCenter(_:)), keyEquivalent: "n")
-        toggleNotificationCenter.keyEquivalentModifierMask = [.command, .shift]
+        toggleNotificationCenter.keyEquivalentModifierMask = [.command, .option]
         agentMenu.addItem(toggleNotificationCenter)
 
         let jumpToUnread = NSMenuItem(title: "Jump to Highest Priority Unread", action: #selector(jumpToHighestPriorityUnread(_:)), keyEquivalent: "u")
-        jumpToUnread.keyEquivalentModifierMask = [.command, .shift]
+        jumpToUnread.keyEquivalentModifierMask = [.command, .option]
         agentMenu.addItem(jumpToUnread)
 
         let agentMenuItem = NSMenuItem(title: "Agent", action: nil, keyEquivalent: "")
