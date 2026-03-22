@@ -1547,8 +1547,6 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                     }
                     return .accentColor
                 }(),
-                onNewTab: { [weak self] in self?.addNewTab() },
-                onCloseTab: { [weak self] id in self?.closePolterttyTab(id) },
                 onSwitchTab: { [weak self] id in self?.switchToTab(id) },
                 windowProvider: { [weak self] in self?.window }
             )
@@ -1598,6 +1596,31 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                activeIdx < tabBarViewModel.tabs.count {
                 tabBarViewModel.selectTab(tabBarViewModel.tabs[activeIdx].id)
             }
+        }
+
+        // 注册自定义 titlebar tab bar（仅 workspace 窗口）
+        if workspaceId != nil {
+            let accentColor: Color = {
+                if let wsId = workspaceId,
+                   let workspace = WorkspaceManager.shared.workspace(for: wsId) {
+                    return Color(hex: workspace.colorHex) ?? .accentColor
+                }
+                return .accentColor
+            }()
+            let tabsAccessory = TitlebarTabsAccessory(
+                tabBarViewModel: tabBarViewModel,
+                accentColor: accentColor,
+                onNewTab: { [weak self] in self?.addNewTab() },
+                onCloseTab: { [weak self] id in self?.closePolterttyTab(id) },
+                onSwitchTab: { [weak self] id in self?.switchToTab(id) }
+            )
+            window.addTitlebarAccessoryViewController(tabsAccessory)
+        }
+
+        // 设置 titlebar 显示 workspace 名称
+        if let wsId = workspaceId,
+           let workspace = WorkspaceManager.shared.workspace(for: wsId) {
+            window.title = workspace.name
         }
 
         // Set window title for onboarding/restore modes

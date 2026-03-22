@@ -121,11 +121,15 @@ final class ClaudeSessionProvider: ExternalAgentProvider {
         guard let files = try? FileManager.default.contentsOfDirectory(atPath: sessionsDir) else { return }
         var found: Set<String> = []
 
+        // wrapper 已接管的会话作为本地 session 处理，不在外部列表中重复显示
+        let localSessionIds = HookSessionStore.shared.knownAgentSessionIds()
+
         for file in files where file.hasSuffix(".json") {
             let path = "\(sessionsDir)/\(file)"
             guard let content = try? String(contentsOfFile: path, encoding: .utf8),
                   let entry   = try? ClaudeSessionFileParser.parse(json: content),
-                  entry.cwd == workspaceDir
+                  entry.cwd == workspaceDir,
+                  !localSessionIds.contains(entry.sessionId)
             else { continue }
 
             let alive = kill(Int32(entry.pid), 0) == 0

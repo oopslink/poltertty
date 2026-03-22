@@ -115,6 +115,13 @@ final class HookSessionStore {
 
     // MARK: - Stale 清理
 
+    /// 返回所有活跃（未结束）会话的 claude session ID 集合，用于过滤外部会话
+    func knownAgentSessionIds() -> Set<String> {
+        Set(sessions.values.compactMap {
+            $0.endedAt == nil && $0.agentSessionId != "unknown" ? $0.agentSessionId : nil
+        })
+    }
+
     func cleanupStale() {
         // PID 检测：遍历活跃 session，检查进程是否存活
         for (id, session) in sessions where session.endedAt == nil {

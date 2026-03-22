@@ -682,9 +682,19 @@ extension Ghostty {
                   event.window != nil,
                   window == event.window else { return event }
 
-            // The clicked location in this window should be this view.
-            let location = convert(event.locationInWindow, from: nil)
-            guard hitTest(location) == self else { return event }
+            // Check whether the click landed in this surface's pane.
+            //
+            // We use the SurfaceScrollView container (4 levels up: SurfaceView →
+            // documentView → NSClipView → NSScrollView → SurfaceScrollView) rather
+            // than calling hitTest on self. The reason: SurfaceView lives inside an
+            // NSScrollView whose NSClipView has isFlipped=true and clipsToBounds=false.
+            // Converting window coordinates through this chain can give incorrect results
+            // for vertical (top/bottom) splits, causing the wrong pane to claim the click.
+            // SurfaceScrollView sits directly in the SwiftUI-managed hierarchy and its
+            // frame is reliably positioned, so a bounds check at that level is correct.
+            let container = self.superview?.superview?.superview?.superview ?? self
+            let containerLocation = container.convert(event.locationInWindow, from: nil)
+            guard container.bounds.contains(containerLocation) else { return event }
 
             // We always assume that we're resetting our mouse suppression
             // unless we see the specific scenario below to set it.

@@ -4,25 +4,12 @@ import Network
 import OSLog
 
 /// 内嵌 HTTP server，接收 Claude Code hook 事件
-/// 绑定 localhost 固定端口，多个 Poltertty 实例共享同一 server
+/// 每个 Poltertty 实例绑定随机端口（port 0），通过 POLTERTTY_HTTP_PORT 环境变量传递给终端
 final class HookServer {
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: "HookServer"
     )
-
-    static let defaultPort: UInt16 = 19198
-    static let maxPortRetries: Int = 10
-
-    private static let lockFilePath: String = {
-        let base = ("~/.config/poltertty" as NSString).expandingTildeInPath
-        return (base as NSString).appendingPathComponent("hook-server.json")
-    }()
-
-    private struct LockFile: Codable {
-        let port: UInt16
-        let pid: Int32
-    }
 
     private var listener: NWListener?
     private(set) var port: UInt16 = 0
@@ -37,97 +24,43 @@ final class HookServer {
     // MARK: - 生命周期
 
     func start() {
-        if tryReuseExisting() { return }
-        for offset in 0..<Self.maxPortRetries {
-            let candidate = Self.defaultPort + UInt16(offset)
-            if tryListen(on: candidate) {
-                writeLockFile(port: candidate)
-                Self.logger.info("HookServer listening on port \(candidate)")
-                return
-            }
-        }
-        Self.logger.error("HookServer: failed to bind any port")
-    }
-
-    func stop() {
-        listener?.cancel()
-        listener = nil
-        removeLockFile()
-    }
-
-    // MARK: - 多实例协调
-
-    private func tryReuseExisting() -> Bool {
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: Self.lockFilePath)),
-              let lock = try? JSONDecoder().decode(LockFile.self, from: data) else { return false }
-        guard kill(lock.pid, 0) == 0 else {
-            try? FileManager.default.removeItem(atPath: Self.lockFilePath)
-            return false
-        }
-        if lock.pid == getpid() { return false }
-        // PID 单独检查不可靠（OS 会复用 PID），额外用 TCP connect 验证端口确实在监听
-        guard isPortListening(lock.port) else {
-            Self.logger.warning("HookServer: lock file PID \(lock.pid) alive but port \(lock.port) not responding — stale lock")
-            try? FileManager.default.removeItem(atPath: Self.lockFilePath)
-            return false
-        }
-        self.port = lock.port
-        Self.logger.info("HookServer: reusing port \(lock.port) from PID \(lock.pid)")
-        return true
-    }
-
-    /// TCP connect 验证：尝试连接 localhost:{port}，成功则说明有进程在监听
-    private func isPortListening(_ port: UInt16) -> Bool {
-        guard let portObj = NWEndpoint.Port(rawValue: port) else { return false }
-        let conn = NWConnection(
-            to: .hostPort(host: .ipv4(.loopback), port: portObj),
-            using: .tcp
-        )
-        let semaphore = DispatchSemaphore(value: 0)
-        var connected = false
-        conn.stateUpdateHandler = { state in
-            switch state {
-            case .ready:
-                connected = true
-                conn.cancel()
-                semaphore.signal()
-            case .failed, .cancelled:
-                semaphore.signal()
-            default: break
-            }
-        }
-        conn.start(queue: .global(qos: .utility))
-        let result = semaphore.wait(timeout: .now() + 1.0)
-        if result == .timedOut { conn.cancel() }
-        return connected
-    }
-
-    private func tryListen(on port: UInt16) -> Bool {
         let params = NWParameters.tcp
-        params.allowLocalEndpointReuse = true
-        guard let portObj = NWEndpoint.Port(rawValue: port),
-              let listener = try? NWListener(using: params, on: portObj) else { return false }
+        guard let listener = try? NWListener(using: params, on: .any) else {
+            Self.logger.error("HookServer: failed to create listener")
+            return
+        }
 
         let semaphore = DispatchSemaphore(value: 0)
-        var success = false
+        var assignedPort: UInt16 = 0
 
         listener.stateUpdateHandler = { state in
             switch state {
-            case .ready:   success = true; semaphore.signal()
-            case .failed:  semaphore.signal()
+            case .ready:
+                assignedPort = listener.port?.rawValue ?? 0
+                semaphore.signal()
+            case .failed:
+                semaphore.signal()
             default: break
             }
         }
         listener.newConnectionHandler = { [weak self] conn in self?.handleConnection(conn) }
         listener.start(queue: .global(qos: .utility))
+
         let result = semaphore.wait(timeout: .now() + 5.0)
-        if result == .timedOut {
-            Self.logger.error("HookServer: tryListen timed out on port \(port)")
+        if result == .timedOut || assignedPort == 0 {
+            Self.logger.error("HookServer: failed to bind")
             listener.cancel()
+            return
         }
 
-        if success { self.listener = listener; self.port = port }
-        return success
+        self.listener = listener
+        self.port = assignedPort
+        Self.logger.info("HookServer listening on port \(assignedPort)")
+    }
+
+    func stop() {
+        listener?.cancel()
+        listener = nil
     }
 
     // MARK: - HTTP 处理
@@ -215,6 +148,29 @@ final class HookServer {
                 port: serverPort
             )
 
+            // wrapper 启动的会话注册为本地 AgentSession（仅当该 surface 尚未有活跃会话时）
+            if let surfaceUUID = UUID(uuidString: req.surfaceId),
+               let workspaceUUID = UUID(uuidString: req.workspaceId),
+               self.sessionManager.session(for: surfaceUUID) == nil {
+                let definition = AgentRegistry.shared.definitions
+                    .first { $0.command == req.agent } ?? .claudeCode
+                let agentSession = AgentSession(
+                    id: UUID(),
+                    surfaceId: surfaceUUID,
+                    definition: definition,
+                    workspaceId: workspaceUUID,
+                    cwd: req.cwd
+                )
+                self.sessionManager.register(agentSession)
+                // 预绑定 claude session ID，使后续 hook 事件能直接命中
+                if req.agentSessionId != "unknown" {
+                    self.sessionManager.bindClaudeSession(
+                        surfaceId: surfaceUUID,
+                        claudeSessionId: req.agentSessionId
+                    )
+                }
+            }
+
             let sessionDir = "\(NSHomeDirectory())/.poltertty/sessions/\(req.sessionId)"
             let cliPath = "\(NSHomeDirectory())/.poltertty/bin/poltertty-cli"
 
@@ -273,19 +229,4 @@ final class HookServer {
         connection.send(content: resp, completion: .contentProcessed { _ in connection.cancel() })
     }
 
-    // MARK: - 锁文件
-
-    private func writeLockFile(port: UInt16) {
-        let lock = LockFile(port: port, pid: getpid())
-        let dir = ("~/.config/poltertty" as NSString).expandingTildeInPath
-        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        try? JSONEncoder().encode(lock).write(to: URL(fileURLWithPath: Self.lockFilePath))
-    }
-
-    private func removeLockFile() {
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: Self.lockFilePath)),
-              let lock = try? JSONDecoder().decode(LockFile.self, from: data),
-              lock.pid == getpid() else { return }
-        try? FileManager.default.removeItem(atPath: Self.lockFilePath)
-    }
 }

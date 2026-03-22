@@ -52,8 +52,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @ObservedObject private var agentMonitorVM: AgentMonitorViewModel
     @ObservedObject var tabBarViewModel: TabBarViewModel
     let workspaceAccentColor: Color
-    let onNewTab: () -> Void
-    let onCloseTab: (UUID) -> Void
     let onSwitchTab: ((UUID) -> Void)?
     let windowProvider: () -> NSWindow?
 
@@ -70,8 +68,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
         onCreateTemporary: (() -> Void)?,
         tabBarViewModel: TabBarViewModel,
         workspaceAccentColor: Color,
-        onNewTab: @escaping () -> Void,
-        onCloseTab: @escaping (UUID) -> Void,
         onSwitchTab: ((UUID) -> Void)? = nil,
         windowProvider: @escaping () -> NSWindow? = { nil }
     ) {
@@ -87,8 +83,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
         self.onCreateTemporary = onCreateTemporary
         self.tabBarViewModel = tabBarViewModel
         self.workspaceAccentColor = workspaceAccentColor
-        self.onNewTab = onNewTab
-        self.onCloseTab = onCloseTab
         self.onSwitchTab = onSwitchTab
         self.windowProvider = windowProvider
 
@@ -405,29 +399,13 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .padding(24)
     }
 
-    /// 终端区域：tab bar（条件显示）+ 当前活跃 surface
+    /// 终端区域：当前活跃 surface
     @ViewBuilder
     private var terminalAreaView: some View {
-        VStack(spacing: 0) {
-            // Tab bar：多 tab 且非全屏预览时显示
-            if tabBarViewModel.tabs.count > 1 {
-                TerminalTabBar(
-                    viewModel: tabBarViewModel,
-                    accentColor: workspaceAccentColor,
-                    onNewTab: onNewTab,
-                    onCloseTab: onCloseTab,
-                    onSwitchTab: onSwitchTab
-                )
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
-            // 终端内容：始终使用 terminalView 渲染 surfaceTree（支持 split + tab）
-            // tab 切换通过 onSwitchTab 回调更新 controller 的 surfaceTree
-            terminalView
-                .environmentObject(tabBarViewModel)
-
-        }
-        .animation(.easeInOut(duration: 0.2), value: tabBarViewModel.tabs.count > 1)
+        // 终端内容：始终使用 terminalView 渲染 surfaceTree（支持 split + tab）
+        // tab 切换通过 onSwitchTab 回调更新 controller 的 surfaceTree
+        terminalView
+            .environmentObject(tabBarViewModel)
     }
 
     private var fileBrowserDivider: some View {

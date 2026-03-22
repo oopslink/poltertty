@@ -70,7 +70,7 @@ struct TerminalTabItem: View {
                 }
             }
             .padding(.horizontal, 14)
-            .frame(height: 36)
+            .frame(height: 28)
             .background(Color.clear)
             .contentShape(Rectangle())
             .onHover { isHovered = $0 }

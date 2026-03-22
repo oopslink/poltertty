@@ -303,13 +303,24 @@ class BaseTerminalController: NSWindowController,
     /// Update all surfaces with the focus state. This ensures that libghostty has an accurate view about
     /// what surface is focused. This must be called whenever a surface OR window changes focus.
     func syncFocusToSurfaceTree() {
+        let isKeyWindow = window?.isKeyWindow ?? false
+        let firstResponder = window?.firstResponder
+
         for surfaceView in surfaceTree {
-            // Our focus state requires that this window is key and our currently
-            // focused surface is the surface in this view.
-            let focused: Bool = (window?.isKeyWindow ?? false) &&
-                !commandPaletteIsShowing &&
-                focusedSurface != nil &&
-                surfaceView == focusedSurface!
+            // Determine which surface should be considered focused.
+            // When focusedSurface is known, use it. When it hasn't been
+            // determined yet (e.g. during initial window setup before the
+            // SwiftUI @FocusedValue chain completes), fall back to the actual
+            // AppKit first responder so we don't incorrectly override the focus
+            // that becomeFirstResponder already set.
+            let isFocusedSurface: Bool
+            if let focusedSurface = focusedSurface {
+                isFocusedSurface = surfaceView == focusedSurface
+            } else {
+                isFocusedSurface = firstResponder === surfaceView
+            }
+
+            let focused: Bool = isKeyWindow && !commandPaletteIsShowing && isFocusedSurface
             surfaceView.focusDidChange(focused)
         }
     }
