@@ -263,9 +263,20 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
 
         // 清理已关闭 surface 的 agent session
+        // 注意：tab 切换时整棵 surfaceTree 被替换，from 中的 surface 并非真正关闭，
+        // 仅当 surface 不在任何 tab（含非活跃 tab）中时才清理其 session。
         let fromIds = Set(from.map { $0.id })
         let toIds = Set(to.map { $0.id })
-        for removedId in fromIds.subtracting(toIds) {
+        // 收集所有非活跃 tab 已保存的 surface ID（排除当前活跃 tab 的过时快照，以 to 为准）
+        let activeTabId = tabBarViewModel.activeTabId
+        let savedSurfaceIds = tabSurfaceTrees
+            .filter { $0.key != activeTabId }
+            .values
+            .reduce(into: Set<UUID>()) { result, tree in
+                tree.forEach { result.insert($0.id) }
+            }
+        let allLiveSurfaceIds = toIds.union(savedSurfaceIds)
+        for removedId in fromIds.subtracting(allLiveSurfaceIds) {
             AgentService.shared.sessionManager.remove(surfaceId: removedId)
         }
     }
@@ -1085,7 +1096,14 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // 2. 从 viewModel 移除 tab（不再依赖 closeTab 内部的 selectTab）
         tabBarViewModel.removeTabOnly(id)
 
-        // 3. 清理被关闭 tab 的 surfaceTree 映射
+        // 3. 清理被关闭 tab 的 surfaceTree 映射，并显式移除对应 agent session
+        // surfaceTreeDidChange 在 tab 切换时会因为 surface 仍存活于 tabSurfaceTrees 而跳过清理，
+        // 因此在此处负责关闭 tab 后的 session 清理。
+        if let closedTree = tabSurfaceTrees[id] {
+            closedTree.forEach { surface in
+                AgentService.shared.sessionManager.remove(surfaceId: surface.id)
+            }
+        }
         tabSurfaceTrees.removeValue(forKey: id)
     }
 

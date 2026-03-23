@@ -7,7 +7,7 @@ final class AgentDashboardWindowController: NSWindowController {
 
     private init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 500),
+            contentRect: NSRect(x: 0, y: 0, width: 820, height: 520),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -16,7 +16,7 @@ final class AgentDashboardWindowController: NSWindowController {
         window.setFrameAutosaveName("AgentDashboardWindow")
         window.center()
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 500, height: 300)
+        window.minSize = NSSize(width: 600, height: 340)
         window.contentView = NSHostingView(rootView: AgentDashboardView())
         super.init(window: window)
     }
