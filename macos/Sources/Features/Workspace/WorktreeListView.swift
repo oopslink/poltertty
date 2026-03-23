@@ -7,9 +7,6 @@ struct WorktreeListView: View {
     let onOpenInTab: (String) -> Void
     let onOpenInWindow: (String) -> Void
     let onDelete: (String, Bool) -> Void  // path, force
-    let onShowCreateForm: () -> Void = {}
-
-    @State private var addButtonHovering = false
 
     var body: some View {
         VStack(spacing: 1) {
@@ -22,25 +19,6 @@ struct WorktreeListView: View {
                     onDelete: onDelete
                 )
             }
-
-            // + Add Worktree button
-            Button(action: onShowCreateForm) {
-                HStack(spacing: 4) {
-                    Image(systemName: "plus.circle")
-                        .font(.system(size: 9))
-                    Text(String(localized: "Add Worktree"))
-                        .font(.system(size: 10))
-                }
-                .foregroundColor(addButtonHovering ? .secondary : .secondary.opacity(0.55))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(addButtonHovering ? Color.primary.opacity(0.05) : .clear)
-                )
-            }
-            .buttonStyle(.plain)
-            .onHover { addButtonHovering = $0 }
         }
         .padding(.leading, 16)
     }

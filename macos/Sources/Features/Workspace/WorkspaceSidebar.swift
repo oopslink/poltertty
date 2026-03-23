@@ -315,7 +315,8 @@ struct WorkspaceSidebar: View {
                         manager.moveWorkspace(id: workspace.id, toGroup: groupId, insertAfter: nil)
                     },
                     onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) },
-                    availableGroups: manager.groups
+                    availableGroups: manager.groups,
+                    onShowCreateForm: workspace.id == currentWorkspaceId ? { showWorktreeCreateForm = true } : nil
                 )
                 if workspace.id == currentWorkspaceId,
                    let monitor = worktreeMonitor,
@@ -442,7 +443,8 @@ struct WorkspaceSidebar: View {
                                             manager.moveWorkspace(id: workspace.id, toGroup: groupId, insertAfter: nil)
                                         },
                                         onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) },
-                                        availableGroups: manager.groups
+                                        availableGroups: manager.groups,
+                                        onShowCreateForm: workspace.id == currentWorkspaceId ? { showWorktreeCreateForm = true } : nil
                                     )
                                     .padding(.leading, 8)
                                     if workspace.id == currentWorkspaceId,
@@ -767,9 +769,11 @@ struct ExpandedWorkspaceItem: View {
     var onMoveToGroup: ((UUID?) -> Void)? = nil   // nil groupId = 移入未分组
     var onNewGroup: (() -> Void)? = nil
     var availableGroups: [WorkspaceGroup] = []
+    var onShowCreateForm: (() -> Void)? = nil
 
     @State private var isHovering = false
     @State private var isPressed = false
+    @State private var isMoreHovered = false
 
     private var indicatorColor: Color {
         workspace.isTemporary ? (Color(hex: "#F59E0B") ?? .yellow) : workspace.color
@@ -825,6 +829,21 @@ struct ExpandedWorkspaceItem: View {
             }
 
             Spacer()
+
+            if let onShowCreateForm {
+                Button {
+                    showMoreMenu(onShowCreateForm: onShowCreateForm)
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .opacity(isHovering || isMoreHovered ? 1 : 0)
+                .onHover { isMoreHovered = $0 }
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -875,6 +894,27 @@ struct ExpandedWorkspaceItem: View {
             Button("Delete Workspace", role: .destructive) { onDelete() }
         }
         .onTapGesture(count: 2) {}  // prevent double-tap from passing through to blank area handler
+    }
+
+    private func showMoreMenu(onShowCreateForm: @escaping () -> Void) {
+        let menu = NSMenu()
+        let addItem = NSMenuItem(title: "Add Worktree…", action: nil, keyEquivalent: "")
+        addItem.target = WorkspaceMoreMenuTarget.shared
+        addItem.action = #selector(WorkspaceMoreMenuTarget.addWorktreeClicked(_:))
+        WorkspaceMoreMenuTarget.shared.onAddWorktree = onShowCreateForm
+        menu.addItem(addItem)
+        if let event = NSApp.currentEvent {
+            NSMenu.popUpContextMenu(menu, with: event, for: NSApp.keyWindow?.contentView ?? NSView())
+        }
+    }
+}
+
+private class WorkspaceMoreMenuTarget: NSObject {
+    static let shared = WorkspaceMoreMenuTarget()
+    var onAddWorktree: (() -> Void)?
+
+    @objc func addWorktreeClicked(_ sender: NSMenuItem) {
+        onAddWorktree?()
     }
 }
 
