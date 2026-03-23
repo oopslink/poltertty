@@ -77,6 +77,8 @@ final class GitWorktreeMonitor: ObservableObject {
     private var dotGitSource: DispatchSourceFileSystemObject?
     private var worktreesSource: DispatchSourceFileSystemObject?
     private var worktreeDirSources: [String: DispatchSourceFileSystemObject] = [:]
+    // 监听各 worktree 的父目录，检测 worktree 增删（比个别目录的 .delete 更可靠）
+    private var worktreeParentSources: [String: DispatchSourceFileSystemObject] = [:]
     private var debounceWork: DispatchWorkItem?
 
     init(rootDir: String) {
@@ -90,6 +92,7 @@ final class GitWorktreeMonitor: ObservableObject {
         dotGitSource?.cancel()
         worktreesSource?.cancel()
         worktreeDirSources.values.forEach { $0.cancel() }
+        worktreeParentSources.values.forEach { $0.cancel() }
         debounceWork?.cancel()
     }
 
@@ -148,7 +151,8 @@ final class GitWorktreeMonitor: ObservableObject {
 
     // 监听各 worktree 目录的删除事件，使手动删除目录时侧边栏能实时更新
     private func updateWorktreeDirWatchers(for worktrees: [GitWorktree]) {
-        let activePaths = Set(worktrees.filter { $0.exists && !$0.isMain }.map { $0.path })
+        let nonMainWorktrees = worktrees.filter { $0.exists && !$0.isMain }
+        let activePaths = Set(nonMainWorktrees.map { $0.path })
         let watchedPaths = Set(worktreeDirSources.keys)
 
         for path in watchedPaths.subtracting(activePaths) {
@@ -167,6 +171,35 @@ final class GitWorktreeMonitor: ObservableObject {
             }
             source.setCancelHandler { close(fd) }
             worktreeDirSources[path] = source
+            source.resume()
+        }
+
+        // 监听各 worktree 的父目录，检测增删（link count 变化比 .delete 事件更可靠）
+        updateWorktreeParentWatchers(parentPaths: Set(nonMainWorktrees.map {
+            URL(fileURLWithPath: $0.path).deletingLastPathComponent().path
+        }))
+    }
+
+    // 监听 worktree 父目录的 .write/.link 事件；父目录中有 worktree 增删时 link count 变化
+    private func updateWorktreeParentWatchers(parentPaths: Set<String>) {
+        let watchedPaths = Set(worktreeParentSources.keys)
+
+        for path in watchedPaths.subtracting(parentPaths) {
+            worktreeParentSources[path]?.cancel()
+            worktreeParentSources.removeValue(forKey: path)
+        }
+
+        for path in parentPaths.subtracting(watchedPaths) {
+            let fd = open(path, O_EVTONLY)
+            guard fd >= 0 else { continue }
+            let source = DispatchSource.makeFileSystemObjectSource(
+                fileDescriptor: fd, eventMask: [.write, .link], queue: queue
+            )
+            source.setEventHandler { [weak self] in
+                self?.scheduleRefresh()
+            }
+            source.setCancelHandler { close(fd) }
+            worktreeParentSources[path] = source
             source.resume()
         }
     }
@@ -241,6 +274,8 @@ final class GitWorktreeMonitor: ObservableObject {
         worktreesSource = nil
         worktreeDirSources.values.forEach { $0.cancel() }
         worktreeDirSources.removeAll()
+        worktreeParentSources.values.forEach { $0.cancel() }
+        worktreeParentSources.removeAll()
         debounceWork?.cancel()
         debounceWork = nil
     }
@@ -286,6 +321,8 @@ final class GitWorktreeMonitor: ObservableObject {
             let message = result.stderr?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Unknown error"
             throw WorktreeError.gitError(message)
         }
+        // 应用内删除：主动触发刷新，不依赖文件系统事件
+        queue.async { [weak self] in self?.scheduleRefresh() }
     }
 
     func listBranches() -> [String] {
