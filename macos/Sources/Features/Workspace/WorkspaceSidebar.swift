@@ -14,6 +14,10 @@ struct WorkspaceSidebar: View {
     let onLaunchAgent: () -> Void
 
     @Binding var isCollapsed: Bool
+    var worktreeMonitor: GitWorktreeMonitor? = nil
+    var onOpenWorktreeInTab: ((String) -> Void)? = nil
+    var onOpenWorktreeInWindow: ((String) -> Void)? = nil
+
     @State private var isCreating = false
     @State private var editingWorkspace: WorkspaceModel?
     @State private var showDeleteAlert = false
@@ -21,6 +25,11 @@ struct WorkspaceSidebar: View {
     @Namespace private var sidebarAnimation
     @State private var showDeleteGroupAlert = false
     @State private var pendingDeleteGroup: WorkspaceGroup?
+    @State private var showWorktreeCreateForm = false
+    @State private var worktreeExpanded = true
+    @State private var pendingDeleteWorktreePath: String?
+    @State private var pendingDeleteDirtyCount: Int = 0
+    @State private var showDeleteWorktreeAlert = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -86,6 +95,35 @@ struct WorkspaceSidebar: View {
         } message: {
             Text("Workspaces in this group will be moved to ungrouped.")
         }
+        .alert(
+            "Delete worktree \"\(pendingDeleteWorktreePath?.components(separatedBy: "/").last ?? "")\"?",
+            isPresented: $showDeleteWorktreeAlert
+        ) {
+            Button("Cancel", role: .cancel) {
+                pendingDeleteWorktreePath = nil
+            }
+            Button(
+                pendingDeleteDirtyCount > 0 ? "Force Delete" : "Delete",
+                role: .destructive
+            ) {
+                if let path = pendingDeleteWorktreePath, let monitor = worktreeMonitor {
+                    try? monitor.removeWorktree(path: path, force: pendingDeleteDirtyCount > 0)
+                }
+                pendingDeleteWorktreePath = nil
+            }
+        } message: {
+            if let path = pendingDeleteWorktreePath {
+                Text(path)
+                if pendingDeleteDirtyCount > 0 {
+                    Text("⚠ \(pendingDeleteDirtyCount) uncommitted changes will be lost")
+                }
+            }
+        }
+        .sheet(isPresented: $showWorktreeCreateForm) {
+            if let monitor = worktreeMonitor {
+                WorktreeCreateForm(monitor: monitor, onDismiss: { showWorktreeCreateForm = false })
+            }
+        }
     }
 
     // MARK: - Collapsed View
@@ -144,7 +182,15 @@ struct WorkspaceSidebar: View {
                                 onMoveToGroup: { groupId in
                                     manager.moveWorkspace(id: workspace.id, toGroup: groupId, insertAfter: nil)
                                 },
-                                onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) }
+                                onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) },
+                                worktreeMonitor: workspace.id == currentWorkspaceId ? worktreeMonitor : nil,
+                                onOpenWorktreeInTab: workspace.id == currentWorkspaceId ? onOpenWorktreeInTab : nil,
+                                onOpenWorktreeInWindow: workspace.id == currentWorkspaceId ? onOpenWorktreeInWindow : nil,
+                                onDeleteWorktree: workspace.id == currentWorkspaceId ? { path in
+                                    if let monitor = worktreeMonitor {
+                                        confirmDeleteWorktree(path: path, monitor: monitor)
+                                    }
+                                } : nil
                             )
                         }
 
@@ -184,7 +230,15 @@ struct WorkspaceSidebar: View {
                                             onMoveToGroup: { groupId in
                                                 manager.moveWorkspace(id: workspace.id, toGroup: groupId, insertAfter: nil)
                                             },
-                                            onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) }
+                                            onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) },
+                                            worktreeMonitor: workspace.id == currentWorkspaceId ? worktreeMonitor : nil,
+                                            onOpenWorktreeInTab: workspace.id == currentWorkspaceId ? onOpenWorktreeInTab : nil,
+                                            onOpenWorktreeInWindow: workspace.id == currentWorkspaceId ? onOpenWorktreeInWindow : nil,
+                                            onDeleteWorktree: workspace.id == currentWorkspaceId ? { path in
+                                                if let monitor = worktreeMonitor {
+                                                    confirmDeleteWorktree(path: path, monitor: monitor)
+                                                }
+                                            } : nil
                                         )
                                     }
                                 }
@@ -203,8 +257,16 @@ struct WorkspaceSidebar: View {
                                     onTap: { onSwitch(workspace.id) },
                                     onClose: { onClose(workspace.id) },
                                     onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
-                                    onEdit: { editingWorkspace = workspace }
+                                    onEdit: { editingWorkspace = workspace },
                                     // No availableGroups/onMoveToGroup/onNewGroup for Temporary
+                                    worktreeMonitor: workspace.id == currentWorkspaceId ? worktreeMonitor : nil,
+                                    onOpenWorktreeInTab: workspace.id == currentWorkspaceId ? onOpenWorktreeInTab : nil,
+                                    onOpenWorktreeInWindow: workspace.id == currentWorkspaceId ? onOpenWorktreeInWindow : nil,
+                                    onDeleteWorktree: workspace.id == currentWorkspaceId ? { path in
+                                        if let monitor = worktreeMonitor {
+                                            confirmDeleteWorktree(path: path, monitor: monitor)
+                                        }
+                                    } : nil
                                 )
                             }
                         }
@@ -255,6 +317,42 @@ struct WorkspaceSidebar: View {
                     onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) },
                     availableGroups: manager.groups
                 )
+                if workspace.id == currentWorkspaceId,
+                   let monitor = worktreeMonitor,
+                   monitor.worktrees.count > 1 {
+                    VStack(spacing: 0) {
+                        Button(action: { worktreeExpanded.toggle() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: worktreeExpanded ? "chevron.down" : "chevron.right")
+                                    .font(.system(size: 8, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 10)
+                                Text("\(monitor.worktrees.count) worktrees")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background(Color.secondary.opacity(0.1))
+                                    .cornerRadius(3)
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.leading, 14)
+                        .padding(.trailing, 6)
+                        .padding(.vertical, 2)
+
+                        if worktreeExpanded {
+                            WorktreeListView(
+                                monitor: monitor,
+                                onOpenInTab: { path in onOpenWorktreeInTab?(path) },
+                                onOpenInWindow: { path in onOpenWorktreeInWindow?(path) },
+                                onDelete: { path, _ in confirmDeleteWorktree(path: path, monitor: monitor) },
+                                onShowCreateForm: { showWorktreeCreateForm = true }
+                            )
+                        }
+                    }
+                }
             }
         }
         .dropDestination(for: WorkspaceDragItem.self) { items, _ in
@@ -340,6 +438,31 @@ struct WorkspaceSidebar: View {
                                         availableGroups: manager.groups
                                     )
                                     .padding(.leading, 8)
+                                    if workspace.id == currentWorkspaceId,
+                                       let monitor = worktreeMonitor,
+                                       monitor.worktrees.count > 1 {
+                                        DisclosureGroup(isExpanded: $worktreeExpanded) {
+                                            WorktreeListView(
+                                                monitor: monitor,
+                                                onOpenInTab: { path in onOpenWorktreeInTab?(path) },
+                                                onOpenInWindow: { path in onOpenWorktreeInWindow?(path) },
+                                                onDelete: { path, _ in confirmDeleteWorktree(path: path, monitor: monitor) },
+                                                onShowCreateForm: { showWorktreeCreateForm = true }
+                                            )
+                                        } label: {
+                                            HStack(spacing: 4) {
+                                                Text("\(monitor.worktrees.count) worktrees")
+                                                    .font(.system(size: 9))
+                                                    .foregroundColor(.secondary)
+                                                    .padding(.horizontal, 5)
+                                                    .padding(.vertical, 1)
+                                                    .background(Color.secondary.opacity(0.1))
+                                                    .cornerRadius(3)
+                                            }
+                                        }
+                                        .padding(.leading, 14)
+                                        .padding(.trailing, 6)
+                                    }
                                 }
                             }
                         }
@@ -462,6 +585,17 @@ struct WorkspaceSidebar: View {
         pendingDeleteGroup = group
         showDeleteGroupAlert = true
     }
+
+    private func confirmDeleteWorktree(path: String, monitor: GitWorktreeMonitor) {
+        pendingDeleteWorktreePath = path
+        DispatchQueue.global().async {
+            let count = monitor.dirtyFileCount(at: path)
+            DispatchQueue.main.async {
+                pendingDeleteDirtyCount = count
+                showDeleteWorktreeAlert = true
+            }
+        }
+    }
 }
 
 // MARK: - Collapsed Icon
@@ -478,6 +612,10 @@ struct CollapsedWorkspaceIcon: View {
     var availableGroups: [WorkspaceGroup] = []
     var onMoveToGroup: ((UUID?) -> Void)? = nil
     var onNewGroup: (() -> Void)? = nil
+    var worktreeMonitor: GitWorktreeMonitor? = nil
+    var onOpenWorktreeInTab: ((String) -> Void)? = nil
+    var onOpenWorktreeInWindow: ((String) -> Void)? = nil
+    var onDeleteWorktree: ((String) -> Void)? = nil
 
     @State private var isHovering = false
 
@@ -546,6 +684,23 @@ struct CollapsedWorkspaceIcon: View {
         .onHover { isHovering = $0 }
         .help(tooltipText)
         .contextMenu {
+            if let monitor = worktreeMonitor, monitor.worktrees.count > 1 {
+                Menu("Worktrees") {
+                    ForEach(monitor.worktrees) { wt in
+                        Menu(wt.branch ?? "detached") {
+                            Button(String(localized: "Open in New Tab")) { onOpenWorktreeInTab?(wt.path) }
+                            Button(String(localized: "Open in New Window")) { onOpenWorktreeInWindow?(wt.path) }
+                            if !wt.isMain && !wt.isCurrent {
+                                Divider()
+                                Button(String(localized: "Delete Worktree"), role: .destructive) {
+                                    onDeleteWorktree?(wt.path)
+                                }
+                            }
+                        }
+                    }
+                }
+                Divider()
+            }
             Button("Edit Workspace...") { onEdit() }
             Menu("Move to Group") {
                 if workspace.groupId != nil {

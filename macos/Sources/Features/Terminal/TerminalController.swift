@@ -66,6 +66,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// Custom tab bar view model — owns all SurfaceView instances for this window
     let tabBarViewModel = TabBarViewModel()
 
+    /// Git worktree monitor for sidebar worktree list
+    let worktreeMonitor: GitWorktreeMonitor
+
     /// NSToolbar delegate（workspace 窗口），需要强引用防止释放
     private var workspaceToolbarDelegate: WorkspaceToolbarDelegate?
 
@@ -100,6 +103,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // Poltertty: 将 workspaceId 注入到 baseConfig，供 SurfaceView 注入环境变量
         var config = base ?? Ghostty.SurfaceConfiguration()
         config.workspaceId = workspaceId
+
+        let wtRootDir = workspaceId
+            .flatMap { WorkspaceManager.shared.workspace(for: $0) }?.rootDirExpanded
+            ?? NSHomeDirectory()
+        self.worktreeMonitor = GitWorktreeMonitor(rootDir: wtRootDir)
+
         super.init(ghostty, baseConfig: config, surfaceTree: tree)
 
         // Setup our notifications for behaviors
@@ -1583,7 +1592,14 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                     return .accentColor
                 }(),
                 onSwitchTab: { [weak self] id in self?.switchToTab(id) },
-                windowProvider: { [weak self] in self?.window }
+                windowProvider: { [weak self] in self?.window },
+                worktreeMonitor: self.worktreeMonitor,
+                onOpenWorktreeInTab: { [weak self] path in
+                    self?.openNewTab(cdTo: path)
+                },
+                onOpenWorktreeInWindow: { [weak self] path in
+                    self?.openNewWindow(cdTo: path)
+                }
             )
         }
 
@@ -2503,5 +2519,28 @@ extension TerminalController {
         if let view = self.window?.contentView {
             popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
         }
+    }
+
+    // MARK: - Worktree Navigation
+
+    func openNewTab(cdTo path: String) {
+        guard let window = self.window else { return }
+        var config = Ghostty.SurfaceConfiguration()
+        config.workingDirectory = path
+        config.workspaceId = self.workspaceId
+        _ = TerminalController.newTab(ghostty, from: window, withBaseConfig: config)
+    }
+
+    func openNewWindow(cdTo path: String) {
+        var config = Ghostty.SurfaceConfiguration()
+        config.workingDirectory = path
+        config.workspaceId = self.workspaceId
+        let controller = TerminalController.newWindow(
+            ghostty,
+            withBaseConfig: config,
+            withParent: self.window,
+            workspaceId: self.workspaceId
+        )
+        controller.showWindow(self)
     }
 }

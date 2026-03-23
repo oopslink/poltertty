@@ -11,8 +11,9 @@ struct GitRepoStatus: Equatable {
     let added: Int        // untracked (??) + staged new (A)
     let modified: Int     // staged modified (M?) + unstaged modified (?M)
     let isGitRepo: Bool
+    let isLinkedWorktree: Bool
 
-    static let empty = GitRepoStatus(branch: nil, added: 0, modified: 0, isGitRepo: false)
+    static let empty = GitRepoStatus(branch: nil, added: 0, modified: 0, isGitRepo: false, isLinkedWorktree: false)
 }
 
 // MARK: - Typealias for task compatibility
@@ -145,11 +146,18 @@ final class GitStatusMonitor: ObservableObject {
         let porcelain = statusResult.output ?? ""
         let counts = GitStatusParser.parse(porcelain: porcelain)
 
+        // Detect linked worktree: --git-common-dir returns ".git" for main worktree,
+        // or a relative/absolute path for linked worktrees
+        let commonDirResult = runGit(["-C", pwd, "rev-parse", "--git-common-dir"])
+        let commonDir = commonDirResult.output?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ".git"
+        let isLinked = commonDir != ".git"
+
         let newStatus = GitRepoStatus(
             branch: branch,
             added: counts.added,
             modified: counts.modified,
-            isGitRepo: true
+            isGitRepo: true,
+            isLinkedWorktree: isLinked
         )
         DispatchQueue.main.async { [weak self] in
             self?.status = newStatus
