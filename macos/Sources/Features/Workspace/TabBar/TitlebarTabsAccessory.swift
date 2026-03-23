@@ -128,7 +128,9 @@ struct WorkspaceBarView: View {
             // tab 少时推到右侧，tab 多时压缩到 0
             Spacer(minLength: 0)
 
-            ForEach(layout.visible) { tab in
+            ForEach(Array(layout.visible.enumerated()), id: \.element.id) { index, tab in
+                let nextIsActive = index + 1 < layout.visible.count && layout.visible[index + 1].isActive
+                let isLast = index == layout.visible.count - 1
                 TerminalTabItem(
                     tab: tab,
                     accentColor: accentColor,
@@ -141,7 +143,9 @@ struct WorkspaceBarView: View {
                             .filter { $0.id != tab.id }
                             .forEach { onCloseTab($0.id) }
                     },
-                    agentState: viewModel.agentState(for: tab.surfaceId)
+                    agentState: viewModel.agentState(for: tab.surfaceId),
+                    isNextActive: nextIsActive,
+                    isLastVisible: isLast
                 )
                 .id(tab.id)
             }
