@@ -231,6 +231,10 @@ class BaseTerminalController: NSWindowController,
 
     // MARK: Methods
 
+    /// 当前激活 tab ID；子类覆写提供实际值。
+    /// BaseTerminalController 中返回 nil（无 tab 概念）。
+    @MainActor var activeTabId: UUID? { nil }
+
     /// Create a new split.
     @discardableResult
     func newSplit(
@@ -271,6 +275,19 @@ class BaseTerminalController: NSWindowController,
             moveFocusTo: newView,
             moveFocusFrom: oldView,
             undoAction: "New Split")
+
+        // Emit pane created event（使用 activeTabId 虚属性，避免直接依赖 tabBarViewModel）
+        // workspaceId 需要 TerminalController 提供，此处向下转型是唯一例外
+        if let wsId = (self as? TerminalController)?.workspaceId,
+           let tabId = activeTabId {
+            Task {
+                await EventBus.shared.emit(.paneCreated(
+                    paneId: newView.id,
+                    tabId: tabId,
+                    workspaceId: wsId
+                ))
+            }
+        }
 
         return newView
     }

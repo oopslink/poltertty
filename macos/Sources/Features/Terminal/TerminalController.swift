@@ -59,6 +59,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// Cancellables for tab bar active-tab observation.
     private var tabBarCancellables: Set<AnyCancellable> = []
 
+    /// 当前激活 tab ID，覆写 BaseTerminalController 的虚属性
+    override var activeTabId: UUID? { tabBarViewModel.activeTabId }
+
     /// The workspace this window is bound to (nil = legacy non-workspace window)
     var workspaceId: UUID?
     var startupMode: WorkspaceStartupMode = .terminal
@@ -948,9 +951,11 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     }
 
     /// Add a new tab in the custom poltertty tab bar
+    /// - Returns: 新创建 SurfaceView 的 UUID（即 pane ID）
     @MainActor
-    func addNewTab() {
-        guard let ghostty_app = ghostty.app else { return }
+    @discardableResult
+    func addNewTab() -> UUID {
+        guard let ghostty_app = ghostty.app else { return UUID() }
 
         // Save current tab's surface tree
         if let currentTabId = tabBarViewModel.activeTabId {
@@ -972,6 +977,13 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         if let newTabId = tabBarViewModel.activeTabId {
             tabSurfaceTrees[newTabId] = newTree
         }
+
+        // Emit EventBus event
+        if let wsId = workspaceId, let tabId = tabBarViewModel.activeTabId {
+            Task { await EventBus.shared.emit(.tabCreated(tabId: tabId, workspaceId: wsId)) }
+        }
+
+        return surface.id
     }
 
     /// 创建新 tab 并 attach 到指定 tmux session
@@ -2518,12 +2530,50 @@ extension TerminalController {
 // MARK: - Agent Support
 
 extension TerminalController {
-    /// 向指定 surfaceId 的 surface 写入文本（用于启动命令和 respawn）
-    ///
-    /// surfaceId 对应 SurfaceView.id（不是 TabBarViewModel 字典 key）。
-    func writeToSurface(text: String, surfaceId: UUID) {
-        // 在当前 surfaceTree 中查找匹配的 SurfaceView
-        guard let targetView = surfaceTree.first(where: { $0.id == surfaceId }) else { return }
+    /// 跨所有 tab 查找指定 UUID 的 SurfaceView
+    /// - Note: 必须在 @MainActor 上调用
+    @MainActor func findSurface(id: UUID) -> Ghostty.SurfaceView? {
+        // 先查当前活跃 tab
+        if let view = surfaceTree.first(where: { $0.id == id }) { return view }
+        // 再查非活跃 tab
+        for (_, tree) in tabSurfaceTrees {
+            if let view = tree.first(where: { $0.id == id }) { return view }
+        }
+        return nil
+    }
+
+    /// 列出本 TerminalController 管辖的所有 pane 信息
+    /// - Note: 必须在 @MainActor 上调用
+    @MainActor func listPanes() -> [PaneInfo] {
+        guard let wsId = workspaceId else { return [] }
+        let activeTabId = tabBarViewModel.activeTabId
+        var result: [PaneInfo] = []
+
+        for tab in tabBarViewModel.tabs {
+            let tree: SplitTree<Ghostty.SurfaceView>
+            if tab.id == activeTabId {
+                tree = surfaceTree          // 活跃 tab：用 live surfaceTree
+            } else {
+                guard let t = tabSurfaceTrees[tab.id] else { continue }
+                tree = t
+            }
+            for surface in tree {
+                let isActive = surface.id == focusedSurface?.id && tab.id == activeTabId
+                result.append(PaneInfo(
+                    id: surface.id,
+                    tabId: tab.id,
+                    workspaceId: wsId,
+                    isActive: isActive,
+                    title: tabBarViewModel.tabs.first(where: { $0.id == tab.id })?.title
+                ))
+            }
+        }
+        return result
+    }
+
+    /// 向指定 surfaceId 的 surface 写入文本（支持跨 tab 查找）
+    @MainActor func writeToSurface(text: String, surfaceId: UUID) {
+        guard let targetView = findSurface(id: surfaceId) else { return }
         guard let surfaceModel = targetView.surfaceModel else { return }
         surfaceModel.sendText(text)
     }

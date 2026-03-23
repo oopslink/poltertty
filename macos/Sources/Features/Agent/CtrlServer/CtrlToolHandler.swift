@@ -3,25 +3,19 @@ import Foundation
 import AppKit
 import OSLog
 
-/// MCP tool 实现。
-/// prepareResult() 在 background queue 调用，只做纯数据处理，不访问 @MainActor 属性。
-/// execute() 标注 @MainActor，执行所有 UI 副作用。
-final class CtrlToolHandler {
+/// MCP tool 实现。callTool() 为 async throws，内部用 CheckedContinuation 桥接到 @MainActor。
+final class CtrlToolHandler: Sendable {
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
         category: "CtrlToolHandler"
     )
 
-    // C2: RPCError 声明为 Sendable
-    struct RPCError: Sendable {
+    struct RPCError: Error, Sendable {
         let code: Int
         let message: String
     }
 
-    /// port 由 CtrlServer 在初始化时以值拷贝形式传入，
-    /// 避免在 background 线程访问 @MainActor 的 AgentService 属性
     private let port: UInt16
-    // C1: version 和 instanceId 在 init 时读取并缓存，避免 background 线程访问 Bundle
     private let version: String
     private let instanceId: String
 
@@ -31,75 +25,227 @@ final class CtrlToolHandler {
         self.instanceId = Bundle.main.bundleIdentifier ?? "unknown"
     }
 
-    // MARK: - prepareResult（background queue 安全）
+    // MARK: - Public entry point
 
-    func prepareResult(tool: String, arguments: [String: Any]) -> (String?, RPCError?) {
-        switch tool {
-        case "ping":    return (pingResult(), nil)
-        case "new_tab":
-            // C4: new_tab 响应改用 JSONSerialization，保持一致性
-            let obj: [String: Any] = ["status": "accepted"]
-            let text = (try? JSONSerialization.data(withJSONObject: obj))
-                .flatMap { String(data: $0, encoding: .utf8) } ?? #"{"status":"accepted"}"#
-            return (text, nil)
-        default:        return (nil, RPCError(code: -32601, message: "Unknown tool: \(tool)"))
-        }
-    }
-
-    // MARK: - execute（@MainActor）
-
-    @MainActor
-    func execute(tool: String, arguments: [String: Any]) {
-        switch tool {
-        case "new_tab": executeNewTab(arguments: arguments)
-        default: break
+    func callTool(name: String, arguments: [String: Any]) async throws -> String {
+        switch name {
+        case "ping":       return try await callPing()
+        case "new_tab":    return try await callNewTab(arguments: arguments)
+        case "list_panes": return try await callListPanes(arguments: arguments)
+        case "focus_pane": return try await callFocusPane(arguments: arguments)
+        case "send_text":  return try await callSendText(arguments: arguments)
+        case "split_pane": return try await callSplitPane(arguments: arguments)
+        default:
+            throw RPCError(code: -32601, message: "Unknown tool: \(name)")
         }
     }
 
     // MARK: - ping
 
-    private func pingResult() -> String {
-        // C1: 使用 init 时缓存的 version 和 instanceId
+    private func callPing() async throws -> String {
+        let workspaces: [[String: Any]] = await MainActor.run {
+            WorkspaceManager.shared.allWorkspaceIds().map { id in
+                let isActive = WorkspaceManager.shared.windowForWorkspace(id)?.isKeyWindow == true
+                return ["id": id.uuidString, "isActive": isActive]
+            }
+        }
         let obj: [String: Any] = [
             "instanceId": instanceId,
             "version": version,
-            "port": Int(port)
+            "port": Int(port),
+            "workspaces": workspaces
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: obj),
               let str = String(data: data, encoding: .utf8) else {
-            Self.logger.error("pingResult: JSON serialization failed")
-            return #"{"error":"serialization failed"}"#
+            throw RPCError(code: -32603, message: "ping: serialization failed")
         }
         return str
     }
 
     // MARK: - new_tab
 
-    @MainActor
-    private func executeNewTab(arguments: [String: Any]) {
-        let tc: TerminalController?
-
-        if let wsIdStr = arguments["workspaceId"] as? String {
-            guard let wsId = UUID(uuidString: wsIdStr) else {
-                Self.logger.warning("new_tab: invalid workspaceId UUID: \(wsIdStr)")
-                return
+    private func callNewTab(arguments: [String: Any]) async throws -> String {
+        let paneId: UUID = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let tc = Self.resolveTC(arguments) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "new_tab: no TerminalController found"))
+                    return
+                }
+                let id = tc.addNewTab()
+                cont.resume(returning: id)
             }
-            let window = WorkspaceManager.shared.windowForWorkspace(wsId)
-            tc = (window as? TerminalWindow)?.terminalController
-        } else {
-            // C3: 修正 keyWindow fallback——即使 keyWindow 非 nil 但不是 TerminalWindow，
-            // 也继续遍历找第一个 TerminalWindow
-            let target = (NSApp.keyWindow as? TerminalWindow)
-                ?? NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
-            tc = target?.terminalController
+        }
+        return #"{"paneId":"\#(paneId.uuidString)"}"#
+    }
+
+    // MARK: - list_panes
+
+    private func callListPanes(arguments: [String: Any]) async throws -> String {
+        let infos: [PaneInfo] = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                var result: [PaneInfo] = []
+
+                if let wsIdStr = arguments["workspaceId"] as? String,
+                   let wsId = UUID(uuidString: wsIdStr) {
+                    if let tc = Self.tcForWorkspace(wsId) {
+                        result = tc.listPanes()
+                    }
+                } else {
+                    for wsId in WorkspaceManager.shared.allWorkspaceIds() {
+                        if let tc = Self.tcForWorkspace(wsId) {
+                            result.append(contentsOf: tc.listPanes())
+                        }
+                    }
+                }
+                cont.resume(returning: result)
+            }
         }
 
-        guard let tc else {
-            Self.logger.warning("new_tab: no TerminalController found")
-            return
+        let arr: [[String: Any]] = infos.map { p in
+            var d: [String: Any] = [
+                "id": p.id.uuidString,
+                "tabId": p.tabId.uuidString,
+                "workspaceId": p.workspaceId.uuidString,
+                "isActive": p.isActive
+            ]
+            if let title = p.title { d["title"] = title }
+            return d
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: arr),
+              let str = String(data: data, encoding: .utf8) else {
+            throw RPCError(code: -32603, message: "list_panes: serialization failed")
+        }
+        return str
+    }
+
+    // MARK: - focus_pane
+
+    private func callFocusPane(arguments: [String: Any]) async throws -> String {
+        guard let paneIdStr = arguments["paneId"] as? String,
+              let paneId = UUID(uuidString: paneIdStr) else {
+            throw RPCError(code: -32602, message: "focus_pane: missing or invalid paneId")
         }
 
-        tc.addNewTab()
-        Self.logger.info("new_tab: executed successfully")
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            Task { @MainActor in
+                guard let tc = Self.tcContaining(paneId: paneId) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "focus_pane: pane not found"))
+                    return
+                }
+                tc.switchToTab(containing: paneId)
+                guard let view = tc.findSurface(id: paneId) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "focus_pane: surface not found after tab switch"))
+                    return
+                }
+                tc.focusSurface(view)
+                Task { await EventBus.shared.emit(.paneFocused(paneId: paneId)) }
+                cont.resume()
+            }
+        }
+        return #"{"ok":true}"#
+    }
+
+    // MARK: - send_text
+
+    private func callSendText(arguments: [String: Any]) async throws -> String {
+        guard let text = arguments["text"] as? String else {
+            throw RPCError(code: -32602, message: "send_text: missing text")
+        }
+
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            Task { @MainActor in
+                if let paneIdStr = arguments["paneId"] as? String,
+                   let paneId = UUID(uuidString: paneIdStr) {
+                    guard let tc = Self.tcContaining(paneId: paneId) else {
+                        cont.resume(throwing: RPCError(code: -32603, message: "send_text: pane not found"))
+                        return
+                    }
+                    tc.writeToSurface(text: text, surfaceId: paneId)
+                } else {
+                    let target = (NSApp.keyWindow as? TerminalWindow)
+                        ?? NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
+                    guard let tc = target?.terminalController,
+                          let surface = tc.focusedSurface else {
+                        cont.resume(throwing: RPCError(code: -32603, message: "send_text: no focused surface"))
+                        return
+                    }
+                    tc.writeToSurface(text: text, surfaceId: surface.id)
+                }
+                cont.resume()
+            }
+        }
+        return #"{"ok":true}"#
+    }
+
+    // MARK: - split_pane
+
+    private func callSplitPane(arguments: [String: Any]) async throws -> String {
+        guard let paneIdStr = arguments["paneId"] as? String,
+              let paneId = UUID(uuidString: paneIdStr) else {
+            throw RPCError(code: -32602, message: "split_pane: missing or invalid paneId")
+        }
+        guard let dirStr = arguments["direction"] as? String,
+              let direction = Self.parseDirection(dirStr) else {
+            throw RPCError(code: -32602, message: "split_pane: missing or invalid direction (left|right|up|down)")
+        }
+
+        let newPaneId: UUID = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let tc = Self.tcContaining(paneId: paneId) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "split_pane: pane not found"))
+                    return
+                }
+                tc.switchToTab(containing: paneId)
+                guard let view = tc.findSurface(id: paneId) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "split_pane: surface not found after tab switch"))
+                    return
+                }
+                guard let newView = tc.newSplit(at: view, direction: direction) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "split_pane: split failed"))
+                    return
+                }
+                cont.resume(returning: newView.id)
+            }
+        }
+        return #"{"newPaneId":"\#(newPaneId.uuidString)"}"#
+    }
+
+    // MARK: - Helpers
+
+    @MainActor
+    private static func resolveTC(_ arguments: [String: Any]) -> TerminalController? {
+        if let wsIdStr = arguments["workspaceId"] as? String,
+           let wsId = UUID(uuidString: wsIdStr) {
+            return tcForWorkspace(wsId)
+        }
+        let target = (NSApp.keyWindow as? TerminalWindow)
+            ?? NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
+        return target?.terminalController
+    }
+
+    @MainActor
+    private static func tcForWorkspace(_ wsId: UUID) -> TerminalController? {
+        (WorkspaceManager.shared.windowForWorkspace(wsId) as? TerminalWindow)?.terminalController
+    }
+
+    @MainActor
+    private static func tcContaining(paneId: UUID) -> TerminalController? {
+        for wsId in WorkspaceManager.shared.allWorkspaceIds() {
+            if let tc = tcForWorkspace(wsId),
+               tc.findSurface(id: paneId) != nil {
+                return tc
+            }
+        }
+        return nil
+    }
+
+    private static func parseDirection(_ s: String) -> SplitTree<Ghostty.SurfaceView>.NewDirection? {
+        switch s {
+        case "right": return .right
+        case "left":  return .left
+        case "up":    return .up
+        case "down":  return .down
+        default:      return nil
+        }
     }
 }
