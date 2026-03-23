@@ -3,6 +3,10 @@ import AppKit
 import Carbon
 import OSLog
 
+extension Notification.Name {
+    static let togglePaneSelector = Notification.Name("poltertty.togglePaneSelector")
+}
+
 /// 检测双击 Cmd 键（间隔 ≤ 350ms），触发时发送 togglePaneSelector 通知。
 /// 监听 .flagsChanged 事件（Cmd 产生此事件，不产生 keyDown）。
 /// 两次 Cmd 之间有任何其他键按下或修饰符变化则重置计时器。
