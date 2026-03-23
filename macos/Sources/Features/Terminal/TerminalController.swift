@@ -2529,7 +2529,7 @@ extension TerminalController {
 extension TerminalController {
     /// 跨所有 tab 查找指定 UUID 的 SurfaceView
     /// - Note: 必须在 @MainActor 上调用
-    func findSurface(id: UUID) -> Ghostty.SurfaceView? {
+    @MainActor func findSurface(id: UUID) -> Ghostty.SurfaceView? {
         // 先查当前活跃 tab
         if let view = surfaceTree.first(where: { $0.id == id }) { return view }
         // 再查非活跃 tab
@@ -2541,7 +2541,7 @@ extension TerminalController {
 
     /// 列出本 TerminalController 管辖的所有 pane 信息
     /// - Note: 必须在 @MainActor 上调用
-    func listPanes() -> [PaneInfo] {
+    @MainActor func listPanes() -> [PaneInfo] {
         guard let wsId = workspaceId else { return [] }
         let activeTabId = tabBarViewModel.activeTabId
         var result: [PaneInfo] = []
@@ -2569,7 +2569,7 @@ extension TerminalController {
     }
 
     /// 向指定 surfaceId 的 surface 写入文本（支持跨 tab 查找）
-    func writeToSurface(text: String, surfaceId: UUID) {
+    @MainActor func writeToSurface(text: String, surfaceId: UUID) {
         guard let targetView = findSurface(id: surfaceId) else { return }
         guard let surfaceModel = targetView.surfaceModel else { return }
         surfaceModel.sendText(text)
