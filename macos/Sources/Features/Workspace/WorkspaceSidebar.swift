@@ -355,9 +355,11 @@ struct WorkspaceSidebar: View {
                         }
                     }
                     .overlay(alignment: .leading) {
-                        Rectangle()
-                            .fill(workspace.color.opacity(0.6))
-                            .frame(width: 2)
+                        if worktreeExpanded {
+                            Rectangle()
+                                .fill(workspace.color.opacity(0.6))
+                                .frame(width: 2)
+                        }
                     }
                     .padding(.leading, 20)
                 }
@@ -484,9 +486,11 @@ struct WorkspaceSidebar: View {
                                             }
                                         }
                                         .overlay(alignment: .leading) {
-                                            Rectangle()
-                                                .fill(workspace.color.opacity(0.6))
-                                                .frame(width: 2)
+                                            if worktreeExpanded {
+                                                Rectangle()
+                                                    .fill(workspace.color.opacity(0.6))
+                                                    .frame(width: 2)
+                                            }
                                         }
                                         .padding(.leading, 20)
                                     }
