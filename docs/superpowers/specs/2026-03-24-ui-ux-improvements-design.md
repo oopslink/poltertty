@@ -23,12 +23,18 @@
 
 - **Active tab**：圆角（`cornerRadius: 4`）背景色块，颜色 `Color.primary.opacity(0.1)`，底部 2px accent 色条保留
 - **非 active tab**：透明背景，相邻 tab 之间加 1px 竖分隔线，颜色 `Color(nsColor: .separatorColor)`；hover 时显示浅色背景 `Color.primary.opacity(0.05)`
-- **分隔线规则**：每个 tab 在右侧 overlay 一条竖线，active tab 及其右邻 tab 不显示分隔线（避免与背景色块产生视觉噪音）；这需要 `TerminalTabItem` 知道右侧 tab 是否 active，通过新增 `isNextActive: Bool` 参数传入
+- **分隔线规则**：每个 tab 在自身**右侧** overlay 一条竖线。为避免 active tab 背景色块两侧产生视觉噪音，规则如下：
+  - Active tab 不显示自身右侧竖线（`tab.isActive == true` 时不渲染）
+  - 紧靠 active tab 右侧的 tab 也不显示自身右侧竖线（即该 tab 的 `isNextActive == true`）
+  - 数组末位 tab 的 `isNextActive` 为 `false`
+  - `layout.overflow` 中的溢出 tab 不进入 `ForEach` 渲染，无需处理
+
+- **`isNextActive` 计算方式**：在 `WorkspaceBarView.body` 的 `ForEach(layout.visible)` 中，改用 `Array(layout.visible.enumerated())` 遍历，通过下标 `i+1` 访问下一个元素判断其 `isActive`；末位元素直接传 `false`
 
 ### 涉及文件
 
 - `macos/Sources/Features/Workspace/TabBar/TerminalTabItem.swift`
-- `macos/Sources/Features/Workspace/TabBar/TitlebarTabsAccessory.swift`（传 `isNextActive`）
+- `macos/Sources/Features/Workspace/TabBar/TitlebarTabsAccessory.swift`（`WorkspaceBarView` 中改用 `enumerated()` 传 `isNextActive`）
 
 ---
 
@@ -45,10 +51,11 @@
 
 ### 设计细节
 
-- Worktree 折叠区（header + list）整体用 `overlay(alignment: .leading)` 添加 2px 竖线
-- 竖线颜色：取自 `workspace.color`（与 workspace item 左侧 active bar 同色），非 active workspace 时颜色降至 `workspace.color.opacity(0.35)`
-- 当前缩进从 `padding(.leading, 16)` 改为 `padding(.leading, 20)`，为左边线留出视觉空间
-- 左边线高度：撑满整个 worktree 折叠区
+- Worktree 折叠区的 `VStack(spacing: 0)`（包含 header button + `if worktreeExpanded { WorktreeListView }` 两部分）整体包裹在一个额外的 `VStack` 或直接在该 `VStack` 上，用 `.overlay(alignment: .leading)` 添加 2px 竖线
+- overlay 挂在**最外层的 `VStack(spacing: 0)`** 上，确保竖线从 header 顶部延伸到列表底部
+- 竖线用 `Rectangle().fill(worktreeLineColor).frame(width: 2)` 实现，高度自动撑满父视图
+- 竖线颜色：active workspace 时取 `workspace.color`，非 active 时（当前只在 active workspace 下才显示 worktree 区域，故此规则仅供扩展参考）
+- 整体 `padding(.leading, 20)` 为竖线和内容留出空间（原为 `padding(.leading, 16)`）
 
 ### 涉及文件
 
@@ -83,8 +90,13 @@
 - 删除 `onShowCreateForm` 参数（该回调上移至 workspace item 层）
 
 **`WorkspaceSidebar` 改动**：
-- `ExpandedWorkspaceItem` 调用处传入 `onShowCreateForm: { showWorktreeCreateForm = true }`（仅 active workspace）
-- `WorktreeListView` 调用处移除 `onShowCreateForm` 参数
+- `ExpandedWorkspaceItem` 共有**两处**调用需要同步修改：
+  1. `ungroupedSection`（约第 303 行）中 active workspace 对应的调用
+  2. `expandedContent` 内分组 `ForEach(manager.workspacesInGroup(group.id))` 中 active workspace 对应的调用
+  - 两处均只在 `workspace.id == currentWorkspaceId` 时传入 `onShowCreateForm: { showWorktreeCreateForm = true }`，非 active workspace 传 `nil`
+- `WorktreeListView` 共有**两处**调用需要同步移除 `onShowCreateForm` 参数：
+  1. `ungroupedSection` 中（约第 348 行）
+  2. `expandedContent` 分组内（约第 471 行）
 
 ### 涉及文件
 
