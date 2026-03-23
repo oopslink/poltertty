@@ -33,9 +33,13 @@
 | … | … | … |
 | 35 | `#z` | `z` |
 
-- 序号按 `SplitTree.leaves()` DFS 顺序（从左到右、从上到下）分配
-- 最多支持 36 个分屏；超出部分显示编号但无法键盘跳转
+- 序号按可见树 `(surfaceTree.zoomed ?? surfaceTree.root)?.leaves()` DFS 顺序（从左到右、从上到下）分配
+  - zoom 模式下只有 1 个可见 pane，badge 仅显示 `#0`
+  - 非 zoom 模式下枚举所有 pane
+- 最多支持 36 个分屏（0-9 共 10 个 + a-z 共 26 个）；超出部分（index ≥ 36）`label(for:)` 返回 `"?"` 作为占位，不注册键位
 - 大小写均接受（`A` 等同 `a`）
+- `Ghostty.SurfaceView.id` 为 `UUID` 类型；`assignments: [UUID: Int]` 的 key 与之直接匹配
+- `TerminalSplitLeafContainer` 中的属性名为 `let surfaceView: Ghostty.SurfaceView`，overlay 代码中的 `surfaceView.id` 与此对应
 
 ---
 
@@ -76,33 +80,42 @@ CmdDoubleTapDetector.shared.start()  // 在 AppDelegate 启动时调用
 @Published var assignments: [UUID: Int] = [:]  // surfaceId → 0-indexed pane 序号
 ```
 
-**辅助函数：**
+**辅助函数（index 合法范围为 0…35，调用方保证非负）：**
 ```swift
 static func label(for index: Int) -> String {
+    guard index >= 0 else { return "?" }
     if index <= 9 { return "\(index)" }
+    guard index <= 35 else { return "?" }  // index ≥ 36：无对应键位
     let char = Character(UnicodeScalar(Int(("a" as UnicodeScalar).value) + index - 10)!)
     return String(char)
 }
 ```
 
+**实例属性（必须保存 monitor 引用，供 deactivate 使用）：**
+```swift
+private var keyMonitor: Any?
+```
+
 **激活流程（`activate(for window: NSWindow?)`）：**
 1. 从 `window?.windowController as? TerminalController` 取控制器
-2. 取当前 active tab 的 `surfaceTree.leaves()`
-3. `enumerate` 建立 `[surfaceView.id: index]`（0-indexed）
+   - 注意：native tab 模式下每个 tab 是独立的 NSWindow，`keyWindow` 本身就是当前 tab 对应的窗口，其 `windowController` 持有当前 tab 的 `surfaceTree`，**无需额外的 tab 过滤**
+2. 调用 `(controller.surfaceTree.zoomed ?? controller.surfaceTree.root)?.leaves()` 获取当前可见 pane
+   - zoom 模式下返回 1 个元素；正常模式下返回全部叶节点
+3. `enumerate` 建立 `[surfaceView.id: index]`（0-indexed，`surfaceView.id` 类型为 `UUID`）
 4. `isActive = true`
-5. 注册 local keyDown monitor
+5. 注册 local keyDown monitor，**引用存入 `keyMonitor`**
 
 **keyDown monitor 逻辑：**
 - `event.charactersIgnoringModifiers?.lowercased()` 取首字符
 - `"0"`…`"9"` → 计算 index（`"0"` → 0，`"1"` → 1…`"9"` → 9）
-- `"a"`…`"z"` → index = ascii - `"a"` + 10
+- `"a"`…`"z"` → index = ascii(`char`) - ascii(`"a"`) + 10
 - 找到对应 surfaceId → `Ghostty.moveFocus(to: surface)` → `deactivate()`，返回 `nil`（消费事件）
-- `Esc`（keyCode 53）→ `deactivate()`，返回 `nil`
+- `Esc`（keyCode 53）→ `deactivate()`，返回 `nil`（**有意消费**：选择模式激活期间 Esc 不透传给终端，为预期行为）
 - 其他键 → 透传，返回 event
 
 **deactivate()：**
 - `isActive = false`，`assignments = [:]`
-- 移除 keyDown monitor
+- `NSEvent.removeMonitor(keyMonitor)`，`keyMonitor = nil`
 
 **通知监听：**
 - `.togglePaneSelector`：若未激活 → `activate(for: notification.object as? NSWindow)`；若已激活 → `deactivate()`
@@ -137,9 +150,11 @@ struct PaneBadgeView: View {
 
 ### `TerminalSplitTreeView.swift` — `TerminalSplitLeafContainer`
 
+注意：badge overlay 修改在 **`TerminalSplitLeafContainer`**（struct，第 96 行附近），而非内层的 `TerminalSplitLeaf`（关闭按钮所在 struct）。`TerminalSplitLeafContainer` 包裹 `TerminalSplitLeaf`，在其 `.overlay` 链末尾追加 badge 层即可。
+
 新增 `@EnvironmentObject var paneSelectorVM: PaneSelectorViewModel`
 
-在现有 overlay 链中，关闭按钮 overlay 之前插入：
+在 `TerminalSplitLeafContainer.body` 的 overlay 链末尾追加：
 
 ```swift
 .overlay(alignment: .topTrailing) {
@@ -152,7 +167,8 @@ struct PaneBadgeView: View {
 }
 ```
 
-badge 层级低于关闭按钮（先声明），两者不会同时显示（选择模式激活时鼠标悬停关闭按钮的场景极罕见）。
+- 单 pane（无分屏）时 badge 同样正常显示（`isSplit` 为 false），行为与多 pane 一致，逻辑简单统一
+- 选择模式激活期间鼠标悬停触发关闭按钮的场景属极端情况，不做特殊处理
 
 ### `TerminalView.swift`
 
@@ -176,11 +192,12 @@ CmdDoubleTapDetector.shared.start()
 
 | 场景 | 处理 |
 |------|------|
-| 单 pane（无分屏） | 正常显示 `#0`，按 `0` 聚焦，无副作用 |
-| pane 数 > 36 | 超出部分显示编号但不响应键盘 |
+| 单 pane（无分屏） | 正常显示 `#0`，按 `0` 聚焦，无副作用；逻辑与多 pane 完全一致 |
+| zoom 模式 | 只对可见节点调用 `leaves()`，仅显示 `#0` |
+| pane 数 > 36 | 超出部分 `label` 为 `"?"`，不响应键盘 |
 | 选择模式中窗口失焦 | 监听 `didResignKeyNotification` 自动 deactivate |
 | 多窗口 | 只响应 `keyWindow` 对应控制器，其他窗口 badge 不出现 |
-| Cmd 与系统快捷键 | keyDown（Cmd+C 等）触发计时器重置，不误激活 |
+| Cmd 与系统快捷键 | Cmd+C 等：local keyDown 触发计时器重置；Cmd+Tab 等系统级快捷键不产生 local keyDown，但双击 350ms 阈值极短，Cmd 按下到 Tab 切换完成再回到 App 所需时间远超阈值，实际不会误触发 |
 | focus 路径兼容 | 使用已有 `Ghostty.moveFocus(to:)`，不触碰 `syncFocusToSurfaceTree` |
 | 上下分屏 focus 兼容 | 不引入新的 hit test / mouse event，无回归风险 |
 
