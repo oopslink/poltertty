@@ -869,6 +869,7 @@ class AppDelegate: NSObject,
 
         // 启动双击 Shift 检测（App Launcher 触发器）
         ShiftDoubleTapDetector.shared.start()
+        CmdDoubleTapDetector.shared.start()
 
         updateAppIcon(from: config)
     }

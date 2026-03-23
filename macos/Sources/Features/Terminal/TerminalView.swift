@@ -83,6 +83,7 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
                         tree: viewModel.surfaceTree,
                         action: { delegate?.performSplitAction($0) })
                         .environmentObject(ghostty)
+                        .environmentObject(PaneSelectorViewModel.shared)
                         .ghosttyLastFocusedSurface(lastFocusedSurface)
                         .focused($focused)
                         .onAppear { self.focused = true }
