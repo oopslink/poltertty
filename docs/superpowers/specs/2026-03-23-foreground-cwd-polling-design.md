@@ -94,7 +94,7 @@ private var pwdPollTimer: DispatchSourceTimer?
 - `stopPwdPolling()`：cancel timer，置 nil
 - Timer handler：调 `ProcessTreeCwd.foregroundCwd(shellPid: pid)`，结果非 nil 且与 `currentPwd` 不同时调 `updatePwd(newCwd)`
 
-**修改 `stopWatching()`**：补充调 `stopPwdPolling()`（已有此方法，加一行即可）。
+**`stopWatching()` 不要修改**：`updatePwd()` 每次 CWD 变化都会调 `stopWatching()`，若同时停掉 poll timer，第一次 CWD 更新后轮询就永久停止。poll timer 由 `deinit` 和 `shellPid = 0` 路径负责清理，与 FS watcher 生命周期独立。
 
 **文件**：`macos/Sources/Features/Workspace/GitStatusMonitor.swift`
 
