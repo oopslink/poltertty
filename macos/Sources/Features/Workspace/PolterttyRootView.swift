@@ -33,6 +33,10 @@ struct PolterttyRootView<TerminalContent: View>: View {
     let onRestoreWorkspaces: (([UUID]) -> Void)?
     let onCreateTemporary: (() -> Void)?
 
+    var worktreeMonitor: GitWorktreeMonitor? = nil
+    var onOpenWorktreeInTab: ((String) -> Void)? = nil
+    var onOpenWorktreeInWindow: ((String) -> Void)? = nil
+
     @State private var sidebarVisible: Bool = PolterttyConfig.shared.sidebarVisible
     @State private var sidebarCollapsed: Bool = UserDefaults.standard.bool(forKey: "poltertty.sidebarCollapsed")
     @State private var sidebarWidth: CGFloat = CGFloat(PolterttyConfig.shared.sidebarWidth)
@@ -69,7 +73,10 @@ struct PolterttyRootView<TerminalContent: View>: View {
         tabBarViewModel: TabBarViewModel,
         workspaceAccentColor: Color,
         onSwitchTab: ((UUID) -> Void)? = nil,
-        windowProvider: @escaping () -> NSWindow? = { nil }
+        windowProvider: @escaping () -> NSWindow? = { nil },
+        worktreeMonitor: GitWorktreeMonitor? = nil,
+        onOpenWorktreeInTab: ((String) -> Void)? = nil,
+        onOpenWorktreeInWindow: ((String) -> Void)? = nil
     ) {
         self.ghostty = ghostty
         self.workspaceId = workspaceId
@@ -85,6 +92,9 @@ struct PolterttyRootView<TerminalContent: View>: View {
         self.workspaceAccentColor = workspaceAccentColor
         self.onSwitchTab = onSwitchTab
         self.windowProvider = windowProvider
+        self.worktreeMonitor = worktreeMonitor
+        self.onOpenWorktreeInTab = onOpenWorktreeInTab
+        self.onOpenWorktreeInWindow = onOpenWorktreeInWindow
 
         if let wsId = workspaceId {
             self._fileBrowserVM = ObservedObject(
@@ -167,7 +177,10 @@ struct PolterttyRootView<TerminalContent: View>: View {
                                     userInfo: ["workspaceId": workspaceId as Any]
                                 )
                             },
-                            isCollapsed: $sidebarCollapsed
+                            isCollapsed: $sidebarCollapsed,
+                            worktreeMonitor: worktreeMonitor,
+                            onOpenWorktreeInTab: onOpenWorktreeInTab,
+                            onOpenWorktreeInWindow: onOpenWorktreeInWindow
                         )
                         .frame(width: effectiveSidebarWidth)
 

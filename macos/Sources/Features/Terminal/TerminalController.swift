@@ -1592,7 +1592,14 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                     return .accentColor
                 }(),
                 onSwitchTab: { [weak self] id in self?.switchToTab(id) },
-                windowProvider: { [weak self] in self?.window }
+                windowProvider: { [weak self] in self?.window },
+                worktreeMonitor: self.worktreeMonitor,
+                onOpenWorktreeInTab: { [weak self] path in
+                    self?.openNewTab(cdTo: path)
+                },
+                onOpenWorktreeInWindow: { [weak self] path in
+                    self?.openNewWindow(cdTo: path)
+                }
             )
         }
 
