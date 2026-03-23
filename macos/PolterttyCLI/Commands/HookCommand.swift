@@ -9,7 +9,7 @@ enum HookCommand {
     }
 
     static func run(_ args: [String]) {
-        guard let event = args.first else {
+        guard args.first != nil else {
             fputs("Error: event name is required as the first argument\n", stderr)
             exit(0) // 不阻塞 agent
         }
@@ -27,23 +27,12 @@ enum HookCommand {
             exit(0)
         }
 
-        // 从 stdin 读取 payload
+        // 从 stdin 读取 Claude Code 的 hook payload（已包含 hook_event_name, session_id 等字段）
+        // 直接转发，不再包装信封
         let stdinData = FileHandle.standardInput.readDataToEndOfFile()
+        guard !stdinData.isEmpty else { exit(0) }
 
-        // 构建请求 body
-        var body: [String: Any] = [
-            "event": event,
-            "sessionId": sessionId,
-        ]
-
-        if !stdinData.isEmpty,
-           let payload = try? JSONSerialization.jsonObject(with: stdinData) {
-            body["payload"] = payload
-        }
-
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: body) else {
-            exit(0)
-        }
+        let jsonData = stdinData
 
         let url = URL(string: "http://localhost:\(meta.port)/hook")!
         var request = URLRequest(url: url)

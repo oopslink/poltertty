@@ -71,6 +71,9 @@ final class HookSessionStore {
         )
         sessions[sessionId] = session
         persistSession(session)
+        #if DEBUG
+        logger.warning("create: ptsId=\(sessionId) agentSid=\(agentSessionId) agent=\(agentType) pid=\(pid) total=\(self.sessions.count)")
+        #endif
         return session
     }
 
@@ -117,9 +120,14 @@ final class HookSessionStore {
 
     /// 返回所有活跃（未结束）会话的 claude session ID 集合，用于过滤外部会话
     func knownAgentSessionIds() -> Set<String> {
-        Set(sessions.values.compactMap {
+        let ids = Set(sessions.values.compactMap {
             $0.endedAt == nil && $0.agentSessionId != "unknown" ? $0.agentSessionId : nil
         })
+        #if DEBUG
+        let allSessions = sessions.values.map { "(\($0.polterttySessionId.prefix(8))→\($0.agentSessionId.prefix(8)),ended=\($0.endedAt != nil))" }
+        logger.warning("knownAgentSessionIds: \(ids) (all=\(allSessions))")
+        #endif
+        return ids
     }
 
     func cleanupStale() {
