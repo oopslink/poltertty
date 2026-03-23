@@ -76,6 +76,7 @@ final class GitWorktreeMonitor: ObservableObject {
 
     private var dotGitSource: DispatchSourceFileSystemObject?
     private var worktreesSource: DispatchSourceFileSystemObject?
+    private var worktreeDirSources: [String: DispatchSourceFileSystemObject] = [:]
     private var debounceWork: DispatchWorkItem?
 
     init(rootDir: String) {
@@ -88,6 +89,7 @@ final class GitWorktreeMonitor: ObservableObject {
     deinit {
         dotGitSource?.cancel()
         worktreesSource?.cancel()
+        worktreeDirSources.values.forEach { $0.cancel() }
         debounceWork?.cancel()
     }
 
@@ -138,8 +140,34 @@ final class GitWorktreeMonitor: ObservableObject {
             return
         }
         let parsed = GitWorktreeParser.parse(porcelain: output, currentPath: rootDir)
+        updateWorktreeDirWatchers(for: parsed)
         DispatchQueue.main.async { [weak self] in
             self?.worktrees = parsed
+        }
+    }
+
+    // 监听各 worktree 目录的删除事件，使手动删除目录时侧边栏能实时更新
+    private func updateWorktreeDirWatchers(for worktrees: [GitWorktree]) {
+        let activePaths = Set(worktrees.filter { $0.exists && !$0.isMain }.map { $0.path })
+        let watchedPaths = Set(worktreeDirSources.keys)
+
+        for path in watchedPaths.subtracting(activePaths) {
+            worktreeDirSources[path]?.cancel()
+            worktreeDirSources.removeValue(forKey: path)
+        }
+
+        for path in activePaths.subtracting(watchedPaths) {
+            let fd = open(path, O_EVTONLY)
+            guard fd >= 0 else { continue }
+            let source = DispatchSource.makeFileSystemObjectSource(
+                fileDescriptor: fd, eventMask: .delete, queue: queue
+            )
+            source.setEventHandler { [weak self] in
+                self?.scheduleRefresh()
+            }
+            source.setCancelHandler { close(fd) }
+            worktreeDirSources[path] = source
+            source.resume()
         }
     }
 
@@ -161,7 +189,7 @@ final class GitWorktreeMonitor: ObservableObject {
             return
         }
         let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd, eventMask: .write, queue: queue
+            fileDescriptor: fd, eventMask: [.write, .link], queue: queue
         )
         source.setEventHandler { [weak self] in
             guard let self else { return }
@@ -187,7 +215,7 @@ final class GitWorktreeMonitor: ObservableObject {
             return
         }
         let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fd, eventMask: .write, queue: queue
+            fileDescriptor: fd, eventMask: [.write, .link], queue: queue
         )
         source.setEventHandler { [weak self] in
             self?.scheduleRefresh()
@@ -211,6 +239,8 @@ final class GitWorktreeMonitor: ObservableObject {
         dotGitSource = nil
         worktreesSource?.cancel()
         worktreesSource = nil
+        worktreeDirSources.values.forEach { $0.cancel() }
+        worktreeDirSources.removeAll()
         debounceWork?.cancel()
         debounceWork = nil
     }
