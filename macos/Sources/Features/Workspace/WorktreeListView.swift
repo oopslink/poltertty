@@ -7,7 +7,7 @@ struct WorktreeListView: View {
     let onOpenInTab: (String) -> Void
     let onOpenInWindow: (String) -> Void
     let onDelete: (String, Bool) -> Void  // path, force
-    let onShowCreateForm: () -> Void
+    let onShowCreateForm: () -> Void = {}
 
     @State private var addButtonHovering = false
 

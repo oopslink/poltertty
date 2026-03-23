@@ -349,11 +349,16 @@ struct WorkspaceSidebar: View {
                                 monitor: monitor,
                                 onOpenInTab: { path in onOpenWorktreeInTab?(path) },
                                 onOpenInWindow: { path in onOpenWorktreeInWindow?(path) },
-                                onDelete: { path, _ in confirmDeleteWorktree(path: path, monitor: monitor) },
-                                onShowCreateForm: { showWorktreeCreateForm = true }
+                                onDelete: { path, _ in confirmDeleteWorktree(path: path, monitor: monitor) }
                             )
                         }
                     }
+                    .overlay(alignment: .leading) {
+                        Rectangle()
+                            .fill(workspace.color.opacity(0.6))
+                            .frame(width: 2)
+                    }
+                    .padding(.leading, 20)
                 }
             }
         }
@@ -472,11 +477,16 @@ struct WorkspaceSidebar: View {
                                                     monitor: monitor,
                                                     onOpenInTab: { path in onOpenWorktreeInTab?(path) },
                                                     onOpenInWindow: { path in onOpenWorktreeInWindow?(path) },
-                                                    onDelete: { path, _ in confirmDeleteWorktree(path: path, monitor: monitor) },
-                                                    onShowCreateForm: { showWorktreeCreateForm = true }
+                                                    onDelete: { path, _ in confirmDeleteWorktree(path: path, monitor: monitor) }
                                                 )
                                             }
                                         }
+                                        .overlay(alignment: .leading) {
+                                            Rectangle()
+                                                .fill(workspace.color.opacity(0.6))
+                                                .frame(width: 2)
+                                        }
+                                        .padding(.leading, 20)
                                     }
                                 }
                             }
