@@ -10,6 +10,7 @@ struct TerminalTabItem: View {
     let onCloseOthers: () -> Void
     var agentState: AgentState? = nil
     var isNextActive: Bool = false
+    var isLastVisible: Bool = false
 
     @State private var isHovered = false
     @State private var isRenaming = false
@@ -91,7 +92,7 @@ struct TerminalTabItem: View {
             }
             .onHover { isHovered = $0 }
             .overlay(alignment: .trailing) {
-                if !tab.isActive && !isNextActive {
+                if !tab.isActive && !isNextActive && !isLastVisible {
                     Rectangle()
                         .fill(Color(nsColor: .separatorColor))
                         .frame(width: 0.5)
