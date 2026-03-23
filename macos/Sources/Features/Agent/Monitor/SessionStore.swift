@@ -150,6 +150,27 @@ final class SessionStore: @unchecked Sendable {
             .map { $0 }
     }
 
+    /// 读取所有 workspace 的最近 session，按 finishedAt 降序，最多 50 条
+    func loadAll() -> [PersistedSession] {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let wsDirs = try? FileManager.default.contentsOfDirectory(atPath: baseDir) else { return [] }
+        var all: [PersistedSession] = []
+        for wsDir in wsDirs {
+            let sessionsDir = (baseDir as NSString)
+                .appendingPathComponent(wsDir)
+                .appending("/sessions")
+            guard let files = try? FileManager.default.contentsOfDirectory(atPath: sessionsDir) else { continue }
+            for name in files where name.hasSuffix(".json") && !name.hasSuffix(".tmp") {
+                let path = (sessionsDir as NSString).appendingPathComponent(name)
+                guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+                      let session = try? decoder.decode(PersistedSession.self, from: data) else { continue }
+                all.append(session)
+            }
+        }
+        return all.sorted { $0.finishedAt > $1.finishedAt }.prefix(50).map { $0 }
+    }
+
     // MARK: - Private
 
     private func sessionsDir(for workspaceId: UUID) -> String {
