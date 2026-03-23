@@ -48,7 +48,18 @@ struct BottomStatusBarView: View {
                         .foregroundColor(.secondary)
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.branch")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(status.isLinkedWorktree ? Color(hex: "#cba6f7") ?? .purple : .secondary)
+                        if status.isLinkedWorktree {
+                            Text(String(localized: "worktree"))
+                                .font(.system(size: 9))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill((Color(hex: "#cba6f7") ?? .purple).opacity(0.15))
+                                )
+                                .foregroundColor(Color(hex: "#cba6f7") ?? .purple)
+                        }
                         Text(status.branch ?? "detached")
                             .foregroundColor(.primary)
                         if status.added > 0 {
