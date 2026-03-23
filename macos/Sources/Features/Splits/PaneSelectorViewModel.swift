@@ -4,6 +4,10 @@ import Carbon
 import Combine
 import OSLog
 
+extension Notification.Name {
+    static let togglePaneSelector = Notification.Name("poltertty.togglePaneSelector")
+}
+
 /// 管理 pane 选择模式的状态：激活/停用、编号分配、键盘事件拦截。
 @MainActor
 final class PaneSelectorViewModel: ObservableObject {
@@ -21,6 +25,7 @@ final class PaneSelectorViewModel: ObservableObject {
     private var keyMonitor: Any?
     private var cancellables: Set<AnyCancellable> = []
     private var activeWindow: NSWindow?
+    private var activeLeaves: [Ghostty.SurfaceView] = []
 
     private init() {
         // 监听双击 Cmd 通知
@@ -82,10 +87,11 @@ final class PaneSelectorViewModel: ObservableObject {
         }
 
         assignments = newAssignments
+        activeLeaves = leaves
         isActive = true
 
         // 注册 keyDown monitor（必须保存引用以便移除）
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] @MainActor event in
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             return self.handleKeyDown(event)
         }
@@ -96,6 +102,7 @@ final class PaneSelectorViewModel: ObservableObject {
     func deactivate() {
         isActive = false
         assignments = [:]
+        activeLeaves = []
         activeWindow = nil
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
         Self.logger.debug("deactivated")
@@ -119,7 +126,11 @@ final class PaneSelectorViewModel: ObservableObject {
         case "0"..."9":
             index = Int(String(char))
         case "a"..."z":
-            index = Int(char.asciiValue! - Character("a").asciiValue!) + 10
+            if let charVal = char.asciiValue, let baseVal = Character("a").asciiValue {
+                index = Int(charVal - baseVal) + 10
+            } else {
+                return event
+            }
         default:
             return event  // 其他键透传
         }
@@ -136,7 +147,6 @@ final class PaneSelectorViewModel: ObservableObject {
     }
 
     private func findSurface(id: UUID) -> Ghostty.SurfaceView? {
-        guard let controller = activeWindow?.windowController as? TerminalController else { return nil }
-        return Array(controller.surfaceTree).first(where: { $0.id == id })
+        return activeLeaves.first(where: { $0.id == id })
     }
 }
