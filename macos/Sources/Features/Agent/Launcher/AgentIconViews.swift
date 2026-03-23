@@ -2,21 +2,6 @@
 import SwiftUI
 import AppKit
 
-// MARK: - Claude.app 图标提供者（共享缓存）
-
-private enum ClaudeAppIconProvider {
-    static let appIcon: NSImage? = {
-        let candidates = [
-            "/Applications/Claude.app",
-            (("~/Applications/Claude.app") as NSString).expandingTildeInPath,
-        ]
-        for path in candidates where FileManager.default.fileExists(atPath: path) {
-            return NSWorkspace.shared.icon(forFile: path)
-        }
-        return nil
-    }()
-}
-
 // MARK: - 带背景徽章（Launcher / Picker 等）
 
 /// 根据 agent.id 选择专属图标，未知 agent 降级到通用徽章。
@@ -61,18 +46,10 @@ struct AgentInlineIcon: View {
     var body: some View {
         switch agent.id {
         case "claude-code":
-            if let icon = ClaudeAppIconProvider.appIcon {
-                Image(nsImage: icon)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: size, height: size)
-                    .clipShape(RoundedRectangle(cornerRadius: size * 0.2))
-            } else {
-                Image("ClaudeLogoIcon")
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: size, height: size)
-            }
+            Image("ClaudeLogoIcon")
+                .resizable()
+                .interpolation(.high)
+                .frame(width: size, height: size)
         case "gemini-cli":
             Image("GeminiLogoIcon")
                 .resizable()
@@ -98,24 +75,10 @@ private struct ClaudeIcon: View {
     let size: CGFloat
 
     var body: some View {
-        if let icon = ClaudeAppIconProvider.appIcon {
-            Image(nsImage: icon)
-                .resizable()
-                .interpolation(.high)
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: size * 0.214))
-        } else {
-            // 未安装 Claude.app 时降级到内置图标
-            ZStack {
-                RoundedRectangle(cornerRadius: size * 0.214)
-                    .fill(Color(hex: "#CC785C") ?? .orange)
-                    .frame(width: size, height: size)
-                Image("ClaudeLogoIcon")
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: size * 0.72, height: size * 0.72)
-            }
-        }
+        Image("ClaudeLogoIcon")
+            .resizable()
+            .interpolation(.high)
+            .frame(width: size, height: size)
     }
 }
 
