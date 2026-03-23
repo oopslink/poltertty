@@ -111,13 +111,25 @@ final class GitStatusMonitor: ObservableObject {
             return
         }
         gitRoot = root
-        setupWatching(gitRoot: root)
+
+        // 获取实际的 git dir。对于 linked worktree，--git-dir 返回绝对路径
+        // （如 /repo/.git/worktrees/feature）；对于主 worktree 返回 ".git"（相对路径）
+        let gitDirResult = runGit(["-C", root, "rev-parse", "--git-dir"])
+        let gitDir: String
+        if let dir = gitDirResult.output?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !dir.isEmpty {
+            gitDir = dir.hasPrefix("/") ? dir : "\(root)/\(dir)"
+        } else {
+            gitDir = "\(root)/.git"
+        }
+
+        setupWatching(gitDir: gitDir)
         refresh()
     }
 
-    private func setupWatching(gitRoot: String) {
-        startSource(path: "\(gitRoot)/.git/HEAD", store: &headSource)
-        startSource(path: "\(gitRoot)/.git/index", store: &indexSource)
+    private func setupWatching(gitDir: String) {
+        startSource(path: "\(gitDir)/HEAD", store: &headSource)
+        startSource(path: "\(gitDir)/index", store: &indexSource)
     }
 
     private func startSource(path: String, store: inout DispatchSourceFileSystemObject?) {
