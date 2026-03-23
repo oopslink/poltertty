@@ -296,7 +296,7 @@ struct AgentDashboardView: View {
                                 ? "\(activeSubagents)/\(totalSubagents)"
                                 : "\(totalSubagents)")
                                 .font(.system(size: 9, design: .monospaced))
-                                .foregroundStyle(activeSubagents > 0 ? .blue : .tertiary)
+                                .foregroundStyle(activeSubagents > 0 ? AnyShapeStyle(Color.blue) : AnyShapeStyle(.tertiary))
                         }
                     } else {
                         Text("—").font(.system(size: 10)).foregroundStyle(.quaternary)
