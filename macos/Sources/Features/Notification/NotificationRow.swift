@@ -48,19 +48,40 @@ struct NotificationRow: View {
 
     @ViewBuilder
     private var typeIcon: some View {
+        let def = AgentRegistry.shared.definitions.first { $0.id == notification.agentDefinitionId }
+        if let def {
+            ZStack(alignment: .bottomTrailing) {
+                AgentIconBadge(agent: def, size: 16)
+                Circle()
+                    .fill(typeIndicatorColor)
+                    .frame(width: 6, height: 6)
+                    .offset(x: 2, y: 2)
+            }
+        } else {
+            // 未知 agent 降级到类型图标
+            switch notification.type {
+            case .waiting:
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundColor(.orange)
+            case .error:
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.red)
+            case .done:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+            case .info:
+                Image(systemName: "info.circle.fill")
+                    .foregroundColor(.blue)
+            }
+        }
+    }
+
+    private var typeIndicatorColor: Color {
         switch notification.type {
-        case .waiting:
-            Image(systemName: "exclamationmark.circle.fill")
-                .foregroundColor(.orange)
-        case .error:
-            Image(systemName: "xmark.circle.fill")
-                .foregroundColor(.red)
-        case .done:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundColor(.green)
-        case .info:
-            Image(systemName: "info.circle.fill")
-                .foregroundColor(.blue)
+        case .waiting: return .orange
+        case .error:   return .red
+        case .done:    return .green
+        case .info:    return .blue
         }
     }
 
