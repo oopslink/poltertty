@@ -15,7 +15,10 @@ final class OptionDoubleTapDetector {
     )
 
     private let threshold: TimeInterval = 0.35
+    /// 触发后的冷却期，防止极快速的第三次按键再次触发
+    private let cooldown: TimeInterval = 0.5
     private var lastOptionTime: Date?
+    private var lastFiredTime: Date = .distantPast
     private var flagsMonitor: Any?
     private var keyDownMonitor: Any?
 
@@ -59,6 +62,9 @@ final class OptionDoubleTapDetector {
         let now = Date()
         if let last = lastOptionTime, now.timeIntervalSince(last) <= threshold {
             lastOptionTime = nil
+            // 冷却期内忽略，防止三连击等场景触发两次 toggle
+            guard now.timeIntervalSince(lastFiredTime) > cooldown else { return }
+            lastFiredTime = now
             Self.logger.debug("double-option detected, posting toggleAgentDashboard")
             DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .toggleAgentDashboard, object: NSApp.keyWindow)

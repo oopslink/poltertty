@@ -4,6 +4,7 @@ import SwiftUI
 struct AgentDashboardView: View {
     @StateObject private var viewModel = AgentDashboardViewModel()
     @Environment(\.colorScheme) private var colorScheme
+    @State private var hoveredRowId: UUID?
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { timeline in
@@ -234,6 +235,7 @@ struct AgentDashboardView: View {
         let ctx = session.tokenUsage.contextUtilization
         let activeSubagents = session.subagents.values.filter { $0.state.isActive }.count
         let totalSubagents = session.subagents.count
+        let isHovered = hoveredRowId == session.id
 
         return HStack(spacing: 0) {
             // Workspace accent bar
@@ -318,10 +320,18 @@ struct AgentDashboardView: View {
             .padding(.vertical, 7)
             .padding(.trailing, 10)
         }
-        .background(Color(nsColor: .controlBackgroundColor)
-            .opacity(colorScheme == .dark ? 0.35 : 0.5))
+        .background(
+            isHovered
+                ? Color(nsColor: .controlAccentColor).opacity(colorScheme == .dark ? 0.15 : 0.1)
+                : Color(nsColor: .controlBackgroundColor).opacity(colorScheme == .dark ? 0.35 : 0.5)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 5))
         .contentShape(Rectangle())
+        .onHover { hovering in hoveredRowId = hovering ? session.id : nil }
+        .onTapGesture(count: 2) {
+            PaneLocator.navigate(to: session.surfaceId)
+            AgentDashboardWindowController.shared.close()
+        }
         .onTapGesture { PaneLocator.navigate(to: session.surfaceId) }
     }
 
