@@ -319,7 +319,7 @@ struct WorkspaceSidebar: View {
                 )
                 if workspace.id == currentWorkspaceId,
                    let monitor = worktreeMonitor,
-                   monitor.worktrees.count > 1 {
+                   monitor.isGitRepo {
                     VStack(spacing: 0) {
                         Button(action: { worktreeExpanded.toggle() }) {
                             HStack(spacing: 4) {
@@ -327,7 +327,9 @@ struct WorkspaceSidebar: View {
                                     .font(.system(size: 8, weight: .semibold))
                                     .foregroundColor(.secondary)
                                     .frame(width: 10)
-                                Text("\(monitor.worktrees.count) worktrees")
+                                Text(monitor.worktrees.count == 1
+                                     ? "1 worktree"
+                                     : "\(monitor.worktrees.count) worktrees")
                                     .font(.system(size: 9))
                                     .foregroundColor(.secondary)
                                     .padding(.horizontal, 5)
@@ -440,28 +442,41 @@ struct WorkspaceSidebar: View {
                                     .padding(.leading, 8)
                                     if workspace.id == currentWorkspaceId,
                                        let monitor = worktreeMonitor,
-                                       monitor.worktrees.count > 1 {
-                                        DisclosureGroup(isExpanded: $worktreeExpanded) {
-                                            WorktreeListView(
-                                                monitor: monitor,
-                                                onOpenInTab: { path in onOpenWorktreeInTab?(path) },
-                                                onOpenInWindow: { path in onOpenWorktreeInWindow?(path) },
-                                                onDelete: { path, _ in confirmDeleteWorktree(path: path, monitor: monitor) },
-                                                onShowCreateForm: { showWorktreeCreateForm = true }
-                                            )
-                                        } label: {
-                                            HStack(spacing: 4) {
-                                                Text("\(monitor.worktrees.count) worktrees")
-                                                    .font(.system(size: 9))
-                                                    .foregroundColor(.secondary)
-                                                    .padding(.horizontal, 5)
-                                                    .padding(.vertical, 1)
-                                                    .background(Color.secondary.opacity(0.1))
-                                                    .cornerRadius(3)
+                                       monitor.isGitRepo {
+                                        VStack(spacing: 0) {
+                                            Button(action: { worktreeExpanded.toggle() }) {
+                                                HStack(spacing: 4) {
+                                                    Image(systemName: worktreeExpanded ? "chevron.down" : "chevron.right")
+                                                        .font(.system(size: 8, weight: .semibold))
+                                                        .foregroundColor(.secondary)
+                                                        .frame(width: 10)
+                                                    Text(monitor.worktrees.count == 1
+                                                         ? "1 worktree"
+                                                         : "\(monitor.worktrees.count) worktrees")
+                                                        .font(.system(size: 9))
+                                                        .foregroundColor(.secondary)
+                                                        .padding(.horizontal, 5)
+                                                        .padding(.vertical, 1)
+                                                        .background(Color.secondary.opacity(0.1))
+                                                        .cornerRadius(3)
+                                                    Spacer()
+                                                }
+                                            }
+                                            .buttonStyle(.plain)
+                                            .padding(.leading, 14)
+                                            .padding(.trailing, 6)
+                                            .padding(.vertical, 2)
+
+                                            if worktreeExpanded {
+                                                WorktreeListView(
+                                                    monitor: monitor,
+                                                    onOpenInTab: { path in onOpenWorktreeInTab?(path) },
+                                                    onOpenInWindow: { path in onOpenWorktreeInWindow?(path) },
+                                                    onDelete: { path, _ in confirmDeleteWorktree(path: path, monitor: monitor) },
+                                                    onShowCreateForm: { showWorktreeCreateForm = true }
+                                                )
                                             }
                                         }
-                                        .padding(.leading, 14)
-                                        .padding(.trailing, 6)
                                     }
                                 }
                             }

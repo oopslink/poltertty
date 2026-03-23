@@ -81,12 +81,12 @@ final class AgentDashboardViewModel: ObservableObject {
         }
     }
 
-    /// 运行时长格式化
-    func durationString(for session: AgentSession) -> String {
-        let elapsed = Date().timeIntervalSince(session.startedAt)
+    /// 运行时长格式化（支持 TimelineView 传入 tick 精确刷新）
+    func durationString(for session: AgentSession, tick: Date = Date()) -> String {
+        let elapsed = tick.timeIntervalSince(session.startedAt)
         if elapsed < 60 { return "\(Int(elapsed))s" }
-        if elapsed < 3600 { return "\(Int(elapsed / 60))m" }
-        return "\(Int(elapsed / 3600))h \(Int((elapsed.truncatingRemainder(dividingBy: 3600)) / 60))m"
+        if elapsed < 3600 { return "\(Int(elapsed / 60))m\(Int(elapsed) % 60)s" }
+        return "\(Int(elapsed / 3600))h\(Int((elapsed.truncatingRemainder(dividingBy: 3600)) / 60))m"
     }
 
     /// Token 数量格式化
