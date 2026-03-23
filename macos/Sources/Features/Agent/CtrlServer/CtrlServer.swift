@@ -280,6 +280,14 @@ final class CtrlServer {
                     }
                 }
 
+                // 消除竞态：subscribe() 期间可能已断开
+                switch connection.state {
+                case .failed, .cancelled:
+                    Task { await EventBus.shared.unsubscribe(subscriberId) }
+                    return
+                default: break
+                }
+
                 for await event in stream {
                     guard let data = Self.formatSSENotification(event) else { continue }
                     connection.send(content: data, completion: .idempotent)
