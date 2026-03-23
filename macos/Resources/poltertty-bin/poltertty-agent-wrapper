@@ -17,6 +17,9 @@ find_real_binary() {
 
 REAL_BINARY="$(find_real_binary)"
 
+# Debug 日志：仅在 POLTERTTY_DEBUG=1 时输出
+_log() { [[ "${POLTERTTY_DEBUG:-}" == "1" ]] && echo "[poltertty-wrapper] $*" >&2 || true; }
+
 # Pass-through subcommands
 case "${1:-}" in
     mcp|config|doctor|update|--help|--version|-v)
@@ -24,9 +27,16 @@ case "${1:-}" in
 esac
 
 # Fallback conditions: no surface, hooks disabled, or already inside a poltertty session
-if [[ -z "${POLTERTTY_SURFACE_ID:-}" ]] \
-    || [[ "${POLTERTTY_HOOKS_DISABLED:-}" == "1" ]] \
-    || [[ -n "${POLTERTTY_SESSION_ID:-}" ]]; then
+if [[ -z "${POLTERTTY_SURFACE_ID:-}" ]]; then
+    _log "fallback: POLTERTTY_SURFACE_ID is empty"
+    exec "$REAL_BINARY" "$@"
+fi
+if [[ "${POLTERTTY_HOOKS_DISABLED:-}" == "1" ]]; then
+    _log "fallback: POLTERTTY_HOOKS_DISABLED=1"
+    exec "$REAL_BINARY" "$@"
+fi
+if [[ -n "${POLTERTTY_SESSION_ID:-}" ]]; then
+    _log "fallback: already inside poltertty session ($POLTERTTY_SESSION_ID)"
     exec "$REAL_BINARY" "$@"
 fi
 
@@ -34,6 +44,7 @@ fi
 if ! poltertty-cli ping \
         --port "${POLTERTTY_HTTP_PORT:-}" \
         --timeout 750 2>/dev/null; then
+    _log "fallback: ping failed (port=${POLTERTTY_HTTP_PORT:-})"
     exec "$REAL_BINARY" "$@"
 fi
 
@@ -88,10 +99,15 @@ if [[ -n "$USER_SETTINGS_FLAG" ]]; then
     PREPARE_ARGS+=(--user-settings "$USER_SETTINGS_FLAG")
 fi
 
+_log "prepare-session: ptsId=$PTS_ID ccSid=${CC_SID:-unknown} surface=$POLTERTTY_SURFACE_ID port=$POLTERTTY_HTTP_PORT"
+
 SESSION_DIR=$(poltertty-cli prepare-session "${PREPARE_ARGS[@]}") || {
-    # prepare failed, fall back to pass-through
+    _log "prepare-session FAILED (exit=$?), falling back to pass-through"
     exec "$REAL_BINARY" "$@"
 }
+
+_log "prepare-session OK: sessionDir=$SESSION_DIR"
+_log "exec: ${CC_SESSION_ARGS[*]:-} --settings $SESSION_DIR/settings.json $*"
 
 # Exec agent
 export POLTERTTY_SESSION_ID="$PTS_ID"

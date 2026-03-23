@@ -1,5 +1,6 @@
 // macos/Sources/Features/Agent/ExternalMonitor/ClaudeSessionProvider.swift
 import Foundation
+import OSLog
 
 // MARK: - 可测试的纯函数解析器
 
@@ -73,6 +74,10 @@ final class ClaudeSessionProvider: ExternalAgentProvider {
     let toolType: ExternalToolType = .claudeCode
     private let workspaceDir: String
     private let sessionsDir: String
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier!,
+        category: "ClaudeSessionProvider"
+    )
     private var dirSource: DispatchSourceFileSystemObject?
     private var jsonlSources: [String: DispatchSourceFileSystemObject] = [:]
     private var records: [String: ExternalSessionRecord] = [:]
@@ -123,19 +128,29 @@ final class ClaudeSessionProvider: ExternalAgentProvider {
 
         // wrapper 已接管的会话作为本地 session 处理，不在外部列表中重复显示
         let localSessionIds = HookSessionStore.shared.knownAgentSessionIds()
+        let jsonFiles = files.filter { $0.hasSuffix(".json") }
 
-        for file in files where file.hasSuffix(".json") {
+        #if DEBUG
+        logger.warning("scan: workspaceDir=\(self.workspaceDir) jsonFiles=\(jsonFiles.count) localIds=\(localSessionIds)")
+        #endif
+
+        for file in jsonFiles {
             let path = "\(sessionsDir)/\(file)"
             guard let content = try? String(contentsOfFile: path, encoding: .utf8),
-                  let entry   = try? ClaudeSessionFileParser.parse(json: content),
-                  entry.cwd == workspaceDir
+                  let entry   = try? ClaudeSessionFileParser.parse(json: content)
             else { continue }
 
+            guard entry.cwd == workspaceDir else { continue }
+
             if localSessionIds.contains(entry.sessionId) {
-                NSLog("[ClaudeSessionProvider] filtering local session: \(entry.sessionId)")
+                #if DEBUG
+                logger.warning("scan: filtering local session: \(entry.sessionId) (pid=\(entry.pid))")
+                #endif
                 continue
             }
-            NSLog("[ClaudeSessionProvider] external session detected: \(entry.sessionId), localIds=\(localSessionIds)")
+            #if DEBUG
+            logger.warning("scan: EXTERNAL session: sid=\(entry.sessionId) pid=\(entry.pid) alive=\(kill(Int32(entry.pid), 0) == 0)")
+            #endif
 
             let alive = kill(Int32(entry.pid), 0) == 0
             found.insert(entry.sessionId)
