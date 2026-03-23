@@ -3,8 +3,8 @@ import Foundation
 import Network
 import OSLog
 
-/// 内嵌 MCP HTTP server，供 agent 调用 Poltertty 控制接口
-/// 每个实例绑定随机端口，通过 SettingsMerger 注入给 Claude Code settings
+/// 统一 HTTP server，处理 hook 事件接收和 MCP 控制接口
+/// 每个实例绑定随机端口，通过 POLTERTTY_CTRL_PORT 环境变量和 SettingsMerger 注入给终端/Claude Code
 final class CtrlServer {
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier!,
@@ -17,6 +17,26 @@ final class CtrlServer {
     /// 活跃 SSE 连接及其心跳 timer。所有访问均在 queue 上。
     private var sseConnections: [ObjectIdentifier: (conn: NWConnection, timer: DispatchSourceTimer)] = [:]
     private let queue = DispatchQueue(label: "com.poltertty.CtrlServer", qos: .utility)
+    private let sessionManager: AgentSessionManager
+    private let decoder = JSONDecoder()
+
+    init(sessionManager: AgentSessionManager) {
+        self.sessionManager = sessionManager
+    }
+
+    // MARK: - prepare-session
+
+    private struct PrepareRequest: Decodable {
+        let sessionId: String
+        let agent: String
+        let agentSessionId: String
+        let cwd: String
+        let workspaceId: String
+        let surfaceId: String
+        let port: UInt16
+        let pid: Int32
+        let userSettings: String?
+    }
 
     // MARK: - 生命周期
 
@@ -65,7 +85,7 @@ final class CtrlServer {
         }
     }
 
-    // MARK: - 请求积累（与 HookServer 相同模式）
+    // MARK: - 请求积累
 
     private func handleConnection(_ connection: NWConnection) {
         connection.start(queue: queue)
@@ -116,6 +136,18 @@ final class CtrlServer {
     private func processRequest(firstLine: String, bodyData: Data, connection: NWConnection) {
         Self.logger.info("CtrlServer: \(firstLine)")
 
+        // --- health ---
+        if firstLine.hasPrefix("GET") && firstLine.contains("/health") {
+            sendJSON(connection, status: 200, body: "{}"); return
+        }
+        // --- hook routes（prepare-session 必须在 /hook 之前匹配） ---
+        if firstLine.hasPrefix("POST") && firstLine.contains("/hooks/prepare-session") {
+            handlePrepareSession(bodyData: bodyData, connection: connection); return
+        }
+        if firstLine.hasPrefix("POST") && firstLine.contains("/hook") {
+            handleHook(bodyData: bodyData, connection: connection); return
+        }
+        // --- MCP routes ---
         if firstLine.hasPrefix("GET") && firstLine.contains("/mcp") {
             handleSSE(connection: connection); return
         }
@@ -126,6 +158,89 @@ final class CtrlServer {
             handleMCP(bodyData: bodyData, connection: connection); return
         }
         sendJSON(connection, status: 404, body: #"{"error":"not found"}"#)
+    }
+
+    // MARK: - Hook handlers
+
+    private func handlePrepareSession(bodyData: Data, connection: NWConnection) {
+        guard let req = try? decoder.decode(PrepareRequest.self, from: bodyData) else {
+            Self.logger.warning("CtrlServer: failed to decode prepare-session request")
+            sendJSON(connection, status: 400, body: #"{"error":"invalid json"}"#)
+            return
+        }
+
+        let serverPort = self.port
+        Task { @MainActor in
+            let session = HookSessionStore.shared.create(
+                sessionId: req.sessionId,
+                agentSessionId: req.agentSessionId,
+                agentType: req.agent,
+                workspaceId: req.workspaceId,
+                surfaceId: req.surfaceId,
+                pid: req.pid,
+                cwd: req.cwd,
+                port: serverPort
+            )
+
+            Self.logger.info("prepare-session: agent=\(req.agent) agentSessionId=\(req.agentSessionId) surfaceId=\(req.surfaceId) workspaceId=\(req.workspaceId)")
+            if let surfaceUUID = UUID(uuidString: req.surfaceId),
+               let workspaceUUID = UUID(uuidString: req.workspaceId),
+               self.sessionManager.session(for: surfaceUUID) == nil {
+                let definition = AgentRegistry.shared.definitions
+                    .first { $0.command == req.agent } ?? .claudeCode
+                let agentSession = AgentSession(
+                    id: UUID(),
+                    surfaceId: surfaceUUID,
+                    definition: definition,
+                    workspaceId: workspaceUUID,
+                    cwd: req.cwd
+                )
+                self.sessionManager.register(agentSession)
+                Self.logger.info("prepare-session: registered AgentSession surfaceId=\(surfaceUUID) agentSessionId=\(req.agentSessionId)")
+                if req.agentSessionId != "unknown" {
+                    self.sessionManager.bindClaudeSession(
+                        surfaceId: surfaceUUID,
+                        claudeSessionId: req.agentSessionId
+                    )
+                }
+            } else {
+                Self.logger.info("prepare-session: skipped registration (surface already has session or invalid UUIDs)")
+            }
+
+            let sessionDir = "\(NSHomeDirectory())/.poltertty/sessions/\(req.sessionId)"
+            let cliPath = "\(NSHomeDirectory())/.poltertty/bin/poltertty-cli"
+
+            SettingsMerger.mergeAndWrite(
+                sessionId: req.sessionId,
+                sessionDir: sessionDir,
+                cwd: req.cwd,
+                cliPath: cliPath,
+                userSettingsPath: req.userSettings,
+                ctrlPort: serverPort
+            )
+
+            let responseBody = #"{"sessionDir":"\#(sessionDir)","token":"\#(session.token)"}"#
+            self.sendJSON(connection, status: 200, body: responseBody)
+        }
+    }
+
+    private func handleHook(bodyData: Data, connection: NWConnection) {
+        guard var payload = try? decoder.decode(HookPayload.self, from: bodyData) else {
+            let bodyPreview = String(data: bodyData.prefix(500), encoding: .utf8) ?? "(binary)"
+            Self.logger.warning("CtrlServer: failed to decode hook payload (\(bodyData.count) bytes): \(bodyPreview)")
+            sendJSON(connection, status: 400, body: #"{"error":"invalid json"}"#)
+            return
+        }
+        // 注入 tool_input 原始 JSON（用于 Trace 显示参数）
+        if let jsonObj = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any],
+           let toolInput = jsonObj["tool_input"],
+           let inputData = try? JSONSerialization.data(withJSONObject: toolInput, options: [.sortedKeys]),
+           let inputStr = String(data: inputData, encoding: .utf8) {
+            payload.toolInputRaw = inputStr
+        }
+        Self.logger.info("CtrlServer: event=\(payload.hookEventName.rawValue) sid=\(payload.sessionId ?? "nil") tool=\(payload.toolName ?? "-") toolUseId=\(payload.toolUseId ?? "-")")
+        sendJSON(connection, status: 200, body: "{}")
+        Task { @MainActor in self.sessionManager.processHookEvent(payload) }
     }
 
     // MARK: - SSE 长连接（GET /mcp）
@@ -239,7 +354,7 @@ final class CtrlServer {
             sendRPCResult(connection, id: id, result: ["content": content])
         }
 
-        // 先 respond 再执行 UI 副作用（与 HookServer 一致）
+        // 先 respond 再执行 UI 副作用
         Task { @MainActor in
             handler.execute(tool: name, arguments: arguments)
         }

@@ -1,4 +1,4 @@
-// macos/Sources/Features/Agent/HookServer/HookEvent.swift
+// macos/Sources/Features/Agent/CtrlServer/HookEvent.swift
 import Foundation
 
 enum HookEventType: String, Decodable {
@@ -51,7 +51,7 @@ struct HookPayload: Decodable {
     let agentName: String?
     let agentType: String?
     let toolResponse: String?       // PostToolUse 的 tool_response（agent 输出文本，可能为对象）
-    var toolInputRaw: String? = nil // 由 HookServer 注入的 tool_input 原始 JSON（不参与 Decodable）
+    var toolInputRaw: String? = nil // 由 CtrlServer 注入的 tool_input 原始 JSON（不参与 Decodable）
 
     enum CodingKeys: String, CodingKey {
         case hookEventName   = "hook_event_name"

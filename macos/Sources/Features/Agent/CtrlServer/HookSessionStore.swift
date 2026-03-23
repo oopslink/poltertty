@@ -1,4 +1,4 @@
-// macos/Sources/Features/Agent/HookServer/HookSessionStore.swift
+// macos/Sources/Features/Agent/CtrlServer/HookSessionStore.swift
 import Foundation
 import OSLog
 import Security
@@ -12,7 +12,7 @@ struct WrapperSession: Codable {
     let pid: Int32
     let cwd: String
     let token: String
-    let port: UInt16              // HookServer 端口，供 poltertty-cli hook 读取
+    let port: UInt16              // CtrlServer 端口，供 poltertty-cli hook 读取
     let startedAt: Date
     var updatedAt: Date
     var endedAt: Date?

@@ -17,7 +17,6 @@ final class AgentService {
     let processMonitor = ProcessMonitor()
 
     // 后续 Phase 填充（声明为可选，Phase 2/5/6 取消注释）
-    var hookServer: HookServer? = nil
     var ctrlServer: CtrlServer? = nil
     var tokenTracker: TokenTracker? = nil
 
@@ -35,9 +34,7 @@ final class AgentService {
         HookSessionStore.shared.loadFromDisk()
         HookSessionStore.shared.cleanupStale()
 
-        hookServer = HookServer(sessionManager: sessionManager)
-        hookServer?.start()
-        ctrlServer = CtrlServer()
+        ctrlServer = CtrlServer(sessionManager: sessionManager)
         ctrlServer?.start()
         tokenTracker = TokenTracker(sessionManager: sessionManager)
         // 初始化通知中心（加载磁盘数据）+ 请求系统通知权限
@@ -78,12 +75,11 @@ final class AgentService {
         Self.logger.info("AgentService shutting down")
         cleanupTimer?.invalidate()
         cleanupTimer = nil
-        hookServer?.stop()
         ctrlServer?.stop()
     }
 
     func injectHooks(for cwd: String) {
-        guard let port = hookServer?.port, port > 0 else { return }
+        guard let port = ctrlServer?.port, port > 0 else { return }
         HookInjector.inject(cwd: cwd, port: port)
     }
 

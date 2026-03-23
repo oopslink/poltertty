@@ -1,4 +1,4 @@
-// macos/Sources/Features/Agent/HookServer/HookInjector.swift
+// macos/Sources/Features/Agent/CtrlServer/HookInjector.swift
 import Foundation
 import OSLog
 

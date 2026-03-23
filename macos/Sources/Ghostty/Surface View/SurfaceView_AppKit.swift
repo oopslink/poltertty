@@ -424,13 +424,13 @@ extension Ghostty {
             surfaceId: UUID
         ) {
             let home = NSHomeDirectory()
-            let port = AgentService.shared.hookServer?.port ?? 0
+            let port = AgentService.shared.ctrlServer?.port ?? 0
 
             config.environmentVariables["POLTERTTY_WORKSPACE_ID"] =
                 config.workspaceId?.uuidString ?? ""
             config.environmentVariables["POLTERTTY_SURFACE_ID"] =
                 surfaceId.uuidString
-            config.environmentVariables["POLTERTTY_HTTP_PORT"] =
+            config.environmentVariables["POLTERTTY_CTRL_PORT"] =
                 String(port)
             config.environmentVariables["POLTERTTY_BIN_DIR"] =
                 "\(home)/.poltertty/bin"
