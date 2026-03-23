@@ -101,6 +101,7 @@ private struct TerminalSplitLeafContainer: View {
     @StateObject private var statusMonitor = GitStatusMonitor(pwd: "")
     @Environment(\.showStatusBar) private var showStatusBar
     @FocusedValue(\.ghosttySurfaceView) private var focusedSurface
+    @EnvironmentObject private var paneSelectorVM: PaneSelectorViewModel
 
     // Dashboard: 脉冲高亮
     @State private var highlightOpacity: CGFloat = 0
@@ -137,6 +138,14 @@ private struct TerminalSplitLeafContainer: View {
                 guard let targetId = notif.userInfo?["surfaceId"] as? UUID,
                       targetId == surfaceView.id else { return }
                 triggerPulse()
+            }
+            .overlay(alignment: .topTrailing) {
+                if paneSelectorVM.isActive,
+                   let idx = paneSelectorVM.assignments[surfaceView.id] {
+                    PaneBadgeView(label: PaneSelectorViewModel.label(for: idx))
+                        .padding(6)
+                        .transition(.opacity.animation(.easeInOut(duration: 0.15)))
+                }
             }
     }
 
