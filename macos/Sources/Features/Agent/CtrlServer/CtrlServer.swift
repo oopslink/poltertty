@@ -344,20 +344,17 @@ final class CtrlServer {
         }
         let arguments = params?["arguments"] as? [String: Any] ?? [:]
 
-        // CtrlToolHandler 持有 port 值拷贝，不访问 @MainActor 属性
         let handler = CtrlToolHandler(port: self.port)
-        let (resultText, rpcError) = handler.prepareResult(tool: name, arguments: arguments)
-
-        if let err = rpcError {
-            sendRPCError(connection, id: id, code: err.code, message: err.message)
-        } else {
-            let content: [[String: Any]] = [["type": "text", "text": resultText ?? ""]]
-            sendRPCResult(connection, id: id, result: ["content": content])
-        }
-
-        // 先 respond 再执行 UI 副作用
-        Task { @MainActor in
-            handler.execute(tool: name, arguments: arguments)
+        Task {
+            do {
+                let resultText = try await handler.callTool(name: name, arguments: arguments)
+                let content: [[String: Any]] = [["type": "text", "text": resultText]]
+                self.sendRPCResult(connection, id: id, result: ["content": content])
+            } catch let err as CtrlToolHandler.RPCError {
+                self.sendRPCError(connection, id: id, code: err.code, message: err.message)
+            } catch {
+                self.sendRPCError(connection, id: id, code: -32603, message: error.localizedDescription)
+            }
         }
     }
 
