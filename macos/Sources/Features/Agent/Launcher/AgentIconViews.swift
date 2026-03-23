@@ -7,12 +7,13 @@ import AppKit
 /// 根据 agent.id 选择专属图标，未知 agent 降级到通用徽章。
 struct AgentIconBadge: View {
     let agent: AgentDefinition
+    var size: CGFloat = 28
 
     var body: some View {
         switch agent.id {
-        case "claude-code":  ClaudeIcon()
-        case "gemini-cli":   GeminiIcon()
-        case "opencode":     OpenCodeIcon()
+        case "claude-code":  ClaudeIcon(size: size)
+        case "gemini-cli":   GeminiIcon(size: size)
+        case "opencode":     OpenCodeIcon(size: size)
         default:             genericBadge
         }
     }
@@ -25,11 +26,11 @@ struct AgentIconBadge: View {
             return c
         }()
         return ZStack {
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: size * 0.214)
                 .fill(color)
-                .frame(width: 28, height: 28)
+                .frame(width: size, height: size)
             Text(agent.icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: size * 0.464, weight: .semibold))
                 .foregroundStyle(.white)
         }
     }
@@ -38,6 +39,8 @@ struct AgentIconBadge: View {
 // MARK: - Claude Code（从 Claude.app 提取真实图标）
 
 private struct ClaudeIcon: View {
+    let size: CGFloat
+
     private static let appIcon: NSImage? = {
         let candidates = [
             "/Applications/Claude.app",
@@ -54,16 +57,16 @@ private struct ClaudeIcon: View {
             Image(nsImage: icon)
                 .resizable()
                 .interpolation(.high)
-                .frame(width: 28, height: 28)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.214))
         } else {
             // 未安装 Claude.app 时的降级方案
             ZStack {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: size * 0.214)
                     .fill(Color(hex: "#CC785C") ?? .orange)
-                    .frame(width: 28, height: 28)
+                    .frame(width: size, height: size)
                 Text("◆")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: size * 0.464, weight: .semibold))
                     .foregroundStyle(.white)
             }
         }
@@ -73,11 +76,13 @@ private struct ClaudeIcon: View {
 // MARK: - Gemini CLI（品牌四角星）
 
 private struct GeminiIcon: View {
+    let size: CGFloat
+
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: size * 0.214)
                 .fill(Color.black)
-                .frame(width: 28, height: 28)
+                .frame(width: size, height: size)
             GeminiStarShape()
                 .fill(
                     LinearGradient(
@@ -89,7 +94,7 @@ private struct GeminiIcon: View {
                         endPoint: .bottom
                     )
                 )
-                .frame(width: 19, height: 19)
+                .frame(width: size * 0.679, height: size * 0.679)
         }
     }
 }
@@ -127,13 +132,15 @@ private struct GeminiStarShape: Shape {
 // MARK: - OpenCode（代码括号）
 
 private struct OpenCodeIcon: View {
+    let size: CGFloat
+
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6)
+            RoundedRectangle(cornerRadius: size * 0.214)
                 .fill(Color(red: 0.09, green: 0.09, blue: 0.11))
-                .frame(width: 28, height: 28)
+                .frame(width: size, height: size)
             Image(systemName: "curlybraces")
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: size * 0.5, weight: .medium))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [

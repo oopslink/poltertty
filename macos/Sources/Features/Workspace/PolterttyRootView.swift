@@ -17,6 +17,7 @@ extension Notification.Name {
     static let tmuxAttachInCurrentPane = Notification.Name("poltertty.tmuxAttachInCurrentPane")
     static let toggleNotificationCenter = Notification.Name("poltertty.toggleNotificationCenter")
     static let jumpToHighestPriorityUnread = Notification.Name("poltertty.jumpToHighestPriorityUnread")
+    static let toggleAgentDashboard = Notification.Name("poltertty.toggleAgentDashboard")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {

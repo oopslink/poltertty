@@ -870,6 +870,14 @@ class AppDelegate: NSObject,
         // 启动双击 Shift 检测（App Launcher 触发器）
         ShiftDoubleTapDetector.shared.start()
         CmdDoubleTapDetector.shared.start()
+        // 启动双击 Option 检测（Agent Dashboard 触发器）
+        OptionDoubleTapDetector.shared.start()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleToggleAgentDashboard(_:)),
+            name: .toggleAgentDashboard,
+            object: nil
+        )
 
         updateAppIcon(from: config)
     }
@@ -1191,6 +1199,15 @@ class AppDelegate: NSObject,
 
     @objc func showAgentDashboard(_ sender: Any?) {
         AgentDashboardWindowController.shared.showWindow(nil)
+    }
+
+    @objc func handleToggleAgentDashboard(_ notification: Notification) {
+        let wc = AgentDashboardWindowController.shared
+        if wc.window?.isVisible == true {
+            wc.close()
+        } else {
+            wc.showWindow(nil)
+        }
     }
 
     @objc func toggleNotificationCenter(_ sender: Any?) {

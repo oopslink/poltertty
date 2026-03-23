@@ -19,6 +19,11 @@ struct AgentDashboardView: View {
         }
         .frame(minWidth: 720, minHeight: 360)
         .background(Color(nsColor: .windowBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+        )
     }
 
     // MARK: - Toolbar
@@ -153,7 +158,7 @@ struct AgentDashboardView: View {
                 Text("当前没有活跃的 Agent")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                Text("⌘⇧A 在终端中启动")
+                Text("双击 Option 键打开 / 关闭 · ⌘⇧A 启动")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -240,8 +245,7 @@ struct AgentDashboardView: View {
                 // State dot + icon + agent name
                 HStack(spacing: 5) {
                     AgentStateDot(state: session.state)
-                    Text(session.definition.icon)
-                        .font(.system(size: 11))
+                    AgentIconBadge(agent: session.definition, size: 16)
                     Text(session.definition.name)
                         .font(.system(size: 11, weight: .medium))
                         .lineLimit(1)
@@ -353,7 +357,7 @@ struct AgentDashboardView: View {
             // Header
             HStack(spacing: 6) {
                 AgentStateDot(state: session.state)
-                Text(session.definition.icon).font(.system(size: 13))
+                AgentIconBadge(agent: session.definition, size: 20)
                 Text(session.definition.name)
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
@@ -366,6 +370,7 @@ struct AgentDashboardView: View {
                     .clipShape(Capsule())
                 Button {
                     PaneLocator.navigate(to: session.surfaceId)
+                    AgentDashboardWindowController.shared.close()
                 } label: {
                     Image(systemName: "arrow.up.right.square")
                         .font(.system(size: 11))
@@ -456,6 +461,10 @@ struct AgentDashboardView: View {
                 .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
         )
         .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            PaneLocator.navigate(to: session.surfaceId)
+            AgentDashboardWindowController.shared.close()
+        }
     }
 
     // MARK: - Historical Section
