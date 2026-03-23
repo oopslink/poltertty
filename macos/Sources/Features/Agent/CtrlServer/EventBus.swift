@@ -6,7 +6,7 @@ import Foundation
 actor EventBus {
     static let shared = EventBus()
 
-    enum Event {
+    enum Event: @unchecked Sendable {
         case hook(HookPayload)
         case paneCreated(paneId: UUID, tabId: UUID, workspaceId: UUID)
         case paneClosed(paneId: UUID)
