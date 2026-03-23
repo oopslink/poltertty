@@ -241,6 +241,7 @@ final class CtrlServer {
         }
         Self.logger.info("CtrlServer: event=\(payload.hookEventName.rawValue) sid=\(payload.sessionId ?? "nil") tool=\(payload.toolName ?? "-") toolUseId=\(payload.toolUseId ?? "-")")
         sendJSON(connection, status: 200, body: "{}")
+        Task { await EventBus.shared.emit(.hook(payload)) }
         Task { @MainActor in self.sessionManager.processHookEvent(payload) }
     }
 
@@ -251,29 +252,76 @@ final class CtrlServer {
         connection.send(content: header.data(using: .utf8)!, completion: .contentProcessed { [weak self] error in
             guard let self, error == nil else { connection.cancel(); return }
 
-            // 断线自动清理
             let key = ObjectIdentifier(connection)
-            connection.stateUpdateHandler = { [weak self] state in
-                switch state {
-                case .failed, .cancelled:
-                    self?.queue.async { [weak self] in
-                        self?.sseConnections[key]?.timer.cancel()
-                        self?.sseConnections.removeValue(forKey: key)
-                    }
-                default: break
-                }
-            }
 
-            // 每 30 秒发送 SSE 注释行，防止代理超时断开
+            // 每 30 秒发送 SSE 心跳，防止代理超时断开
             let timer = DispatchSource.makeTimerSource(queue: self.queue)
             timer.schedule(deadline: .now() + 30, repeating: 30)
             timer.setEventHandler { [weak connection] in
                 connection?.send(content: ": ping\n\n".data(using: .utf8)!, completion: .idempotent)
             }
             timer.resume()
-
             self.queue.async { self.sseConnections[key] = (conn: connection, timer: timer) }
+
+            // 订阅 EventBus，启动事件循环 Task
+            Task {
+                let (subscriberId, stream) = await EventBus.shared.subscribe()
+
+                // 连接断开时：取消订阅（onTermination 作为双重保障）
+                connection.stateUpdateHandler = { [weak self] state in
+                    switch state {
+                    case .failed, .cancelled:
+                        self?.queue.async { [weak self] in
+                            self?.sseConnections[key]?.timer.cancel()
+                            self?.sseConnections.removeValue(forKey: key)
+                        }
+                        Task { await EventBus.shared.unsubscribe(subscriberId) }
+                    default: break
+                    }
+                }
+
+                for await event in stream {
+                    guard let data = Self.formatSSENotification(event) else { continue }
+                    connection.send(content: data, completion: .idempotent)
+                }
+            }
         })
+    }
+
+    /// 将 EventBus.Event 格式化为 SSE data 行（JSON-RPC 2.0 notification）
+    private static func formatSSENotification(_ event: EventBus.Event) -> Data? {
+        let method: String
+        var params: [String: Any] = [:]
+
+        switch event {
+        case .hook(let payload):
+            method = "notifications/hook"
+            params["event"] = payload.hookEventName.rawValue
+            params["sessionId"] = payload.sessionId ?? ""
+        case .paneCreated(let paneId, let tabId, let workspaceId):
+            method = "notifications/pane_created"
+            params["paneId"] = paneId.uuidString
+            params["tabId"] = tabId.uuidString
+            params["workspaceId"] = workspaceId.uuidString
+        case .paneClosed(let paneId):
+            method = "notifications/pane_closed"
+            params["paneId"] = paneId.uuidString
+        case .paneFocused(let paneId):
+            method = "notifications/pane_focused"
+            params["paneId"] = paneId.uuidString
+        case .tabCreated(let tabId, let workspaceId):
+            method = "notifications/tab_created"
+            params["tabId"] = tabId.uuidString
+            params["workspaceId"] = workspaceId.uuidString
+        case .tabClosed(let tabId):
+            method = "notifications/tab_closed"
+            params["tabId"] = tabId.uuidString
+        }
+
+        let obj: [String: Any] = ["jsonrpc": "2.0", "method": method, "params": params]
+        guard let json = try? JSONSerialization.data(withJSONObject: obj),
+              let jsonStr = String(data: json, encoding: .utf8) else { return nil }
+        return "data: \(jsonStr)\n\n".data(using: .utf8)
     }
 
     // MARK: - JSON-RPC（POST /mcp）
@@ -317,20 +365,62 @@ final class CtrlServer {
         let tools: [[String: Any]] = [
             [
                 "name": "ping",
-                "description": "Ping the Poltertty instance to verify connectivity",
+                "description": "Ping the Poltertty instance; returns version, port, and all workspace IDs",
                 "inputSchema": ["type": "object", "properties": [String: Any]()]
             ],
             [
                 "name": "new_tab",
-                "description": "Open a new tab in the specified or current workspace",
+                "description": "Open a new tab; returns the new pane ID",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
-                        "workspaceId": [
-                            "type": "string",
-                            "description": "UUID of the target workspace (optional)"
-                        ]
+                        "workspaceId": ["type": "string", "description": "UUID of the target workspace (optional)"]
                     ]
+                ]
+            ],
+            [
+                "name": "list_panes",
+                "description": "List all panes in the specified or all workspaces",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workspaceId": ["type": "string", "description": "UUID of the target workspace (optional)"]
+                    ]
+                ]
+            ],
+            [
+                "name": "focus_pane",
+                "description": "Switch focus to the specified pane",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "paneId": ["type": "string", "description": "UUID of the target pane"]
+                    ],
+                    "required": ["paneId"]
+                ]
+            ],
+            [
+                "name": "send_text",
+                "description": "Write text to the specified pane or the currently focused pane",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "text": ["type": "string", "description": "Text to write to the terminal"],
+                        "paneId": ["type": "string", "description": "UUID of the target pane (optional, defaults to focused pane)"]
+                    ],
+                    "required": ["text"]
+                ]
+            ],
+            [
+                "name": "split_pane",
+                "description": "Split the specified pane; returns the new pane ID",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "paneId": ["type": "string", "description": "UUID of the pane to split"],
+                        "direction": ["type": "string", "enum": ["left", "right", "up", "down"], "description": "Split direction"]
+                    ],
+                    "required": ["paneId", "direction"]
                 ]
             ]
         ]
