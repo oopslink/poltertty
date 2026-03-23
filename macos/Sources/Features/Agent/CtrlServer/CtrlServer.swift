@@ -193,7 +193,8 @@ final class CtrlServer {
                     surfaceId: surfaceUUID,
                     definition: definition,
                     workspaceId: workspaceUUID,
-                    cwd: req.cwd
+                    cwd: req.cwd,
+                    shellPid: req.pid
                 )
                 self.sessionManager.register(agentSession)
                 Self.logger.info("prepare-session: registered AgentSession surfaceId=\(surfaceUUID) agentSessionId=\(req.agentSessionId)")
