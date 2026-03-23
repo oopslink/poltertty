@@ -57,6 +57,22 @@ final class GitStatusMonitor: ObservableObject {
     private var indexSource: DispatchSourceFileSystemObject?
     private var debounceWork: DispatchWorkItem?
 
+    // MARK: - Foreground process polling
+    // shellPid 必须在 MainActor 上赋值（来自 SwiftUI onReceive）。
+    // timer 操作全部派发到 queue，确保线程安全。
+    var shellPid: pid_t = 0 {
+        didSet {
+            guard shellPid != oldValue else { return }
+            let pid = shellPid
+            queue.async { [weak self] in
+                guard let self else { return }
+                if pid == 0 { self.stopPwdPolling() } else { self.startPwdPolling(pid: pid) }
+            }
+        }
+    }
+    private var pwdPollTimer: DispatchSourceTimer?  // accessed only on queue
+    private var pollingPid: pid_t = 0              // queue 侧的 shellPid 副本
+
     init(pwd: String) {
         self.currentPwd = pwd
         queue.async { [weak self] in
@@ -79,6 +95,7 @@ final class GitStatusMonitor: ObservableObject {
         headSource?.cancel()
         indexSource?.cancel()
         debounceWork?.cancel()
+        pwdPollTimer?.cancel()
     }
 
     // MARK: - Private
@@ -172,6 +189,29 @@ final class GitStatusMonitor: ObservableObject {
         debounceWork?.cancel()
         debounceWork = nil
         gitRoot = nil
+    }
+
+    // MARK: - Polling（在 queue 上执行）
+
+    private func startPwdPolling(pid: pid_t) {
+        stopPwdPolling()
+        pollingPid = pid
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + 2.0, repeating: 2.0, leeway: .milliseconds(200))
+        timer.setEventHandler { [weak self] in
+            guard let self, self.pollingPid > 0 else { return }
+            guard let newCwd = ProcessTreeCwd.foregroundCwd(shellPid: self.pollingPid),
+                  newCwd != self.currentPwd else { return }
+            self.updatePwd(newCwd)
+        }
+        pwdPollTimer = timer
+        timer.resume()
+    }
+
+    private func stopPwdPolling() {
+        pwdPollTimer?.cancel()
+        pwdPollTimer = nil
+        pollingPid = 0
     }
 
     // MARK: - Subprocess
