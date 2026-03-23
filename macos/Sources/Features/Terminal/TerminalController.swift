@@ -59,6 +59,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// Cancellables for tab bar active-tab observation.
     private var tabBarCancellables: Set<AnyCancellable> = []
 
+    /// 当前激活 tab ID，覆写 BaseTerminalController 的虚属性
+    override var activeTabId: UUID? { tabBarViewModel.activeTabId }
+
     /// The workspace this window is bound to (nil = legacy non-workspace window)
     var workspaceId: UUID?
     var startupMode: WorkspaceStartupMode = .terminal
