@@ -33,6 +33,7 @@ struct AgentSessionGroup: View {
             } else {
                 Circle().fill(Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
             }
+            AgentInlineIcon(agent: session.definition, size: 11)
             Text(session.definition.name)
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(isSelected ? (Color(hex: "#90bfff") ?? .blue) : (session.state.isActive ? .primary : .secondary))

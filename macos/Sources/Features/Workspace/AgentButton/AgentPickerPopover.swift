@@ -16,8 +16,7 @@ struct AgentPickerPopover: View {
             ForEach(registry.definitions) { def in
                 Button(action: { selectedDefinition = def }) {
                     HStack {
-                        Text(def.icon)
-                            .foregroundColor(def.iconColor.flatMap { Color(hex: $0) } ?? .secondary)
+                        AgentIconBadge(agent: def, size: 16)
                         Text(def.name)
                             .foregroundColor(.primary)
                         Spacer()

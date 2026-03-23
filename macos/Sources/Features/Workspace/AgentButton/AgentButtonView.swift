@@ -35,9 +35,7 @@ struct AgentButtonView: View {
 
     @ViewBuilder
     private func agentStateIcon(session: AgentSession) -> some View {
-        let color = session.definition.iconColor.flatMap { Color(hex: $0) } ?? .secondary
-        Text(session.definition.icon)
-            .foregroundColor(color)
+        AgentInlineIcon(agent: session.definition, size: 13)
             .opacity(session.state == .working ? (pulse ? 1.0 : 0.4) : (session.state.isActive ? 0.8 : 0.4))
             .onChange(of: session.state == .working) { isWorking in
                 pulse = isWorking
