@@ -1141,6 +1141,12 @@ class AppDelegate: NSObject,
         jumpToUnread.keyEquivalentModifierMask = [.command, .option]
         agentMenu.addItem(jumpToUnread)
 
+        agentMenu.addItem(.separator())
+
+        let agentDashboard = NSMenuItem(title: "Agent Dashboard", action: #selector(showAgentDashboard(_:)), keyEquivalent: "d")
+        agentDashboard.keyEquivalentModifierMask = [.command, .option]
+        agentMenu.addItem(agentDashboard)
+
         let agentMenuItem = NSMenuItem(title: "Agent", action: nil, keyEquivalent: "")
         agentMenuItem.submenu = agentMenu
 
@@ -1180,6 +1186,10 @@ class AppDelegate: NSObject,
 
     @objc func toggleAgentMonitor(_ sender: Any?) {
         NotificationCenter.default.post(name: .toggleAgentMonitor, object: nil)
+    }
+
+    @objc func showAgentDashboard(_ sender: Any?) {
+        AgentDashboardWindowController.shared.showWindow(nil)
     }
 
     @objc func toggleNotificationCenter(_ sender: Any?) {

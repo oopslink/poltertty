@@ -102,6 +102,9 @@ private struct TerminalSplitLeafContainer: View {
     @Environment(\.showStatusBar) private var showStatusBar
     @FocusedValue(\.ghosttySurfaceView) private var focusedSurface
 
+    // Dashboard: 脉冲高亮
+    @State private var highlightOpacity: CGFloat = 0
+
     private var isFocused: Bool {
         // focusedSurface 为 nil 时（窗口失焦），默认视为 focused，避免所有 pane 同时变半透明
         guard let focused = focusedSurface else { return true }
@@ -120,9 +123,28 @@ private struct TerminalSplitLeafContainer: View {
                     )
                 }
             }
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(Color.blue, lineWidth: 2)
+                    .shadow(color: .blue.opacity(0.5), radius: 8)
+                    .opacity(highlightOpacity)
+                    .allowsHitTesting(false)
+            )
             .onReceive(surfaceView.$pwd.compactMap { $0 }.removeDuplicates()) { pwd in
                 statusMonitor.updatePwd(pwd)
             }
+            .onReceive(NotificationCenter.default.publisher(for: PaneLocator.highlightSurface)) { notif in
+                guard let targetId = notif.userInfo?["surfaceId"] as? UUID,
+                      targetId == surfaceView.id else { return }
+                triggerPulse()
+            }
+    }
+
+    private func triggerPulse() {
+        highlightOpacity = 1.0
+        withAnimation(.easeInOut(duration: 0.5).repeatCount(3, autoreverses: true)) {
+            highlightOpacity = 0.0
+        }
     }
 }
 

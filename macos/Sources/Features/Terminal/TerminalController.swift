@@ -1019,6 +1019,27 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
     }
 
+    /// Dashboard: 检查该窗口的所有 tab（含当前活跃 tab）是否包含指定 surfaceId
+    func surfaceTreeContains(_ surfaceId: UUID) -> Bool {
+        // 检查当前活跃的 surfaceTree
+        if surfaceTree.contains(where: { $0.id == surfaceId }) { return true }
+        // 检查所有非活跃 tab 的 surfaceTree
+        return tabSurfaceTrees.values.contains { tree in
+            tree.contains(where: { $0.id == surfaceId })
+        }
+    }
+
+    /// Dashboard: 从 surfaceId 反查 tabId 并切换到该 tab
+    func switchToTab(containing surfaceId: UUID) {
+        // 当前活跃 tree 已包含该 surface，无需切换
+        if surfaceTree.contains(where: { $0.id == surfaceId }) { return }
+        // 在非活跃 tab 中反查 tabId
+        guard let tabId = tabSurfaceTrees.first(where: { _, tree in
+            tree.contains(where: { $0.id == surfaceId })
+        })?.key else { return }
+        switchToTab(tabId)
+    }
+
     /// Close a tab in the custom poltertty tab bar
     @MainActor
     func closePolterttyTab(_ id: UUID) {
@@ -2524,23 +2545,35 @@ extension TerminalController {
     // MARK: - Worktree Navigation
 
     func openNewTab(cdTo path: String) {
-        guard let window = self.window else { return }
+        guard let ghostty_app = ghostty.app else { return }
+        // Save current tab's surface tree
+        if let currentTabId = tabBarViewModel.activeTabId {
+            tabSurfaceTrees[currentTabId] = surfaceTree
+        }
+
         var config = Ghostty.SurfaceConfiguration()
+        config.workspaceId = workspaceId
         config.workingDirectory = path
-        config.workspaceId = self.workspaceId
-        _ = TerminalController.newTab(ghostty, from: window, withBaseConfig: config)
+        let surface = Ghostty.SurfaceView(ghostty_app, baseConfig: config)
+        tabBarViewModel.addTab(surface: surface, title: "Terminal")
+
+        let newTree = SplitTree<Ghostty.SurfaceView>(view: surface)
+        surfaceTree = newTree
+        if let newTabId = tabBarViewModel.activeTabId {
+            tabSurfaceTrees[newTabId] = newTree
+        }
     }
 
     func openNewWindow(cdTo path: String) {
         var config = Ghostty.SurfaceConfiguration()
         config.workingDirectory = path
         config.workspaceId = self.workspaceId
-        let controller = TerminalController.newWindow(
+        // newWindow already calls showWindow internally via DispatchQueue.main.async
+        _ = TerminalController.newWindow(
             ghostty,
             withBaseConfig: config,
             withParent: self.window,
             workspaceId: self.workspaceId
         )
-        controller.showWindow(self)
     }
 }
