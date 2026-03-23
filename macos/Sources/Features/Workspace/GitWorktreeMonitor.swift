@@ -9,6 +9,7 @@ struct GitWorktree: Identifiable, Equatable {
     let branch: String?     // nil when HEAD is detached
     let isMain: Bool        // true for the primary worktree
     let isCurrent: Bool     // true when this worktree matches the monitor's rootDir
+    let exists: Bool        // true when the worktree directory exists on disk
 }
 
 // MARK: - Porcelain Parser
@@ -52,7 +53,8 @@ enum GitWorktreeParser {
                 path: normalizedPath,
                 branch: isDetached ? nil : branch,
                 isMain: isFirst,
-                isCurrent: normalizedPath == normalizedCurrent
+                isCurrent: normalizedPath == normalizedCurrent,
+                exists: FileManager.default.fileExists(atPath: normalizedPath)
             ))
             isFirst = false
         }
