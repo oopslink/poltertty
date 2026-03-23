@@ -222,6 +222,11 @@ class WorkspaceManager: ObservableObject {
         activeWindows[id]?.window
     }
 
+    /// 返回所有注册了活跃窗口的 workspace ID（@MainActor 安全）
+    func allWorkspaceIds() -> [UUID] {
+        activeWindows.keys.filter { activeWindows[$0]?.window != nil }
+    }
+
     func workspaceId(for window: NSWindow) -> UUID? {
         activeWindows.first { $0.value.window === window }?.key
     }
