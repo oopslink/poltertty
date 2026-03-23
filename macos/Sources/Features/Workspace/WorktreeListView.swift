@@ -118,10 +118,10 @@ private struct WorktreeRow: View {
                     : (isHovering && worktree.exists ? Color.primary.opacity(0.04) : .clear))
         )
         .contentShape(Rectangle())
-        .onTapGesture {
+        .onTapGesture(count: 2) {
             if worktree.exists { onOpenInTab(worktree.path) }
         }
-        .onTapGesture(count: 2) {}  // 防止双击透传到空白区域
+        .onTapGesture {}  // 单击不响应，防止事件传递到空白区域处理器
         .onHover { isHovering = $0 }
         .contextMenu {
             if worktree.exists {

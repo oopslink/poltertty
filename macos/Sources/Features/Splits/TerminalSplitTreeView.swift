@@ -133,6 +133,12 @@ private struct TerminalSplitLeafContainer: View {
             .onReceive(surfaceView.$pwd.compactMap { $0 }.removeDuplicates()) { pwd in
                 statusMonitor.updatePwd(pwd)
             }
+            .onReceive(AgentService.shared.sessionManager.$sessions) { sessions in
+                // AgentService 是 @MainActor，SwiftUI onReceive 也在 MainActor 执行，直接访问合法
+                // sessions 的 key 就是 surfaceId（[UUID: AgentSession]），直接下标 O(1)
+                let pid = sessions[surfaceView.id]?.shellPid ?? 0
+                statusMonitor.shellPid = pid_t(pid)
+            }
             .onReceive(NotificationCenter.default.publisher(for: PaneLocator.highlightSurface)) { notif in
                 guard let targetId = notif.userInfo?["surfaceId"] as? UUID,
                       targetId == surfaceView.id else { return }
