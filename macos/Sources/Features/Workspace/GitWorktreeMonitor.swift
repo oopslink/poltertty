@@ -60,3 +60,265 @@ enum GitWorktreeParser {
         return worktrees
     }
 }
+
+// MARK: - Monitor
+
+final class GitWorktreeMonitor: ObservableObject {
+    @Published var worktrees: [GitWorktree] = []
+    @Published var isGitRepo: Bool = false
+
+    private let rootDir: String
+    private var gitRoot: String?
+    private var gitCommonDir: String?
+    private let queue = DispatchQueue(label: "poltertty.git-worktree-monitor")
+
+    private var dotGitSource: DispatchSourceFileSystemObject?
+    private var worktreesSource: DispatchSourceFileSystemObject?
+    private var debounceWork: DispatchWorkItem?
+
+    init(rootDir: String) {
+        self.rootDir = rootDir
+        queue.async { [weak self] in
+            self?.detectAndSetup()
+        }
+    }
+
+    deinit {
+        dotGitSource?.cancel()
+        worktreesSource?.cancel()
+        debounceWork?.cancel()
+    }
+
+    // MARK: - Git Detection
+
+    private func detectAndSetup() {
+        let toplevelResult = runGit(["-C", rootDir, "rev-parse", "--show-toplevel"])
+        guard toplevelResult.exitCode == 0,
+              let toplevel = toplevelResult.output?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !toplevel.isEmpty else {
+            DispatchQueue.main.async { [weak self] in
+                self?.isGitRepo = false
+                self?.worktrees = []
+            }
+            return
+        }
+        gitRoot = toplevel
+
+        let commonDirResult = runGit(["-C", rootDir, "rev-parse", "--git-common-dir"])
+        if commonDirResult.exitCode == 0,
+           let commonDir = commonDirResult.output?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !commonDir.isEmpty {
+            if commonDir.hasPrefix("/") {
+                gitCommonDir = commonDir
+            } else {
+                let resolved = URL(fileURLWithPath: toplevel).appendingPathComponent(commonDir).standardized.path
+                gitCommonDir = resolved
+            }
+        } else {
+            gitCommonDir = "\(toplevel)/.git"
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.isGitRepo = true
+        }
+
+        refresh()
+        setupWatching()
+    }
+
+    // MARK: - Refresh
+
+    private func refresh() {
+        guard let root = gitRoot else { return }
+        let result = runGit(["-C", root, "worktree", "list", "--porcelain"])
+        guard result.exitCode == 0, let output = result.output else {
+            NSLog("[GitWorktreeMonitor] git worktree list failed: exit=\(result.exitCode)")
+            return
+        }
+        let parsed = GitWorktreeParser.parse(porcelain: output, currentPath: rootDir)
+        DispatchQueue.main.async { [weak self] in
+            self?.worktrees = parsed
+        }
+    }
+
+    // MARK: - Filesystem Watching
+
+    private func setupWatching() {
+        guard let gitDir = gitCommonDir else { return }
+        startDotGitSource(gitDir: gitDir)
+        let worktreesPath = "\(gitDir)/worktrees"
+        if FileManager.default.fileExists(atPath: worktreesPath) {
+            startWorktreesSource(path: worktreesPath)
+        }
+    }
+
+    private func startDotGitSource(gitDir: String) {
+        let fd = open(gitDir, O_EVTONLY)
+        guard fd >= 0 else {
+            NSLog("[GitWorktreeMonitor] open failed for \(gitDir): errno=\(errno)")
+            return
+        }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd, eventMask: .write, queue: queue
+        )
+        source.setEventHandler { [weak self] in
+            guard let self else { return }
+            let worktreesPath = "\(gitDir)/worktrees"
+            let exists = FileManager.default.fileExists(atPath: worktreesPath)
+            if exists && self.worktreesSource == nil {
+                self.startWorktreesSource(path: worktreesPath)
+            } else if !exists && self.worktreesSource != nil {
+                self.worktreesSource?.cancel()
+                self.worktreesSource = nil
+            }
+            self.scheduleRefresh()
+        }
+        source.setCancelHandler { close(fd) }
+        dotGitSource = source
+        source.resume()
+    }
+
+    private func startWorktreesSource(path: String) {
+        let fd = open(path, O_EVTONLY)
+        guard fd >= 0 else {
+            NSLog("[GitWorktreeMonitor] open failed for \(path): errno=\(errno)")
+            return
+        }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd, eventMask: .write, queue: queue
+        )
+        source.setEventHandler { [weak self] in
+            self?.scheduleRefresh()
+        }
+        source.setCancelHandler { close(fd) }
+        worktreesSource = source
+        source.resume()
+    }
+
+    private func scheduleRefresh() {
+        debounceWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.refresh()
+        }
+        debounceWork = work
+        queue.asyncAfter(deadline: .now() + 0.3, execute: work)
+    }
+
+    func stopWatching() {
+        dotGitSource?.cancel()
+        dotGitSource = nil
+        worktreesSource?.cancel()
+        worktreesSource = nil
+        debounceWork?.cancel()
+        debounceWork = nil
+    }
+
+    // MARK: - Worktree Operations
+
+    func addWorktree(branch: String, path: String, baseBranch: String?, createNew: Bool) throws {
+        guard let root = gitRoot else {
+            throw WorktreeError.notGitRepo
+        }
+        var args = ["-C", root, "worktree", "add"]
+        if createNew {
+            args += ["-b", branch]
+        }
+        let resolvedPath: String
+        if path.hasPrefix("/") {
+            resolvedPath = path
+        } else {
+            resolvedPath = URL(fileURLWithPath: root).appendingPathComponent(path).path
+        }
+        args.append(resolvedPath)
+        if createNew, let base = baseBranch {
+            args.append(base)
+        } else if !createNew {
+            args.append(branch)
+        }
+        let result = runGit(args)
+        if result.exitCode != 0 {
+            let message = result.stderr?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Unknown error"
+            throw WorktreeError.gitError(message)
+        }
+    }
+
+    func removeWorktree(path: String, force: Bool) throws {
+        guard let root = gitRoot else {
+            throw WorktreeError.notGitRepo
+        }
+        var args = ["-C", root, "worktree", "remove"]
+        if force { args.append("--force") }
+        args.append(path)
+        let result = runGit(args)
+        if result.exitCode != 0 {
+            let message = result.stderr?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Unknown error"
+            throw WorktreeError.gitError(message)
+        }
+    }
+
+    func listBranches() -> [String] {
+        guard let root = gitRoot else { return [] }
+        let result = runGit(["-C", root, "branch", "-a", "--format=%(refname:short)"])
+        guard result.exitCode == 0, let output = result.output else { return [] }
+        let allBranches = output.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let worktreeBranches = Set(worktrees.compactMap { $0.branch })
+        return allBranches.filter { !worktreeBranches.contains($0) }
+    }
+
+    func dirtyFileCount(at path: String) -> Int {
+        let result = runGit(["-C", path, "status", "--porcelain"])
+        guard result.exitCode == 0, let output = result.output else { return 0 }
+        return output.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .count
+    }
+
+    // MARK: - Errors
+
+    enum WorktreeError: LocalizedError {
+        case notGitRepo
+        case gitError(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .notGitRepo: return "Not a git repository"
+            case .gitError(let msg): return msg
+            }
+        }
+    }
+
+    // MARK: - Subprocess
+
+    private struct GitResult {
+        let exitCode: Int32
+        let output: String?
+        let stderr: String?
+    }
+
+    private func runGit(_ args: [String]) -> GitResult {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        proc.arguments = args
+        proc.environment = ["HOME": NSHomeDirectory()]
+        let outPipe = Pipe()
+        let errPipe = Pipe()
+        proc.standardOutput = outPipe
+        proc.standardError = errPipe
+        do {
+            try proc.run()
+            proc.waitUntilExit()
+            let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
+            let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+            return GitResult(
+                exitCode: proc.terminationStatus,
+                output: String(data: outData, encoding: .utf8),
+                stderr: String(data: errData, encoding: .utf8)
+            )
+        } catch {
+            NSLog("[GitWorktreeMonitor] git error: \(error)")
+            return GitResult(exitCode: -1, output: nil, stderr: nil)
+        }
+    }
+}
