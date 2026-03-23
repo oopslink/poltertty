@@ -85,7 +85,7 @@ final class CtrlServer {
         }
     }
 
-    // MARK: - 请求积累（与 HookServer 相同模式）
+    // MARK: - 请求积累
 
     private func handleConnection(_ connection: NWConnection) {
         connection.start(queue: queue)
@@ -354,7 +354,7 @@ final class CtrlServer {
             sendRPCResult(connection, id: id, result: ["content": content])
         }
 
-        // 先 respond 再执行 UI 副作用（与 HookServer 一致）
+        // 先 respond 再执行 UI 副作用
         Task { @MainActor in
             handler.execute(tool: name, arguments: arguments)
         }

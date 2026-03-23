@@ -1,4 +1,4 @@
-// macos/Sources/Features/Agent/HookServer/SettingsMerger.swift
+// macos/Sources/Features/Agent/CtrlServer/SettingsMerger.swift
 import Foundation
 import OSLog
 

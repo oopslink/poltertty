@@ -1,4 +1,4 @@
-// macos/Sources/Features/Agent/HookServer/HookSessionStore.swift
+// macos/Sources/Features/Agent/CtrlServer/HookSessionStore.swift
 import Foundation
 import OSLog
 import Security

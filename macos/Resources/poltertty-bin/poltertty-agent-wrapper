@@ -42,9 +42,9 @@ fi
 
 # Check HTTP server is alive (750ms timeout)
 if ! poltertty-cli ping \
-        --port "${POLTERTTY_HTTP_PORT:-}" \
+        --port "${POLTERTTY_CTRL_PORT:-}" \
         --timeout 750 2>/dev/null; then
-    _log "fallback: ping failed (port=${POLTERTTY_HTTP_PORT:-})"
+    _log "fallback: ping failed (port=${POLTERTTY_CTRL_PORT:-})"
     exec "$REAL_BINARY" "$@"
 fi
 
@@ -92,14 +92,14 @@ PREPARE_ARGS=(
     --cwd              "$(pwd)"
     --workspace-id     "$POLTERTTY_WORKSPACE_ID"
     --surface-id       "$POLTERTTY_SURFACE_ID"
-    --port             "$POLTERTTY_HTTP_PORT"
+    --port             "$POLTERTTY_CTRL_PORT"
     --pid              $$
 )
 if [[ -n "$USER_SETTINGS_FLAG" ]]; then
     PREPARE_ARGS+=(--user-settings "$USER_SETTINGS_FLAG")
 fi
 
-_log "prepare-session: ptsId=$PTS_ID ccSid=${CC_SID:-unknown} surface=$POLTERTTY_SURFACE_ID port=$POLTERTTY_HTTP_PORT"
+_log "prepare-session: ptsId=$PTS_ID ccSid=${CC_SID:-unknown} surface=$POLTERTTY_SURFACE_ID port=$POLTERTTY_CTRL_PORT"
 
 SESSION_DIR=$(poltertty-cli prepare-session "${PREPARE_ARGS[@]}") || {
     _log "prepare-session FAILED (exit=$?), falling back to pass-through"
