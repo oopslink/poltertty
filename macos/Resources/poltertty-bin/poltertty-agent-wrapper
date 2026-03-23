@@ -64,7 +64,7 @@ for arg in "$@"; do
     fi
     FILTERED_ARGS+=("$arg")
 done
-set -- "${FILTERED_ARGS[@]}"
+set -- ${FILTERED_ARGS[@]+"${FILTERED_ARGS[@]}"}
 
 # Resolve Claude Code session id
 CC_SESSION_ARGS=()
@@ -107,7 +107,7 @@ SESSION_DIR=$(poltertty-cli prepare-session "${PREPARE_ARGS[@]}") || {
 }
 
 _log "prepare-session OK: sessionDir=$SESSION_DIR"
-_log "exec: ${CC_SESSION_ARGS[*]:-} --settings $SESSION_DIR/settings.json $*"
+_log "exec: ${CC_SESSION_ARGS[*]:+${CC_SESSION_ARGS[*]}} --settings $SESSION_DIR/settings.json $*"
 
 # Exec agent
 export POLTERTTY_SESSION_ID="$PTS_ID"
@@ -115,6 +115,6 @@ export POLTERTTY_AGENT_PID=$$
 unset CLAUDECODE 2>/dev/null || true   # prevent CC from treating this as a nested session
 
 exec "$REAL_BINARY" \
-    "${CC_SESSION_ARGS[@]}" \
+    ${CC_SESSION_ARGS[@]+"${CC_SESSION_ARGS[@]}"} \
     --settings "$SESSION_DIR/settings.json" \
     "$@"
