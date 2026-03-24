@@ -1539,9 +1539,17 @@ extension Ghostty {
             // in a row without storing it all.
             var item: NSMenuItem
 
-            // If we have a selection, add copy
+            // If we have a selection, add copy and path-related items
             if let text = self.accessibilitySelectedText(), text.count > 0 {
                 menu.addItem(withTitle: "Copy", action: #selector(copy(_:)), keyEquivalent: "")
+
+                // If the selected text is a valid file/directory path, add "Open in Finder"
+                let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if FileManager.default.fileExists(atPath: trimmedText) {
+                    item = menu.addItem(withTitle: "Open in Finder", action: #selector(openInFinder(_:)), keyEquivalent: "")
+                    item.setImageIfDesired(systemSymbolName: "folder")
+                    item.representedObject = trimmedText
+                }
             }
             menu.addItem(withTitle: "Paste", action: #selector(paste(_:)), keyEquivalent: "")
 
@@ -1583,6 +1591,16 @@ extension Ghostty {
                 object: nil,
                 userInfo: ["attachInCurrentPane": true]
             )
+        }
+
+        @objc func openInFinder(_ sender: NSMenuItem?) {
+            guard let path = sender?.representedObject as? String else { return }
+            let url = URL(fileURLWithPath: path)
+            if url.hasDirectoryPath {
+                NSWorkspace.shared.open(url)
+            } else {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
         }
 
         @IBAction func copy(_ sender: Any?) {
