@@ -5,6 +5,7 @@ import AppKit
 struct FileBrowserPanel: View {
     @ObservedObject var viewModel: FileBrowserViewModel
     var onOpenInTerminal: ((URL) -> Void)?
+    var worktreeMonitor: GitWorktreeMonitor? = nil
 
     @State private var renameText: String = ""
     @FocusState private var isFocused: Bool
@@ -79,6 +80,10 @@ struct FileBrowserPanel: View {
                     BreadcrumbView(segments: viewModel.breadcrumbSegments) { segment in
                         viewModel.focusDirectory(segment.url)
                     }
+                    Divider()
+                }
+                if let monitor = worktreeMonitor, monitor.worktrees.count > 1 {
+                    WorktreeNavigationBar(monitor: monitor, viewModel: viewModel)
                     Divider()
                 }
                 filterBar
@@ -338,7 +343,7 @@ struct FileBrowserPanel: View {
             Image(systemName: "folder")
                 .font(.system(size: 24))
                 .foregroundColor(Color.secondary.opacity(0.5))
-            Text(viewModel.rootDir.isEmpty ? "No directory set" : "Directory not found")
+            Text(viewModel.effectiveRootDir.isEmpty ? "No directory set" : "Directory not found")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
                 .padding(.top, 4)
@@ -502,5 +507,87 @@ struct FileBrowserPanel: View {
             _ = viewModel.move(urls: urlsToMove, to: entry.node.url)
             return true
         } isTargeted: { _ in }
+    }
+}
+
+// MARK: - Worktree Navigation Bar
+
+/// 显示当前所在 worktree 并提供快速切换的工具栏
+private struct WorktreeNavigationBar: View {
+    @ObservedObject var monitor: GitWorktreeMonitor
+    @ObservedObject var viewModel: FileBrowserViewModel
+
+    var body: some View {
+        let effectivePath = viewModel.effectiveRootDir
+        let current = monitor.worktrees.first {
+            URL(fileURLWithPath: $0.path).standardized.path
+                == URL(fileURLWithPath: effectivePath).standardized.path
+        }
+        let currentLabel = currentDisplayLabel(for: current, fallback: effectivePath)
+
+        HStack(spacing: 4) {
+            if viewModel.overrideRootDir != nil {
+                Button {
+                    viewModel.switchRoot(to: nil)
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text("主仓库")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.plain)
+                .help("返回主仓库根目录")
+            }
+
+            Spacer()
+
+            Menu {
+                ForEach(monitor.worktrees) { wt in
+                    let isActive = URL(fileURLWithPath: wt.path).standardized.path
+                        == URL(fileURLWithPath: effectivePath).standardized.path
+                    Button {
+                        if wt.isMain {
+                            viewModel.switchRoot(to: nil)
+                        } else {
+                            viewModel.switchRoot(to: wt.path)
+                        }
+                    } label: {
+                        Label {
+                            Text(wt.isMain ? "主仓库" : (wt.branch ?? wt.path))
+                        } icon: {
+                            if isActive {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    .disabled(isActive)
+                }
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.system(size: 10))
+                    Text(currentLabel)
+                        .font(.system(size: 11))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                }
+                .foregroundColor(.secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("切换 Worktree")
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+    }
+
+    private func currentDisplayLabel(for wt: GitWorktree?, fallback: String) -> String {
+        guard let wt else { return URL(fileURLWithPath: fallback).lastPathComponent }
+        if wt.isMain { return "主仓库" }
+        return wt.branch ?? wt.path
     }
 }

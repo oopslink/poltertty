@@ -203,7 +203,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
                                             "path": url.path
                                         ]
                                     )
-                                }
+                                },
+                                worktreeMonitor: worktreeMonitor
                             )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
@@ -219,7 +220,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
                                             "path": url.path
                                         ]
                                     )
-                                }
+                                },
+                                worktreeMonitor: worktreeMonitor
                             )
                             .frame(
                                 minWidth: fileBrowserVM.showPreviewPanel

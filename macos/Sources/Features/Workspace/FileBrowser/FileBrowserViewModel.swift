@@ -15,6 +15,12 @@ final class FileBrowserViewModel: ObservableObject {
     @Published var panelWidth: CGFloat
     @Published var renamingURL: URL? = nil
 
+    /// 临时覆盖的根目录（切换到 worktree 时使用），nil 表示使用 workspace 原始 rootDir
+    @Published var overrideRootDir: String? = nil
+
+    /// 当前实际浏览的根目录
+    var effectiveRootDir: String { overrideRootDir ?? rootDir }
+
     // Preview state
     @Published var selectedNodeIds: Set<UUID> = []
     @Published private(set) var lastSelectedId: UUID? = nil   // @Published 保证预览面板 SwiftUI 响应性
@@ -85,7 +91,7 @@ final class FileBrowserViewModel: ObservableObject {
         guard renamingURL == nil else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            guard !self.rootDir.isEmpty, FileManager.default.fileExists(atPath: self.rootDir) else {
+            guard !self.effectiveRootDir.isEmpty, FileManager.default.fileExists(atPath: self.effectiveRootDir) else {
                 self.rootNodes = []
                 return
             }
@@ -95,7 +101,7 @@ final class FileBrowserViewModel: ObservableObject {
             let lastSelectedURL = self.lastSelectedId.flatMap { self.findNodeURL(id: $0) }
 
             let expanded = self.currentExpandedUrls()
-            self.rootNodes = self.loadChildren(at: URL(fileURLWithPath: self.rootDir), expandedUrls: expanded)
+            self.rootNodes = self.loadChildren(at: URL(fileURLWithPath: self.effectiveRootDir), expandedUrls: expanded)
 
             // Restore multi-selection by URL
             var newIds = Set<UUID>()
@@ -602,11 +608,11 @@ final class FileBrowserViewModel: ObservableObject {
         let url: URL
     }
 
-    /// 从 workspace 根目录到当前选中文件的父目录路径段
+    /// 从当前根目录到当前选中文件的父目录路径段
     var breadcrumbSegments: [BreadcrumbSegment] {
         guard let selectedId = lastSelectedId,
               let selectedURL = findNodeURL(id: selectedId) else { return [] }
-        let root = URL(fileURLWithPath: rootDir)
+        let root = URL(fileURLWithPath: effectiveRootDir)
         let targetDir = selectedURL.hasDirectoryPath ? selectedURL : selectedURL.deletingLastPathComponent()
 
         var segments: [BreadcrumbSegment] = []
@@ -623,8 +629,16 @@ final class FileBrowserViewModel: ObservableObject {
     }
 
     func focusDirectory(_ url: URL) {
-        let rootURL = URL(fileURLWithPath: rootDir)
+        let rootURL = URL(fileURLWithPath: effectiveRootDir)
         focusedRootURL = (url.standardized == rootURL.standardized) ? nil : url
+    }
+
+    /// 切换文件浏览器根目录到指定路径，nil 表示回到 workspace 原始根目录
+    func switchRoot(to path: String?) {
+        overrideRootDir = path
+        clearSelection()
+        focusedRootURL = nil
+        reload()
     }
 
     // MARK: - Keyboard Navigation
