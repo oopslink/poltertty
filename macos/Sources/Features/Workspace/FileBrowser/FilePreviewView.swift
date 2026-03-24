@@ -81,7 +81,7 @@ struct FilePreviewView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(showDiff ? .accentColor : .secondary)
-                .help("切换 Git Diff 视图")
+                .help("Toggle Git Diff View")
             }
 
             // Fullscreen toggle button
