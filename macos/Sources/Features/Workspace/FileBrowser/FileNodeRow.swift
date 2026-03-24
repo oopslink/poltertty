@@ -11,6 +11,7 @@ struct FileNodeRow: View {
     let onSingleClick: () -> Void
     let onDoubleClick: () -> Void
     let onOpenInTerminal: () -> Void
+    let onOpenInFinder: () -> Void
     let onCopyPath: () -> Void
     let onNewFile: () -> Void
     let onNewDirectory: () -> Void
@@ -117,6 +118,8 @@ struct FileNodeRow: View {
         .contextMenu {
             if isMultiSelected {
                 // 多选菜单
+                Button("在 Finder 中显示") { onOpenInFinder() }
+                Divider()
                 Button("删除 \(selectedCount) 个项目…", role: .destructive) { onDelete() }
                 Button("移动到…") { onMoveSelected?() }
                 Divider()
@@ -124,6 +127,7 @@ struct FileNodeRow: View {
                 Button("Unstage \(selectedCount) 个项目") { onUnstage?() }
             } else {
                 // 单选菜单
+                Button("在 Finder 中显示") { onOpenInFinder() }
                 Button("Open in Terminal") { onOpenInTerminal() }
                 Button("Copy Path") { onCopyPath() }
                 Divider()

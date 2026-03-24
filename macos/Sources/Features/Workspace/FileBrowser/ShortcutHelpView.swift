@@ -26,6 +26,7 @@ struct ShortcutHelpView: View {
             ShortcutItem(keys: "N", description: "新建目录"),
             ShortcutItem(keys: "r", description: "重命名"),
             ShortcutItem(keys: "⌘⌫", description: "删除"),
+            ShortcutItem(keys: "o", description: "在 Finder 中显示"),
             ShortcutItem(keys: "t", description: "在终端打开"),
         ]),
         ShortcutSection(title: "搜索与视图", items: [

@@ -25,6 +25,7 @@ struct FileBrowserPanel: View {
             .focusable()
             .focused($isFocused)
             .backport.onKeyPress(".") { handleDotKey(modifiers: $0) }
+            .backport.onKeyPress("o") { handleOKey(modifiers: $0) }
             .backport.onKeyPress("t") { handleTKey(modifiers: $0) }
             .backport.onKeyPress("r") { handleRKey(modifiers: $0) }
             .backport.onKeyPress("n") { handleNKey(modifiers: $0) }
@@ -177,6 +178,13 @@ struct FileBrowserPanel: View {
     private func handleDotKey(modifiers: EventModifiers) -> BackportKeyPressResult {
         guard isFocused else { return .ignored }
         viewModel.toggleHiddenFiles()
+        return .handled
+    }
+
+    private func handleOKey(modifiers: EventModifiers) -> BackportKeyPressResult {
+        guard isFocused, let nodeId = viewModel.lastSelectedId,
+              let entry = viewModel.visibleNodes.first(where: { $0.node.id == nodeId }) else { return .ignored }
+        viewModel.openInFinder(entry.node.url)
         return .handled
     }
 
@@ -425,6 +433,9 @@ struct FileBrowserPanel: View {
             },
             onOpenInTerminal: {
                 onOpenInTerminal?(entry.node.url)
+            },
+            onOpenInFinder: {
+                viewModel.openInFinder(entry.node.url)
             },
             onCopyPath: {
                 viewModel.copyPath(entry.node.url)

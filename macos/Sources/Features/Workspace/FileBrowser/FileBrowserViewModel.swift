@@ -362,6 +362,10 @@ final class FileBrowserViewModel: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
+    func openInFinder(_ url: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
     /// 批量删除选中项，返回无法删除的文件名列表（供 UI 层汇总展示）
     @discardableResult
     func deleteSelected() -> [String] {
