@@ -38,7 +38,7 @@ struct FilterChipsView: View {
                 // 清除全部按钮
                 if viewModel.hasActiveFilters {
                     Button(action: { viewModel.clearAllFilters() }) {
-                        Text("清除")
+                        Text("Clear")
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
                     }
@@ -60,10 +60,10 @@ struct FilterChipsView: View {
     private var gitStatusItems: [GitStatusItem] {
         guard !viewModel.gitStatuses.isEmpty else { return [] }
         return [
-            GitStatusItem(status: .modified, label: "已修改"),
-            GitStatusItem(status: .untracked, label: "未追踪"),
-            GitStatusItem(status: .added, label: "已添加"),
-            GitStatusItem(status: .deleted, label: "已删除"),
+            GitStatusItem(status: .modified, label: "Modified"),
+            GitStatusItem(status: .untracked, label: "Untracked"),
+            GitStatusItem(status: .added, label: "Added"),
+            GitStatusItem(status: .deleted, label: "Deleted"),
         ]
     }
 }

@@ -44,20 +44,20 @@ struct FileBrowserPanel: View {
                     viewModel.deactivateRecursiveFilter()
                 }
             }
-            .alert("删除 \(viewModel.selectedNodeIds.count) 个项目？", isPresented: $showBatchDeleteAlert) {
-                Button("取消", role: .cancel) {}
-                Button("移到废纸篓", role: .destructive) {
+            .alert("Delete \(viewModel.selectedNodeIds.count) Items?", isPresented: $showBatchDeleteAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Move to Trash", role: .destructive) {
                     let errors = viewModel.deleteSelected()
                     if !errors.isEmpty {
-                        moveErrorMessage = "以下项目无法删除：\(errors.joined(separator: "、"))"
+                        moveErrorMessage = "The following items could not be deleted: \(errors.joined(separator: ", "))"
                         showMoveError = true
                     }
                 }
             } message: {
-                Text("此操作将移至废纸篓，可恢复。")
+                Text("Items will be moved to Trash and can be recovered.")
             }
-            .alert("操作失败", isPresented: $showMoveError) {
-                Button("好") {}
+            .alert("Operation Failed", isPresented: $showMoveError) {
+                Button("OK") {}
             } message: {
                 Text(moveErrorMessage)
             }
@@ -158,8 +158,8 @@ struct FileBrowserPanel: View {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "移动到此处"
-        panel.message = "选择目标目录"
+        panel.prompt = "Move Here"
+        panel.message = "Choose destination directory"
 
         panel.begin { response in
             guard response == .OK, let destination = panel.url else { return }
@@ -219,7 +219,7 @@ struct FileBrowserPanel: View {
         } else {
             let errors = viewModel.deleteSelected()
             if !errors.isEmpty {
-                moveErrorMessage = "以下项目无法删除：\(errors.joined(separator: "、"))"
+                moveErrorMessage = "The following items could not be deleted: \(errors.joined(separator: ", "))"
                 showMoveError = true
             }
         }
@@ -308,18 +308,18 @@ struct FileBrowserPanel: View {
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("关闭文件浏览器")
+                .help("Close File Browser")
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
 
             if viewModel.selectedNodeIds.count > 1 {
                 HStack {
-                    Text("已选 \(viewModel.selectedNodeIds.count) 个项目")
+                    Text("\(viewModel.selectedNodeIds.count) items selected")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                     Spacer()
-                    Button("取消选择") { viewModel.clearSelection() }
+                    Button("Deselect All") { viewModel.clearSelection() }
                         .font(.system(size: 10))
                         .buttonStyle(.plain)
                         .foregroundColor(.accentColor)

@@ -99,7 +99,7 @@ struct FileNodeRow: View {
             NSItemProvider(contentsOf: node.url) ?? NSItemProvider()
         } preview: {
             if isMultiSelected && selectedCount > 1 {
-                Label("\(selectedCount) 个项目", systemImage: "doc.on.doc")
+                Label("\(selectedCount) items", systemImage: "doc.on.doc")
                     .padding(8)
                     .background(Color(nsColor: .windowBackgroundColor))
                     .cornerRadius(6)
@@ -117,17 +117,15 @@ struct FileNodeRow: View {
         .simultaneousGesture(TapGesture(count: 1).onEnded { onSingleClick() })
         .contextMenu {
             if isMultiSelected {
-                // 多选菜单
-                Button("在 Finder 中显示") { onOpenInFinder() }
+                Button("Show in Finder") { onOpenInFinder() }
                 Divider()
-                Button("删除 \(selectedCount) 个项目…", role: .destructive) { onDelete() }
-                Button("移动到…") { onMoveSelected?() }
+                Button("Delete \(selectedCount) Items…", role: .destructive) { onDelete() }
+                Button("Move to…") { onMoveSelected?() }
                 Divider()
-                Button("Stage \(selectedCount) 个项目") { onStage?() }
-                Button("Unstage \(selectedCount) 个项目") { onUnstage?() }
+                Button("Stage \(selectedCount) Items") { onStage?() }
+                Button("Unstage \(selectedCount) Items") { onUnstage?() }
             } else {
-                // 单选菜单
-                Button("在 Finder 中显示") { onOpenInFinder() }
+                Button("Show in Finder") { onOpenInFinder() }
                 Button("Open in Terminal") { onOpenInTerminal() }
                 Button("Copy Path") { onCopyPath() }
                 Divider()

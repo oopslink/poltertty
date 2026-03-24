@@ -15,7 +15,7 @@ struct DiffView: View {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if diffContent.isEmpty {
-                Text("无变更内容")
+                Text("No changes")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

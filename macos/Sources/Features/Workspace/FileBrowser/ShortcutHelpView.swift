@@ -17,27 +17,27 @@ struct ShortcutHelpView: View {
     }
 
     private let sections: [ShortcutSection] = [
-        ShortcutSection(title: "导航", items: [
-            ShortcutItem(keys: "↑ / ↓", description: "上下选择"),
-            ShortcutItem(keys: "Return", description: "展开/折叠目录"),
+        ShortcutSection(title: "Navigation", items: [
+            ShortcutItem(keys: "↑ / ↓", description: "Select Up/Down"),
+            ShortcutItem(keys: "Return", description: "Expand/Collapse Directory"),
         ]),
-        ShortcutSection(title: "文件操作", items: [
-            ShortcutItem(keys: "n", description: "新建文件"),
-            ShortcutItem(keys: "N", description: "新建目录"),
-            ShortcutItem(keys: "r", description: "重命名"),
-            ShortcutItem(keys: "⌘⌫", description: "删除"),
-            ShortcutItem(keys: "o", description: "在 Finder 中显示"),
-            ShortcutItem(keys: "t", description: "在终端打开"),
+        ShortcutSection(title: "File Operations", items: [
+            ShortcutItem(keys: "n", description: "New File"),
+            ShortcutItem(keys: "N", description: "New Directory"),
+            ShortcutItem(keys: "r", description: "Rename"),
+            ShortcutItem(keys: "⌘⌫", description: "Delete"),
+            ShortcutItem(keys: "o", description: "Show in Finder"),
+            ShortcutItem(keys: "t", description: "Open in Terminal"),
         ]),
-        ShortcutSection(title: "搜索与视图", items: [
-            ShortcutItem(keys: "⌘F", description: "过滤文件"),
-            ShortcutItem(keys: ".", description: "切换隐藏文件"),
-            ShortcutItem(keys: "Space", description: "切换预览面板"),
-            ShortcutItem(keys: "⌘⇧C", description: "复制路径"),
-            ShortcutItem(keys: "⌘A", description: "全选"),
+        ShortcutSection(title: "Search & View", items: [
+            ShortcutItem(keys: "⌘F", description: "Filter Files"),
+            ShortcutItem(keys: ".", description: "Toggle Hidden Files"),
+            ShortcutItem(keys: "Space", description: "Toggle Preview"),
+            ShortcutItem(keys: "⌘⇧C", description: "Copy Path"),
+            ShortcutItem(keys: "⌘A", description: "Select All"),
         ]),
-        ShortcutSection(title: "帮助", items: [
-            ShortcutItem(keys: "?", description: "显示/隐藏此面板"),
+        ShortcutSection(title: "Help", items: [
+            ShortcutItem(keys: "?", description: "Show/Hide This Panel"),
         ]),
     ]
 
@@ -52,7 +52,7 @@ struct ShortcutHelpView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // 标题栏
                 HStack {
-                    Text("快捷键")
+                    Text("Keyboard Shortcuts")
                         .font(.system(size: 13, weight: .semibold))
                     Spacer()
                     Button(action: onDismiss) {
