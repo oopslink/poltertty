@@ -9,6 +9,8 @@ struct TerminalTabItem: View {
     let onRename: (String) -> Void
     let onCloseOthers: () -> Void
     var agentState: AgentState? = nil
+    var isNextActive: Bool = false
+    var isLastVisible: Bool = false
 
     @State private var isHovered = false
     @State private var isRenaming = false
@@ -65,7 +67,10 @@ struct TerminalTabItem: View {
                 }
             }
             .frame(width: Self.tabWidth, height: 28)
-            .background(Color.clear)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(tab.isActive ? Color.primary.opacity(0.1) : (isHovered ? Color.primary.opacity(0.05) : Color.clear))
+            )
             .contentShape(Rectangle())
             // 双击重命名（count:2 要在 count:1 之前）
             .onTapGesture(count: 2) { startRename() }
@@ -86,6 +91,14 @@ struct TerminalTabItem: View {
                 }
             }
             .onHover { isHovered = $0 }
+            .overlay(alignment: .trailing) {
+                if !tab.isActive && !isNextActive && !isLastVisible {
+                    Rectangle()
+                        .fill(Color(nsColor: .separatorColor))
+                        .frame(width: 0.5)
+                        .padding(.vertical, 6)
+                }
+            }
             .contextMenu {
                 Button("重命名") { startRename() }
                 Divider()
