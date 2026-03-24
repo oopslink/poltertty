@@ -77,4 +77,77 @@ struct GitStatusService {
         }
         return result
     }
+
+    // MARK: - Diff
+
+    /// 获取文件的 git diff 内容
+    /// - Parameters:
+    ///   - staged: true 时使用 `git diff --cached`（已暂存），false 时使用 `git diff HEAD`
+    static func fetchDiff(rootDir: String, fileURL: URL, staged: Bool) async -> String {
+        guard !rootDir.isEmpty else { return "" }
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+                if staged {
+                    process.arguments = ["-C", rootDir, "diff", "--cached", "--", fileURL.path]
+                } else {
+                    process.arguments = ["-C", rootDir, "diff", "HEAD", "--", fileURL.path]
+                }
+                let pipe = Pipe()
+                process.standardOutput = pipe
+                process.standardError = Pipe()
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                } catch {
+                    continuation.resume(returning: "")
+                    return
+                }
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8) ?? ""
+                continuation.resume(returning: output)
+            }
+        }
+    }
+
+    // MARK: - Stage / Unstage
+
+    /// 暂存文件（git add）
+    static func stage(rootDir: String, urls: [URL]) async throws {
+        try await runGitCommand(rootDir: rootDir, args: ["add", "--"] + urls.map(\.path))
+    }
+
+    /// 取消暂存（git restore --staged）
+    static func unstage(rootDir: String, urls: [URL]) async throws {
+        try await runGitCommand(rootDir: rootDir, args: ["restore", "--staged", "--"] + urls.map(\.path))
+    }
+
+    private static func runGitCommand(rootDir: String, args: [String]) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            DispatchQueue.global(qos: .utility).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+                process.arguments = ["-C", rootDir] + args
+                process.standardOutput = Pipe()
+                process.standardError = Pipe()
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                    if process.terminationStatus == 0 {
+                        continuation.resume()
+                    } else {
+                        continuation.resume(
+                            throwing: NSError(
+                                domain: "GitStatusService",
+                                code: Int(process.terminationStatus)
+                            )
+                        )
+                    }
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
 }
