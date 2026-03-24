@@ -9,7 +9,7 @@ struct FilterChipsView: View {
             HStack(spacing: 6) {
                 // 扩展名 Chips
                 ForEach(viewModel.availableExtensions, id: \.ext) { item in
-                    FilterChip(
+                    FileBrowserFilterChip(
                         label: ".\(item.ext)",
                         count: item.count,
                         isActive: viewModel.activeExtensions.contains(item.ext),
@@ -25,7 +25,7 @@ struct FilterChipsView: View {
 
                 // Git 状态 Chips
                 ForEach(gitStatusItems, id: \.status.rawValue) { item in
-                    FilterChip(
+                    FileBrowserFilterChip(
                         label: item.label,
                         count: nil,
                         isActive: viewModel.activeGitStatuses.contains(item.status),
@@ -68,7 +68,7 @@ struct FilterChipsView: View {
     }
 }
 
-private struct FilterChip: View {
+private struct FileBrowserFilterChip: View {
     let label: String
     let count: Int?
     let isActive: Bool
