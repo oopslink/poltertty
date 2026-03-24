@@ -21,6 +21,8 @@ struct FileNodeRow: View {
     let selectedCount: Int              // 当前选中数量
     let selectedURLs: [URL]            // 所有选中节点的 URL（用于拖拽载荷）
     let onMoveSelected: (() -> Void)?   // 触发"移动到…"面板
+    var onStage: (() -> Void)? = nil
+    var onUnstage: (() -> Void)? = nil
 
     var isRenaming: Bool = false
     var renameText: Binding<String>? = nil
@@ -117,8 +119,11 @@ struct FileNodeRow: View {
                 // 多选菜单
                 Button("删除 \(selectedCount) 个项目…", role: .destructive) { onDelete() }
                 Button("移动到…") { onMoveSelected?() }
+                Divider()
+                Button("Stage \(selectedCount) 个项目") { onStage?() }
+                Button("Unstage \(selectedCount) 个项目") { onUnstage?() }
             } else {
-                // 单选菜单（保持原有）
+                // 单选菜单
                 Button("Open in Terminal") { onOpenInTerminal() }
                 Button("Copy Path") { onCopyPath() }
                 Divider()
@@ -127,6 +132,18 @@ struct FileNodeRow: View {
                 Divider()
                 Button("Rename") { onStartRename() }
                 Button("Delete", role: .destructive) { onDelete() }
+                // Git 操作（仅非目录文件）
+                if !node.isDirectory {
+                    Divider()
+                    if gitStatus == .modified || gitStatus == .untracked {
+                        Button("Stage") { onStage?() }
+                    } else if gitStatus == .added {
+                        Button("Unstage") { onUnstage?() }
+                    } else if gitStatus == .deleted {
+                        Button("Stage Deletion") { onStage?() }
+                        Button("Unstage") { onUnstage?() }
+                    }
+                }
             }
         }
     }

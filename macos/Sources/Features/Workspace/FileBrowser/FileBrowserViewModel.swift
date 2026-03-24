@@ -8,6 +8,8 @@ final class FileBrowserViewModel: ObservableObject {
     @Published var rootNodes: [FileNode] = []
     @Published var gitStatuses: [String: GitStatus] = [:]
     @Published var filterText: String = ""
+    @Published var activeExtensions: Set<String> = []
+    @Published var activeGitStatuses: Set<GitStatus> = []
     @Published var showHiddenFiles: Bool = false
     @Published var isVisible: Bool
     @Published var panelWidth: CGFloat
@@ -24,6 +26,12 @@ final class FileBrowserViewModel: ObservableObject {
     @Published var isPreviewFullscreen: Bool = false
     @Published var treeWidth: CGFloat = 260
     @Published var previewTotalWidth: CGFloat = 700
+
+    // 快捷键面板
+    @Published var showShortcutHelp: Bool = false
+
+    // 面包屑
+    @Published var focusedRootURL: URL? = nil
 
     // MARK: - Internal State
 
@@ -187,28 +195,51 @@ final class FileBrowserViewModel: ObservableObject {
 
     var visibleNodes: [(node: FileNode, depth: Int)] {
         var result: [(FileNode, Int)] = []
-        let source = filterText.isEmpty ? rootNodes : filteredNodes
+        let baseNodes: [FileNode]
+        if let focusURL = focusedRootURL,
+           let focusNode = findNodeByURL(url: focusURL, in: rootNodes),
+           let children = focusNode.children {
+            baseNodes = children
+        } else {
+            baseNodes = rootNodes
+        }
+        let source = filterText.isEmpty && activeExtensions.isEmpty && activeGitStatuses.isEmpty
+            ? baseNodes
+            : filterTree(nodes: baseNodes, query: filterText.lowercased())
         collectVisible(from: source, depth: 0, into: &result)
         return result
-    }
-
-    private var filteredNodes: [FileNode] {
-        let query = filterText.lowercased()
-        return filterTree(nodes: rootNodes, query: query)
     }
 
     private func filterTree(nodes: [FileNode], query: String) -> [FileNode] {
         var result: [FileNode] = []
         for node in nodes {
-            if node.name.lowercased().contains(query) {
-                result.append(node)
-            } else if node.isExpanded, let children = node.children {
-                let filtered = filterTree(nodes: children, query: query)
-                if !filtered.isEmpty {
+            if node.isDirectory {
+                let filteredChildren: [FileNode]
+                if let children = node.children {
+                    filteredChildren = filterTree(nodes: children, query: query)
+                } else {
+                    filteredChildren = []
+                }
+                if !filteredChildren.isEmpty {
                     var copy = node
-                    copy.children = filtered
+                    copy.children = filteredChildren
+                    copy.isExpanded = true
                     result.append(copy)
                 }
+            } else {
+                // 文本过滤
+                if !query.isEmpty && !node.name.lowercased().contains(query) { continue }
+                // 扩展名过滤
+                if !activeExtensions.isEmpty {
+                    let ext = node.url.pathExtension.lowercased()
+                    if !activeExtensions.contains(ext) { continue }
+                }
+                // Git 状态过滤
+                if !activeGitStatuses.isEmpty {
+                    let status = gitStatus(for: node.url)
+                    guard let status, activeGitStatuses.contains(status) else { continue }
+                }
+                result.append(node)
             }
         }
         return result
@@ -273,6 +304,20 @@ final class FileBrowserViewModel: ObservableObject {
     func refreshGitStatus() async {
         let statuses = await GitStatusService.fetchStatus(rootDir: rootDir)
         await MainActor.run { gitStatuses = statuses }
+    }
+
+    func stageFiles(_ urls: [URL]) {
+        Task {
+            try? await GitStatusService.stage(rootDir: rootDir, urls: urls)
+            await refreshGitStatus()
+        }
+    }
+
+    func unstageFiles(_ urls: [URL]) {
+        Task {
+            try? await GitStatusService.unstage(rootDir: rootDir, urls: urls)
+            await refreshGitStatus()
+        }
     }
 
     /// Returns git status for a URL; for directories returns max of children's statuses
@@ -492,6 +537,90 @@ final class FileBrowserViewModel: ObservableObject {
             }
         }
         return nil
+    }
+
+    // MARK: - Smart Filter
+
+    /// 遍历整个树，统计各扩展名的文件数量（目录不计）
+    var availableExtensions: [(ext: String, count: Int)] {
+        var counts: [String: Int] = [:]
+        collectExtensions(from: rootNodes, into: &counts)
+        return counts
+            .map { (ext: $0.key, count: $0.value) }
+            .sorted { $0.ext < $1.ext }
+    }
+
+    private func collectExtensions(from nodes: [FileNode], into counts: inout [String: Int]) {
+        for node in nodes {
+            if !node.isDirectory {
+                let ext = node.url.pathExtension.lowercased()
+                if !ext.isEmpty {
+                    counts[ext, default: 0] += 1
+                }
+            }
+            if let children = node.children {
+                collectExtensions(from: children, into: &counts)
+            }
+        }
+    }
+
+    func toggleExtensionFilter(_ ext: String) {
+        if activeExtensions.contains(ext) {
+            activeExtensions.remove(ext)
+        } else {
+            activeExtensions.insert(ext)
+        }
+    }
+
+    func toggleGitStatusFilter(_ status: GitStatus) {
+        if activeGitStatuses.contains(status) {
+            activeGitStatuses.remove(status)
+        } else {
+            activeGitStatuses.insert(status)
+        }
+    }
+
+    func clearAllFilters() {
+        activeExtensions = []
+        activeGitStatuses = []
+        filterText = ""
+    }
+
+    var hasActiveFilters: Bool {
+        !activeExtensions.isEmpty || !activeGitStatuses.isEmpty || !filterText.isEmpty
+    }
+
+    // MARK: - Breadcrumb
+
+    struct BreadcrumbSegment: Identifiable {
+        let id = UUID()
+        let name: String
+        let url: URL
+    }
+
+    /// 从 workspace 根目录到当前选中文件的父目录路径段
+    var breadcrumbSegments: [BreadcrumbSegment] {
+        guard let selectedId = lastSelectedId,
+              let selectedURL = findNodeURL(id: selectedId) else { return [] }
+        let root = URL(fileURLWithPath: rootDir)
+        let targetDir = selectedURL.hasDirectoryPath ? selectedURL : selectedURL.deletingLastPathComponent()
+
+        var segments: [BreadcrumbSegment] = []
+        var current = targetDir
+        while current.path.hasPrefix(root.path) {
+            segments.insert(
+                BreadcrumbSegment(name: current.lastPathComponent, url: current),
+                at: 0
+            )
+            if current.path == root.path { break }
+            current = current.deletingLastPathComponent()
+        }
+        return segments
+    }
+
+    func focusDirectory(_ url: URL) {
+        let rootURL = URL(fileURLWithPath: rootDir)
+        focusedRootURL = (url.standardized == rootURL.standardized) ? nil : url
     }
 
     // MARK: - Keyboard Navigation

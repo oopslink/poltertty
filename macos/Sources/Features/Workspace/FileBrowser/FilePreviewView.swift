@@ -8,9 +8,12 @@ struct FilePreviewView: View {
     let isFullscreen: Bool
     let onToggleFullscreen: () -> Void
     var onClose: (() -> Void)? = nil
+    var rootDir: String = ""
+    var gitStatus: GitStatus? = nil
 
     @State private var content: PreviewContent = .loading
     @State private var fileInfo: FileInfo?
+    @State private var showDiff: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -66,6 +69,21 @@ struct FilePreviewView: View {
 
             Spacer()
 
+            // Diff 切换按钮（仅修改/已添加文件显示）
+            if gitStatus == .modified || gitStatus == .added {
+                Button(action: { showDiff.toggle() }) {
+                    Text("Diff")
+                        .font(.system(size: 10, weight: showDiff ? .semibold : .regular))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(showDiff ? Color.accentColor.opacity(0.2) : Color.clear)
+                        .cornerRadius(4)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(showDiff ? .accentColor : .secondary)
+                .help("切换 Git Diff 视图")
+            }
+
             // Fullscreen toggle button
             Button(action: onToggleFullscreen) {
                 Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
@@ -117,22 +135,30 @@ struct FilePreviewView: View {
 
     @ViewBuilder
     private var contentView: some View {
-        switch content {
-        case .loading:
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        if showDiff && (gitStatus == .modified || gitStatus == .added) {
+            DiffView(
+                rootDir: rootDir,
+                fileURL: url,
+                isStaged: gitStatus == .added
+            )
+        } else {
+            switch content {
+            case .loading:
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-        case .text(let text, let language):
-            SyntaxHighlightView(text: text, language: language)
+            case .text(let text, let language):
+                SyntaxHighlightView(text: text, language: language)
 
-        case .image(let nsImage):
-            imagePreview(nsImage)
+            case .image(let nsImage):
+                imagePreview(nsImage)
 
-        case .notSupported(let message):
-            notSupportedView(message)
+            case .notSupported(let message):
+                notSupportedView(message)
 
-        case .error(let message):
-            errorView(message)
+            case .error(let message):
+                errorView(message)
+            }
         }
     }
 

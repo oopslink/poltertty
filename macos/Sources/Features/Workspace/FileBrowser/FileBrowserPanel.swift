@@ -16,6 +16,12 @@ struct FileBrowserPanel: View {
     var body: some View {
         panelContent
             .background(Color(nsColor: .windowBackgroundColor))
+            .overlay {
+                if viewModel.showShortcutHelp {
+                    ShortcutHelpView(onDismiss: { viewModel.showShortcutHelp = false })
+                        .transition(.opacity)
+                }
+            }
             .focusable()
             .focused($isFocused)
             .backport.onKeyPress(".") { handleDotKey(modifiers: $0) }
@@ -31,6 +37,7 @@ struct FileBrowserPanel: View {
             .backport.onKeyPress(KeyEquivalent.downArrow) { handleDownArrow(modifiers: $0) }
             .backport.onKeyPress(KeyEquivalent.return)    { handleReturnKey(modifiers: $0) }
             .backport.onKeyPress("a") { handleAKey(modifiers: $0) }
+            .backport.onKeyPress("?") { handleQuestionKey(modifiers: $0) }
             .onChange(of: viewModel.filterText) { text in
                 if text.isEmpty {
                     viewModel.deactivateRecursiveFilter()
@@ -67,7 +74,17 @@ struct FileBrowserPanel: View {
         HStack(spacing: 0) {
             // Left: File tree (always visible)
             VStack(spacing: 0) {
+                if !viewModel.breadcrumbSegments.isEmpty {
+                    BreadcrumbView(segments: viewModel.breadcrumbSegments) { segment in
+                        viewModel.focusDirectory(segment.url)
+                    }
+                    Divider()
+                }
                 filterBar
+                if !viewModel.availableExtensions.isEmpty || !viewModel.gitStatuses.isEmpty {
+                    FilterChipsView(viewModel: viewModel)
+                    Divider()
+                }
                 Divider()
                 if viewModel.rootDir.isEmpty || !FileManager.default.fileExists(atPath: viewModel.rootDir) {
                     emptyStateView
@@ -89,6 +106,8 @@ struct FileBrowserPanel: View {
                     onToggleFullscreen: {
                         viewModel.togglePreviewFullscreen()
                     },
+                    rootDir: viewModel.rootDir,
+                    gitStatus: viewModel.gitStatus(for: url),
                     onClose: {
                         withAnimation(nil) {
                             viewModel.showPreviewPanel = false
@@ -253,6 +272,12 @@ struct FileBrowserPanel: View {
     private func handleAKey(modifiers: EventModifiers) -> BackportKeyPressResult {
         guard isFocused, modifiers.contains(.command) else { return .ignored }
         viewModel.selectAll()
+        return .handled
+    }
+
+    private func handleQuestionKey(modifiers: EventModifiers) -> BackportKeyPressResult {
+        guard isFocused else { return .ignored }
+        viewModel.showShortcutHelp.toggle()
         return .handled
     }
 
@@ -434,6 +459,18 @@ struct FileBrowserPanel: View {
             selectedCount: viewModel.selectedNodeIds.count,
             selectedURLs: viewModel.selectedURLs,
             onMoveSelected: { presentMovePanel() },
+            onStage: {
+                let urls = viewModel.selectedNodeIds.count > 1
+                    ? viewModel.selectedURLs
+                    : [entry.node.url]
+                viewModel.stageFiles(urls)
+            },
+            onUnstage: {
+                let urls = viewModel.selectedNodeIds.count > 1
+                    ? viewModel.selectedURLs
+                    : [entry.node.url]
+                viewModel.unstageFiles(urls)
+            },
             isRenaming: viewModel.renamingURL == entry.node.url,
             renameText: renamingBinding,
             onCommitRename: { newName in
