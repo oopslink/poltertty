@@ -117,7 +117,7 @@ struct AgentSessionGroup: View {
                 Circle()
                     .fill(Color(hex: "#ff9800") ?? .orange)
                     .frame(width: 5, height: 5)
-                Text("running")
+                Text("working")
                     .font(.system(size: 8))
             }
             .padding(.horizontal, 5).padding(.vertical, 1)
