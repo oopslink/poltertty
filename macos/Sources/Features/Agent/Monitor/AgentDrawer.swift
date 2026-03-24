@@ -46,9 +46,16 @@ struct AgentDrawer: View {
                     Circle().fill(Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
                 }
             }
-            Text(headerTitle)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(headerTitle)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.primary)
+                if let model = headerModelName {
+                    Text(model)
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+            }
             Spacer()
             Button(action: viewModel.closeDrawer) {
                 Image(systemName: "xmark")
@@ -80,6 +87,19 @@ struct AgentDrawer: View {
         switch first {
         case .sessionOverview(let s):       return s.state
         case .subagentDetail(_, let sub):   return sub.state
+        }
+    }
+
+    private var headerModelName: String? {
+        guard viewModel.selectedItems.count == 1, let first = viewModel.selectedItems.first else {
+            return nil
+        }
+        switch first {
+        case .sessionOverview(let s):
+            guard let model = s.model else { return nil }
+            return model.hasPrefix("claude-") ? String(model.dropFirst(7)) : model
+        case .subagentDetail:
+            return nil
         }
     }
 }
