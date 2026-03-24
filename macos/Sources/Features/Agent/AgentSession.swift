@@ -66,4 +66,6 @@ struct AgentSession: Identifiable {
     var lastEventAt: Date = Date()
     var tokenUsage: TokenUsage = TokenUsage()
     var subagents: [String: SubagentInfo] = [:]
+    /// 当前使用的模型名称（从 transcript 解析，如 "claude-sonnet-4-6"）
+    var model: String? = nil
 }

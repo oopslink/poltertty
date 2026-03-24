@@ -244,13 +244,21 @@ struct AgentDashboardView: View {
                 .frame(width: 3)
 
             HStack(spacing: 0) {
-                // State dot + icon + agent name
+                // State dot + icon + agent name (+ model subtitle)
                 HStack(spacing: 5) {
                     AgentStateDot(state: session.state)
                     AgentIconBadge(agent: session.definition, size: 16)
-                    Text(session.definition.name)
-                        .font(.system(size: 11, weight: .medium))
-                        .lineLimit(1)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(session.definition.name)
+                            .font(.system(size: 11, weight: .medium))
+                            .lineLimit(1)
+                        if let model = session.model {
+                            Text(shortModelName(model))
+                                .font(.system(size: 8, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+                    }
                 }
                 .frame(width: 124, alignment: .leading)
                 .padding(.leading, 8)
@@ -368,9 +376,17 @@ struct AgentDashboardView: View {
             HStack(spacing: 6) {
                 AgentStateDot(state: session.state)
                 AgentIconBadge(agent: session.definition, size: 20)
-                Text(session.definition.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(session.definition.name)
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                    if let model = session.model {
+                        Text(shortModelName(model))
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer()
                 Text(stateLabel(session.state))
                     .font(.system(size: 9, weight: .medium))
@@ -554,6 +570,11 @@ struct AgentDashboardView: View {
         case .done:      return "done"
         case .error:     return "error"
         }
+    }
+
+    /// 将完整模型名缩短为可读标签，如 "claude-sonnet-4-6" → "sonnet-4-6"
+    private func shortModelName(_ model: String) -> String {
+        model.hasPrefix("claude-") ? String(model.dropFirst(7)) : model
     }
 
     private func formatTokens(_ n: Int) -> String {
