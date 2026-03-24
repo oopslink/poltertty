@@ -53,6 +53,10 @@ final class AgentSessionManager: ObservableObject {
         sessions[surfaceId]?.lastEventAt = Date()
     }
 
+    func updateModel(surfaceId: UUID, model: String) {
+        sessions[surfaceId]?.model = model
+    }
+
     func updateFromClaudeSession(_ claudeSessionId: String, _ update: (inout AgentSession) -> Void) {
         guard let surfaceId = claudeSessionIndex[claudeSessionId],
               sessions[surfaceId] != nil else { return }

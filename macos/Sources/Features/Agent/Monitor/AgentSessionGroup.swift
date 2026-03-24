@@ -34,10 +34,18 @@ struct AgentSessionGroup: View {
                 Circle().fill(Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
             }
             AgentInlineIcon(agent: session.definition, size: 11)
-            Text(session.definition.name)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(isSelected ? (Color(hex: "#90bfff") ?? .blue) : (session.state.isActive ? .primary : .secondary))
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(session.definition.name)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(isSelected ? (Color(hex: "#90bfff") ?? .blue) : (session.state.isActive ? .primary : .secondary))
+                    .lineLimit(1)
+                if let model = session.model {
+                    Text(shortModelName(model))
+                        .font(.system(size: 8, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
             Spacer()
             if activeCount > 0 {
                 HStack(spacing: 3) {
@@ -133,7 +141,7 @@ struct AgentSessionGroup: View {
                 Circle()
                     .fill(Color.blue)
                     .frame(width: 5, height: 5)
-                Text("starting")
+                Text("launching")
                     .font(.system(size: 8))
             }
             .padding(.horizontal, 5).padding(.vertical, 1)
@@ -173,6 +181,11 @@ struct AgentSessionGroup: View {
 
     private var activeCount: Int {
         session.subagents.values.filter { $0.state.isActive }.count
+    }
+
+    /// 将完整模型名缩短为可读标签，如 "claude-sonnet-4-6" → "sonnet-4-6"
+    private func shortModelName(_ model: String) -> String {
+        model.hasPrefix("claude-") ? String(model.dropFirst(7)) : model
     }
 
     private func elapsedLabel(_ sub: SubagentInfo) -> String {

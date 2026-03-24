@@ -32,9 +32,10 @@ final class TokenTracker {
     /// 收到 Stop hook 时调用，解析 transcript 更新 token 用量
     func processStopEvent(surfaceId: UUID, transcriptPath: String, model: String) {
         Task.detached(priority: .utility) { [weak self] in
-            let usage = await self?.parseTranscript(at: transcriptPath, model: model) ?? TokenUsage()
+            let (usage, parsedModel) = await self?.parseTranscript(at: transcriptPath, fallbackModel: model) ?? (TokenUsage(), nil)
             await MainActor.run {
                 self?.sessionManager.updateTokenUsage(surfaceId: surfaceId, usage: usage)
+                if let m = parsedModel { self?.sessionManager.updateModel(surfaceId: surfaceId, model: m) }
                 // 持久化
                 if let wsId = self?.sessionManager.session(for: surfaceId)?.workspaceId {
                     self?.persist(usage: usage, workspaceId: wsId)
@@ -59,14 +60,14 @@ final class TokenTracker {
 
         guard let session = sessionManager.session(for: surfaceId),
               let path = liveTranscriptPath(for: session) else { return }
-        // TODO: 从 AgentDefinition 读取实际 model 名；暂时硬编码
-        let model = "claude-sonnet-4"
+        let fallbackModel = session.model ?? "claude-sonnet-4"
 
         Task.detached(priority: .utility) { [weak self] in
-            let usage = await self?.parseTranscript(at: path, model: model) ?? TokenUsage()
+            let (usage, parsedModel) = await self?.parseTranscript(at: path, fallbackModel: fallbackModel) ?? (TokenUsage(), nil)
             guard usage.totalTokens > 0 else { return }
             await MainActor.run {
                 self?.sessionManager.updateTokenUsage(surfaceId: surfaceId, usage: usage)
+                if let m = parsedModel { self?.sessionManager.updateModel(surfaceId: surfaceId, model: m) }
             }
         }
     }
@@ -75,24 +76,28 @@ final class TokenTracker {
         lastPollDates.removeValue(forKey: surfaceId)
     }
 
-    private func parseTranscript(at path: String, model: String) async -> TokenUsage {
-        guard let content = try? String(contentsOfFile: path, encoding: .utf8) else { return TokenUsage() }
+    private func parseTranscript(at path: String, fallbackModel: String) async -> (TokenUsage, String?) {
+        guard let content = try? String(contentsOfFile: path, encoding: .utf8) else { return (TokenUsage(), nil) }
         var usage = TokenUsage()
         var totalInput = 0, totalOutput = 0
+        var parsedModel: String? = nil
         for line in content.components(separatedBy: .newlines) {
             guard let data = line.data(using: .utf8),
                   let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+            let msg = event["message"] as? [String: Any]
+            // 提取模型名（assistant 消息中的 model 字段）
+            if let m = msg?["model"] as? String, !m.isEmpty { parsedModel = m }
             // usage 字段在 message.usage 中（Claude Code transcript 格式）
-            let u = (event["message"] as? [String: Any])?["usage"] as? [String: Any]
-                 ?? event["usage"] as? [String: Any]
+            let u = msg?["usage"] as? [String: Any] ?? event["usage"] as? [String: Any]
             guard let u else { continue }
             totalInput  = (u["input_tokens"]  as? Int) ?? totalInput
             totalOutput = (u["output_tokens"] as? Int) ?? totalOutput
         }
+        let effectiveModel = parsedModel ?? fallbackModel
         if totalInput > 0 || totalOutput > 0 {
-            usage.add(input: totalInput, output: totalOutput, model: model)
+            usage.add(input: totalInput, output: totalOutput, model: effectiveModel)
         }
-        return usage
+        return (usage, parsedModel)
     }
 
     func persist(usage: TokenUsage, workspaceId: UUID) {
