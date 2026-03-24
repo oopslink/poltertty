@@ -6,6 +6,7 @@ import AppKit
 struct BottomStatusBarView: View {
     @ObservedObject var monitor: GitStatusMonitor
     @EnvironmentObject var tabBarVM: TabBarViewModel
+    @ObservedObject private var ctrlAPIStore = CtrlAPIStore.shared
     let pwd: String
     let isFocused: Bool
     let surfaceId: UUID
@@ -25,7 +26,7 @@ struct BottomStatusBarView: View {
                     .truncationMode(.head)
                     .foregroundColor(.secondary)
                 Spacer()
-                // 右：tmux 按钮 | agent 按钮 | git 状态
+                // 右：tmux 按钮 | agent 按钮 | ctrl api 按钮 | git 状态
                 if !hasTmuxAttached {
                     Button(action: {
                         NotificationCenter.default.post(
@@ -43,6 +44,13 @@ struct BottomStatusBarView: View {
                     .help("Attach tmux session")
                 }
                 AgentButtonView(surfaceId: surfaceId)
+                Button(action: { ctrlAPIStore.isMonitorVisible.toggle() }) {
+                    Image(systemName: "network")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ctrlAPIStore.isMonitorVisible ? Color.accentColor : Color.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Ctrl API Monitor")
                 if status.isGitRepo {
                     Text("|")
                         .foregroundColor(.secondary)

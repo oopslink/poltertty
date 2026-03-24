@@ -136,36 +136,47 @@ final class CtrlServer {
     private func processRequest(firstLine: String, bodyData: Data, connection: NWConnection) {
         Self.logger.info("CtrlServer: \(firstLine)")
 
+        let startTime = Date()
+        let parts = firstLine.components(separatedBy: " ")
+        let method = parts.count > 0 ? parts[0] : "UNKNOWN"
+        let rawPath = parts.count > 1 ? (parts[1].components(separatedBy: "?").first ?? parts[1]) : "/"
+
+        let baseCtx = RequestContext(
+            method: method, path: rawPath, startTime: startTime,
+            requestBody: bodyData, toolName: nil,
+            workspaceId: nil, surfaceId: nil
+        )
+
         // --- health ---
-        if firstLine.hasPrefix("GET") && firstLine.contains("/health") {
-            sendJSON(connection, status: 200, body: "{}"); return
+        if method == "GET" && rawPath.contains("/health") {
+            sendJSON(connection, status: 200, body: "{}", context: baseCtx); return
         }
         // --- hook routes（prepare-session 必须在 /hook 之前匹配） ---
-        if firstLine.hasPrefix("POST") && firstLine.contains("/hooks/prepare-session") {
-            handlePrepareSession(bodyData: bodyData, connection: connection); return
+        if method == "POST" && rawPath.contains("/hooks/prepare-session") {
+            handlePrepareSession(bodyData: bodyData, connection: connection, context: baseCtx); return
         }
-        if firstLine.hasPrefix("POST") && firstLine.contains("/hook") {
-            handleHook(bodyData: bodyData, connection: connection); return
+        if method == "POST" && rawPath.contains("/hook") {
+            handleHook(bodyData: bodyData, connection: connection, context: baseCtx); return
         }
         // --- MCP routes ---
-        if firstLine.hasPrefix("GET") && firstLine.contains("/mcp") {
-            handleSSE(connection: connection); return
+        if method == "GET" && rawPath.contains("/mcp") {
+            handleSSE(connection: connection, context: baseCtx); return
         }
-        if firstLine.hasPrefix("DELETE") && firstLine.contains("/mcp") {
-            sendJSON(connection, status: 200, body: "{}"); return
+        if method == "DELETE" && rawPath.contains("/mcp") {
+            sendJSON(connection, status: 200, body: "{}", context: baseCtx); return
         }
-        if firstLine.hasPrefix("POST") && firstLine.contains("/mcp") {
-            handleMCP(bodyData: bodyData, connection: connection); return
+        if method == "POST" && rawPath.contains("/mcp") {
+            handleMCP(bodyData: bodyData, connection: connection, context: baseCtx); return
         }
-        sendJSON(connection, status: 404, body: #"{"error":"not found"}"#)
+        sendJSON(connection, status: 404, body: #"{"error":"not found"}"#, context: baseCtx)
     }
 
     // MARK: - Hook handlers
 
-    private func handlePrepareSession(bodyData: Data, connection: NWConnection) {
+    private func handlePrepareSession(bodyData: Data, connection: NWConnection, context: RequestContext) {
         guard let req = try? decoder.decode(PrepareRequest.self, from: bodyData) else {
             Self.logger.warning("CtrlServer: failed to decode prepare-session request")
-            sendJSON(connection, status: 400, body: #"{"error":"invalid json"}"#)
+            sendJSON(connection, status: 400, body: #"{"error":"invalid json"}"#, context: context)
             return
         }
 
@@ -221,15 +232,22 @@ final class CtrlServer {
             )
 
             let responseBody = #"{"sessionDir":"\#(sessionDir)","token":"\#(session.token)"}"#
-            self.sendJSON(connection, status: 200, body: responseBody)
+            // 构造含 workspaceId/surfaceId 的 context
+            let ctx = RequestContext(
+                method: context.method, path: context.path, startTime: context.startTime,
+                requestBody: context.requestBody, toolName: nil,
+                workspaceId: UUID(uuidString: req.workspaceId),
+                surfaceId: UUID(uuidString: req.surfaceId)
+            )
+            self.sendJSON(connection, status: 200, body: responseBody, context: ctx)
         }
     }
 
-    private func handleHook(bodyData: Data, connection: NWConnection) {
+    private func handleHook(bodyData: Data, connection: NWConnection, context: RequestContext) {
         guard var payload = try? decoder.decode(HookPayload.self, from: bodyData) else {
             let bodyPreview = String(data: bodyData.prefix(500), encoding: .utf8) ?? "(binary)"
             Self.logger.warning("CtrlServer: failed to decode hook payload (\(bodyData.count) bytes): \(bodyPreview)")
-            sendJSON(connection, status: 400, body: #"{"error":"invalid json"}"#)
+            sendJSON(connection, status: 400, body: #"{"error":"invalid json"}"#, context: context)
             return
         }
         // 注入 tool_input 原始 JSON（用于 Trace 显示参数）
@@ -240,17 +258,66 @@ final class CtrlServer {
             payload.toolInputRaw = inputStr
         }
         Self.logger.info("CtrlServer: event=\(payload.hookEventName.rawValue) sid=\(payload.sessionId ?? "nil") tool=\(payload.toolName ?? "-") toolUseId=\(payload.toolUseId ?? "-")")
+        // 先发响应（不含 workspaceId），记录由下方 @MainActor Task 完成
         sendJSON(connection, status: 200, body: "{}")
         Task { await EventBus.shared.emit(.hook(payload)) }
-        Task { @MainActor in self.sessionManager.processHookEvent(payload) }
+        Task { @MainActor in
+            self.sessionManager.processHookEvent(payload)
+            // 查 HookSessionStore 获取 workspaceId/surfaceId，补录 hook 调用记录
+            let wsId: UUID?
+            let sfId: UUID?
+            if let sid = payload.sessionId, let session = HookSessionStore.shared.get(sid) {
+                wsId = UUID(uuidString: session.workspaceId)
+                sfId = UUID(uuidString: session.surfaceId)
+            } else {
+                wsId = nil
+                sfId = nil
+            }
+            let truncReq = context.requestBody.flatMap { data -> String? in
+                guard let s = String(data: data, encoding: .utf8) else { return nil }
+                return s.count > 4096 ? String(s.prefix(4096)) + " [truncated]" : s
+            }
+            let record = CtrlAPIRecord(
+                id: UUID(),
+                timestamp: context.startTime,
+                method: context.method,
+                path: context.path,
+                toolName: nil,
+                requestBody: truncReq,
+                responseBody: "{}",
+                statusCode: 200,
+                durationMs: Date().timeIntervalSince(context.startTime) * 1000,
+                error: nil,
+                workspaceId: wsId,
+                surfaceId: sfId
+            )
+            CtrlAPIStore.shared.append(record)
+        }
     }
 
     // MARK: - SSE 长连接（GET /mcp）
 
-    private func handleSSE(connection: NWConnection) {
+    private func handleSSE(connection: NWConnection, context: RequestContext) {
         let header = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n"
         connection.send(content: header.data(using: .utf8)!, completion: .contentProcessed { [weak self] error in
             guard let self, error == nil else { connection.cancel(); return }
+
+            // 记录 SSE 连接建立（仅一次，后续推送不记录）
+            let record = CtrlAPIRecord(
+                id: UUID(),
+                timestamp: context.startTime,
+                method: context.method,
+                path: "/mcp (SSE)",
+                toolName: nil,
+                requestBody: nil,
+                responseBody: nil,
+                statusCode: 200,
+                durationMs: Date().timeIntervalSince(context.startTime) * 1000,
+                error: nil,
+                workspaceId: nil,
+                surfaceId: nil
+            )
+            Task { await MainActor.run { CtrlAPIStore.shared.append(record) } }
 
             let key = ObjectIdentifier(connection)
 
@@ -334,12 +401,12 @@ final class CtrlServer {
 
     // MARK: - JSON-RPC（POST /mcp）
 
-    private func handleMCP(bodyData: Data, connection: NWConnection) {
+    private func handleMCP(bodyData: Data, connection: NWConnection, context: RequestContext) {
         guard
             let obj = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any],
             let method = obj["method"] as? String
         else {
-            sendRPCError(connection, id: nil, code: -32700, message: "Parse error")
+            sendRPCError(connection, id: nil, code: -32700, message: "Parse error", context: context)
             return
         }
         let id = obj["id"]
@@ -347,29 +414,29 @@ final class CtrlServer {
 
         // notifications 为单向消息，按 MCP Streamable HTTP 规范返回 202 Accepted（无 body）
         if method.hasPrefix("notifications/") {
-            sendEmpty(connection, status: 202)
+            sendEmpty(connection, status: 202, context: context)
             return
         }
 
         switch method {
-        case "initialize":   handleInitialize(connection: connection, id: id)
-        case "tools/list":   handleToolsList(connection: connection, id: id)
-        case "tools/call":   handleToolsCall(connection: connection, id: id, params: params)
-        default:             sendRPCError(connection, id: id, code: -32601, message: "Method not found: \(method)")
+        case "initialize":   handleInitialize(connection: connection, id: id, context: context)
+        case "tools/list":   handleToolsList(connection: connection, id: id, context: context)
+        case "tools/call":   handleToolsCall(connection: connection, id: id, params: params, context: context)
+        default:             sendRPCError(connection, id: id, code: -32601, message: "Method not found: \(method)", context: context)
         }
     }
 
-    private func handleInitialize(connection: NWConnection, id: Any?) {
+    private func handleInitialize(connection: NWConnection, id: Any?, context: RequestContext) {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
         let result: [String: Any] = [
             "protocolVersion": "2025-03-26",
             "capabilities": ["tools": [String: Any]()],
             "serverInfo": ["name": "poltertty", "version": version]
         ]
-        sendRPCResult(connection, id: id, result: result)
+        sendRPCResult(connection, id: id, result: result, context: context)
     }
 
-    private func handleToolsList(connection: NWConnection, id: Any?) {
+    private func handleToolsList(connection: NWConnection, id: Any?, context: RequestContext) {
         let tools: [[String: Any]] = [
             [
                 "name": "ping",
@@ -432,51 +499,56 @@ final class CtrlServer {
                 ]
             ]
         ]
-        sendRPCResult(connection, id: id, result: ["tools": tools])
+        sendRPCResult(connection, id: id, result: ["tools": tools], context: context)
     }
 
-    private func handleToolsCall(connection: NWConnection, id: Any?, params: [String: Any]?) {
+    private func handleToolsCall(connection: NWConnection, id: Any?, params: [String: Any]?, context: RequestContext) {
         guard let name = params?["name"] as? String else {
-            sendRPCError(connection, id: id, code: -32602, message: "Invalid params: missing name")
+            sendRPCError(connection, id: id, code: -32602, message: "Invalid params: missing name", context: context)
             return
         }
         let arguments = params?["arguments"] as? [String: Any] ?? [:]
-
+        // 构造含 toolName 的 context 副本
+        let toolCtx = RequestContext(
+            method: context.method, path: context.path, startTime: context.startTime,
+            requestBody: context.requestBody, toolName: name,
+            workspaceId: context.workspaceId, surfaceId: context.surfaceId
+        )
         let handler = CtrlToolHandler(port: self.port)
         Task {
             do {
                 let resultText = try await handler.callTool(name: name, arguments: arguments)
                 let content: [[String: Any]] = [["type": "text", "text": resultText]]
-                self.sendRPCResult(connection, id: id, result: ["content": content])
+                self.sendRPCResult(connection, id: id, result: ["content": content], context: toolCtx)
             } catch let err as CtrlToolHandler.RPCError {
-                self.sendRPCError(connection, id: id, code: err.code, message: err.message)
+                self.sendRPCError(connection, id: id, code: err.code, message: err.message, context: toolCtx)
             } catch {
-                self.sendRPCError(connection, id: id, code: -32603, message: error.localizedDescription)
+                self.sendRPCError(connection, id: id, code: -32603, message: error.localizedDescription, context: toolCtx)
             }
         }
     }
 
     // MARK: - Response helpers
 
-    private func sendRPCResult(_ connection: NWConnection, id: Any?, result: [String: Any]) {
+    private func sendRPCResult(_ connection: NWConnection, id: Any?, result: [String: Any], context: RequestContext? = nil) {
         var obj: [String: Any] = ["jsonrpc": "2.0", "result": result]
         if let id { obj["id"] = id }
         guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
-        sendJSON(connection, status: 200, body: String(data: data, encoding: .utf8) ?? "{}")
+        sendJSON(connection, status: 200, body: String(data: data, encoding: .utf8) ?? "{}", context: context)
     }
 
-    private func sendRPCError(_ connection: NWConnection, id: Any?, code: Int, message: String) {
+    private func sendRPCError(_ connection: NWConnection, id: Any?, code: Int, message: String, context: RequestContext? = nil) {
         var obj: [String: Any] = [
             "jsonrpc": "2.0",
             "error": ["code": code, "message": message]
         ]
         if let id { obj["id"] = id }
         guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
-        sendJSON(connection, status: 200, body: String(data: data, encoding: .utf8) ?? "{}")
+        sendJSON(connection, status: 200, body: String(data: data, encoding: .utf8) ?? "{}", context: context)
     }
 
     /// 发送无 body 的 HTTP 响应（用于 notifications/ 的 202 Accepted）
-    private func sendEmpty(_ connection: NWConnection, status: Int) {
+    private func sendEmpty(_ connection: NWConnection, status: Int, context: RequestContext? = nil) {
         let statusText: String
         switch status {
         case 202: statusText = "Accepted"
@@ -484,10 +556,33 @@ final class CtrlServer {
         }
         let header = "HTTP/1.1 \(status) \(statusText)\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
         let data = header.data(using: .utf8)!
-        connection.send(content: data, completion: .contentProcessed { _ in connection.cancel() })
+        connection.send(content: data, completion: .contentProcessed { _ in
+            connection.cancel()
+            if let ctx = context {
+                let truncReq = ctx.requestBody.flatMap { d -> String? in
+                    guard let s = String(data: d, encoding: .utf8) else { return nil }
+                    return s.count > 4096 ? String(s.prefix(4096)) + " [truncated]" : s
+                }
+                let record = CtrlAPIRecord(
+                    id: UUID(),
+                    timestamp: ctx.startTime,
+                    method: ctx.method,
+                    path: ctx.path,
+                    toolName: ctx.toolName,
+                    requestBody: truncReq,
+                    responseBody: nil,
+                    statusCode: status,
+                    durationMs: Date().timeIntervalSince(ctx.startTime) * 1000,
+                    error: nil,
+                    workspaceId: ctx.workspaceId,
+                    surfaceId: ctx.surfaceId
+                )
+                Task { await MainActor.run { CtrlAPIStore.shared.append(record) } }
+            }
+        })
     }
 
-    private func sendJSON(_ connection: NWConnection, status: Int, body: String) {
+    private func sendJSON(_ connection: NWConnection, status: Int, body: String, context: RequestContext? = nil) {
         let bodyData = body.data(using: .utf8) ?? Data()
         let statusText: String
         switch status {
@@ -500,6 +595,39 @@ final class CtrlServer {
         let header = "HTTP/1.1 \(status) \(statusText)\r\nContent-Length: \(bodyData.count)\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n"
         var resp = header.data(using: .utf8)!
         resp.append(bodyData)
-        connection.send(content: resp, completion: .contentProcessed { _ in connection.cancel() })
+        connection.send(content: resp, completion: .contentProcessed { _ in
+            connection.cancel()
+            if let ctx = context {
+                let truncReq = ctx.requestBody.flatMap { d -> String? in
+                    guard let s = String(data: d, encoding: .utf8) else { return nil }
+                    return s.count > 4096 ? String(s.prefix(4096)) + " [truncated]" : s
+                }
+                let truncResp: String? = body.isEmpty ? nil
+                    : (body.count > 4096 ? String(body.prefix(4096)) + " [truncated]" : body)
+                let record = CtrlAPIRecord(
+                    id: UUID(),
+                    timestamp: ctx.startTime,
+                    method: ctx.method,
+                    path: ctx.path,
+                    toolName: ctx.toolName,
+                    requestBody: truncReq,
+                    responseBody: truncResp,
+                    statusCode: status,
+                    durationMs: Date().timeIntervalSince(ctx.startTime) * 1000,
+                    error: Self.extractRPCError(from: body),
+                    workspaceId: ctx.workspaceId,
+                    surfaceId: ctx.surfaceId
+                )
+                Task { await MainActor.run { CtrlAPIStore.shared.append(record) } }
+            }
+        })
+    }
+
+    private static func extractRPCError(from body: String) -> String? {
+        guard let data = body.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let error = obj["error"] as? [String: Any],
+              let msg = error["message"] as? String else { return nil }
+        return msg
     }
 }
