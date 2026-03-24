@@ -282,6 +282,17 @@ class AppDelegate: NSObject,
             selector: #selector(ghosttyNewTab(_:)),
             name: Ghostty.Notification.ghosttyNewTab,
             object: nil)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleToggleAgentDashboard(_:)),
+            name: .toggleAgentDashboard,
+            object: nil
+        )
+
+        // 启动双击修饰键检测（一次性初始化，不能放在 ghosttyConfigDidChange 里）
+        ShiftDoubleTapDetector.shared.start()
+        CmdDoubleTapDetector.shared.start()
+        OptionDoubleTapDetector.shared.start()
 
         // Configure user notifications
         let actions = [
@@ -867,17 +878,8 @@ class AppDelegate: NSObject,
             GlobalEventTap.shared.disable()
         }
 
-        // 启动双击 Shift 检测（App Launcher 触发器）
-        ShiftDoubleTapDetector.shared.start()
-        CmdDoubleTapDetector.shared.start()
-        // 启动双击 Option 检测（Agent Dashboard 触发器）
-        OptionDoubleTapDetector.shared.start()
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleToggleAgentDashboard(_:)),
-            name: .toggleAgentDashboard,
-            object: nil
-        )
+        // 注意：双击检测器 start() 和 toggleAgentDashboard observer 已移至
+        // applicationDidFinishLaunching，不能放在此处，否则配置变更会导致重复注册
 
         updateAppIcon(from: config)
     }
