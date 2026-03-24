@@ -106,14 +106,14 @@ struct FileBrowserPanel: View {
                     onToggleFullscreen: {
                         viewModel.togglePreviewFullscreen()
                     },
-                    rootDir: viewModel.rootDir,
-                    gitStatus: viewModel.gitStatus(for: url),
                     onClose: {
                         withAnimation(nil) {
                             viewModel.showPreviewPanel = false
                             viewModel.isPreviewFullscreen = false
                         }
-                    }
+                    },
+                    rootDir: viewModel.rootDir,
+                    gitStatus: viewModel.gitStatus(for: url)
                 )
                 .frame(minWidth: 200)
             }
