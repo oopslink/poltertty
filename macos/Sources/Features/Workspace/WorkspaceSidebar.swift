@@ -777,7 +777,6 @@ struct ExpandedWorkspaceItem: View {
 
     @State private var isHovering = false
     @State private var isPressed = false
-    @State private var isMoreHovered = false
 
     private var indicatorColor: Color {
         workspace.isTemporary ? (Color(hex: "#F59E0B") ?? .yellow) : workspace.color
@@ -834,20 +833,6 @@ struct ExpandedWorkspaceItem: View {
 
             Spacer()
 
-            if let onShowCreateForm {
-                Button {
-                    showMoreMenu(onShowCreateForm: onShowCreateForm)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .opacity(isHovering || isMoreHovered ? 1 : 0)
-                .onHover { isMoreHovered = $0 }
-            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -872,6 +857,10 @@ struct ExpandedWorkspaceItem: View {
         .padding(.horizontal, 6)
         .draggable(WorkspaceDragItem(workspaceId: workspace.id))
         .contextMenu {
+            if let onShowCreateForm {
+                Button("Add Worktree…") { onShowCreateForm() }
+                Divider()
+            }
             Button("Edit Workspace...") { onEdit() }
             Menu("Move to Group") {
                 if workspace.groupId != nil {
@@ -900,26 +889,6 @@ struct ExpandedWorkspaceItem: View {
         .onTapGesture(count: 2) {}  // prevent double-tap from passing through to blank area handler
     }
 
-    private func showMoreMenu(onShowCreateForm: @escaping () -> Void) {
-        let menu = NSMenu()
-        let addItem = NSMenuItem(title: "Add Worktree…", action: nil, keyEquivalent: "")
-        addItem.target = WorkspaceMoreMenuTarget.shared
-        addItem.action = #selector(WorkspaceMoreMenuTarget.addWorktreeClicked(_:))
-        WorkspaceMoreMenuTarget.shared.onAddWorktree = onShowCreateForm
-        menu.addItem(addItem)
-        if let event = NSApp.currentEvent {
-            NSMenu.popUpContextMenu(menu, with: event, for: NSApp.keyWindow?.contentView ?? NSView())
-        }
-    }
-}
-
-private class WorkspaceMoreMenuTarget: NSObject {
-    static let shared = WorkspaceMoreMenuTarget()
-    var onAddWorktree: (() -> Void)?
-
-    @objc func addWorktreeClicked(_ sender: NSMenuItem) {
-        onAddWorktree?()
-    }
 }
 
 // MARK: - Group Header Row
