@@ -227,15 +227,16 @@ struct SessionOverviewContent: View {
             .padding(.bottom, 4)
 
             if subagentsExpanded {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(subagents) { sub in
-                        overviewRow(sub)
-                            .onTapGesture { onSubagentTap?(sub) }
-                            .contentShape(Rectangle())
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(subagents) { sub in
+                            overviewRow(sub)
+                                .onTapGesture { onSubagentTap?(sub) }
+                                .contentShape(Rectangle())
+                        }
                     }
                 }
                 .frame(maxHeight: 200)
-                .clipped()
             }
         }
     }
