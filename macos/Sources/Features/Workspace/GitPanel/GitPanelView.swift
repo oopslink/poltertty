@@ -32,37 +32,6 @@ struct GitPanelView: View {
             HSplitView {
                 // 左：Changes + Commits 列表
                 VStack(spacing: 0) {
-                    // 头部：分支 + 刷新
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.triangle.branch")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                        Text(vm.branch ?? "detached")
-                            .font(.system(size: 12, weight: .medium))
-                        Spacer()
-                        Button(action: { Task { await vm.refresh() } }) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 11))
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundColor(.secondary)
-                        .help("Refresh")
-                        // Commit button (v2, disabled)
-                        Button(action: {}) {
-                            Label("Commit", systemImage: "plus.circle")
-                                .font(.system(size: 11))
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundColor(.secondary)
-                        .disabled(true)
-                        .help("Commit (coming soon)")
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .background(Color(nsColor: .windowBackgroundColor))
-
-                    Divider()
-
                     // Error 提示
                     if let err = vm.error {
                         Text(err)

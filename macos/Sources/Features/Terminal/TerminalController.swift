@@ -723,6 +723,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         let vm = WorkspaceManager.shared.fileBrowserViewModel(for: workspaceId)
         ws.fileBrowserVisible = vm.isVisible
         ws.fileBrowserWidth = vm.panelWidth
+        let gitVM = WorkspaceManager.shared.gitPanelViewModel(for: workspaceId)
+        ws.gitPanelWidth = gitVM.gitPanelWidth
         WorkspaceManager.shared.update(ws)
     }
 

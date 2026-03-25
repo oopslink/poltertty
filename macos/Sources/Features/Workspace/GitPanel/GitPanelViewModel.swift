@@ -23,7 +23,7 @@ class GitPanelViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
     @Published var isGitRepo = false
-    @Published var isVisible = false  // Git panel 显隐
+    @Published var gitPanelWidth: CGFloat
     @Published var lastAttemptedDir: String = ""
 
     private(set) var repo: GitRepository?
@@ -35,7 +35,9 @@ class GitPanelViewModel: ObservableObject {
     private var pendingRefreshTask: Task<Void, Never>?
     private var currentGitDir: String?
 
-    init() {}
+    init(gitPanelWidth: CGFloat = 600) {
+        self.gitPanelWidth = gitPanelWidth
+    }
 
     func load(rootDir: String) async {
         guard !rootDir.isEmpty else { return }

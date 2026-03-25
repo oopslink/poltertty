@@ -17,6 +17,7 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
     var isTemporary: Bool
     var fileBrowserVisible: Bool = false
     var fileBrowserWidth: CGFloat = 260
+    var gitPanelWidth: CGFloat = 600
     var groupId: UUID?    // nil = 未分组
     var groupOrder: Int   // workspace 在所属区域内的排列顺序
 
@@ -34,6 +35,7 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
         case isTemporary
         case fileBrowserVisible
         case fileBrowserWidth
+        case gitPanelWidth
         case groupId
         case groupOrder
     }
@@ -69,6 +71,7 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
         isTemporary = try container.decodeIfPresent(Bool.self, forKey: .isTemporary) ?? false
         fileBrowserVisible = try container.decodeIfPresent(Bool.self, forKey: .fileBrowserVisible) ?? false
         fileBrowserWidth   = try container.decodeIfPresent(CGFloat.self, forKey: .fileBrowserWidth) ?? 260
+        gitPanelWidth      = try container.decodeIfPresent(CGFloat.self, forKey: .gitPanelWidth) ?? 600
         groupId    = try container.decodeIfPresent(UUID.self, forKey: .groupId)
         groupOrder = try container.decodeIfPresent(Int.self, forKey: .groupOrder) ?? 0
     }

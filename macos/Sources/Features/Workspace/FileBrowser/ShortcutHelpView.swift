@@ -31,7 +31,8 @@ struct ShortcutHelpView: View {
         ]),
         ShortcutSection(title: "Search & View", items: [
             ShortcutItem(keys: "⌘F", description: "Filter Files"),
-            ShortcutItem(keys: "g", description: "Toggle Uncommitted Filter"),
+            ShortcutItem(keys: "g", description: "Switch to Git Tab"),
+            ShortcutItem(keys: "G", description: "Toggle Uncommitted Filter"),
             ShortcutItem(keys: ".", description: "Toggle Hidden Files"),
             ShortcutItem(keys: "Space", description: "Toggle Preview"),
             ShortcutItem(keys: "⌘⇧C", description: "Copy Path"),

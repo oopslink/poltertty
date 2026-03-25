@@ -48,8 +48,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
     @State private var showConvertAlert = false
     @State private var fileBrowserDividerHovered = false
-    @State private var gitPanelDividerHovered = false
-    @State private var gitPanelWidth: CGFloat = 600
+    @State private var activePanelTab: PanelTab = .files
     @State private var showTmuxPicker = false
     @State private var tmuxPickerAttachInCurrentPane = false
     @State private var launcherVisible = false
@@ -141,6 +140,18 @@ struct PolterttyRootView<TerminalContent: View>: View {
         sidebarCollapsed ? 48 : sidebarWidth
     }
 
+    private var unifiedPanelWidth: CGFloat {
+        switch activePanelTab {
+        case .git:
+            return gitPanelVM.gitPanelWidth
+        case .files:
+            if fileBrowserVM.showPreviewPanel {
+                return fileBrowserVM.previewTotalWidth
+            }
+            return fileBrowserVM.panelWidth
+        }
+    }
+
     var body: some View {
         ZStack {
             switch startupMode {
@@ -200,12 +211,14 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         Divider()
                     }
 
-                    // File Browser Panel
+                    // Unified Panel (File Browser + Git Tab)
                     if fileBrowserVM.isVisible {
                         if fileBrowserVM.isPreviewFullscreen {
-                            // Fullscreen mode: file browser takes all space
-                            FileBrowserPanel(
-                                viewModel: fileBrowserVM,
+                            UnifiedPanelView(
+                                fileBrowserVM: fileBrowserVM,
+                                gitPanelVM: gitPanelVM,
+                                activePanelTab: $activePanelTab,
+                                worktreeMonitor: worktreeMonitor,
                                 onOpenInTerminal: { url in
                                     NotificationCenter.default.post(
                                         name: .fileBrowserOpenInTerminal,
@@ -215,14 +228,15 @@ struct PolterttyRootView<TerminalContent: View>: View {
                                             "path": url.path
                                         ]
                                     )
-                                },
-                                worktreeMonitor: worktreeMonitor
+                                }
                             )
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
-                            // Normal mode
-                            FileBrowserPanel(
-                                viewModel: fileBrowserVM,
+                            UnifiedPanelView(
+                                fileBrowserVM: fileBrowserVM,
+                                gitPanelVM: gitPanelVM,
+                                activePanelTab: $activePanelTab,
+                                worktreeMonitor: worktreeMonitor,
                                 onOpenInTerminal: { url in
                                     NotificationCenter.default.post(
                                         name: .fileBrowserOpenInTerminal,
@@ -232,30 +246,15 @@ struct PolterttyRootView<TerminalContent: View>: View {
                                             "path": url.path
                                         ]
                                     )
-                                },
-                                worktreeMonitor: worktreeMonitor
+                                }
                             )
-                            .frame(
-                                minWidth: fileBrowserVM.showPreviewPanel
-                                    ? (fileBrowserVM.treeWidth + 217)
-                                    : 160,
-                                maxWidth: fileBrowserVM.showPreviewPanel
-                                    ? fileBrowserVM.previewTotalWidth
-                                    : fileBrowserVM.panelWidth
-                            )
+                            .frame(width: unifiedPanelWidth)
 
-                            fileBrowserDivider
-
-                            if gitPanelVM.isVisible {
-                                GitPanelView(vm: gitPanelVM)
-                                    .frame(width: gitPanelWidth)
-                                gitPanelDivider
-                            }
+                            unifiedPanelDivider
 
                             terminalAreaView
                         }
                     } else {
-                        // File browser not visible, show terminal
                         terminalAreaView
                     }
 
@@ -334,7 +333,22 @@ struct PolterttyRootView<TerminalContent: View>: View {
             agentMonitorVM.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleGitPanel)) { _ in
-            gitPanelVM.isVisible.toggle()
+            if fileBrowserVM.isVisible {
+                if activePanelTab == .git {
+                    // 已在 Git Tab：隐藏整个统一面板（toggle）
+                    fileBrowserVM.isVisible = false
+                } else {
+                    // 在 Files Tab：切换到 Git Tab
+                    if fileBrowserVM.isPreviewFullscreen {
+                        fileBrowserVM.togglePreviewFullscreen()
+                    }
+                    activePanelTab = .git
+                }
+            } else {
+                // 面板隐藏：打开面板并切到 Git Tab
+                fileBrowserVM.isVisible = true
+                activePanelTab = .git
+            }
         }
         // 跟随文件浏览器当前路径（切换 worktree 时自动更新）
         .task(id: fileBrowserVM.effectiveRootDir) {
@@ -454,31 +468,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
             .environmentObject(gitPanelVM)
     }
 
-    private var gitPanelDivider: some View {
-        ZStack {
-            Color(nsColor: .separatorColor)
-                .frame(width: 1)
-            if gitPanelDividerHovered {
-                DividerGripHandle()
-            }
-        }
-        .frame(width: 16)
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            gitPanelDividerHovered = hovering
-            if hovering { NSCursor.resizeLeftRight.push() }
-            else { NSCursor.pop() }
-        }
-        .gesture(
-            DragGesture(minimumDistance: 1)
-                .onChanged { value in
-                    let newWidth = gitPanelWidth + value.translation.width
-                    gitPanelWidth = max(400, min(1200, newWidth))
-                }
-        )
-    }
-
-    private var fileBrowserDivider: some View {
+    private var unifiedPanelDivider: some View {
         ZStack {
             // 悬停时加深边框，方便用户找到拖拽区域
             Color(nsColor: fileBrowserDividerHovered ? .controlAccentColor : .separatorColor)
@@ -498,13 +488,19 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .gesture(
             DragGesture(minimumDistance: 1)
                 .onChanged { value in
-                    if fileBrowserVM.showPreviewPanel {
-                        let minW = fileBrowserVM.treeWidth + 217
-                        let newWidth = fileBrowserVM.previewTotalWidth + value.translation.width
-                        fileBrowserVM.previewTotalWidth = max(minW, min(1200, newWidth))
-                    } else {
-                        let newWidth = fileBrowserVM.panelWidth + value.translation.width
-                        fileBrowserVM.panelWidth = max(160, min(600, newWidth))
+                    switch activePanelTab {
+                    case .git:
+                        let newWidth = gitPanelVM.gitPanelWidth + value.translation.width
+                        gitPanelVM.gitPanelWidth = max(400, min(1200, newWidth))
+                    case .files:
+                        if fileBrowserVM.showPreviewPanel {
+                            let minW = fileBrowserVM.treeWidth + 217
+                            let newWidth = fileBrowserVM.previewTotalWidth + value.translation.width
+                            fileBrowserVM.previewTotalWidth = max(minW, min(1200, newWidth))
+                        } else {
+                            let newWidth = fileBrowserVM.panelWidth + value.translation.width
+                            fileBrowserVM.panelWidth = max(160, min(600, newWidth))
+                        }
                     }
                 }
         )

@@ -6,6 +6,7 @@ struct FileBrowserPanel: View {
     @ObservedObject var viewModel: FileBrowserViewModel
     var onOpenInTerminal: ((URL) -> Void)?
     var worktreeMonitor: GitWorktreeMonitor? = nil
+    var onSwitchToGitTab: (() -> Void)?
 
     @State private var renameText: String = ""
     @FocusState private var isFocused: Bool
@@ -37,6 +38,7 @@ struct FileBrowserPanel: View {
             .backport.onKeyPress("a") { handleAKey(modifiers: $0) }
             .backport.onKeyPress("?") { handleQuestionKey(modifiers: $0) }
             .backport.onKeyPress("g") { handleGKey(modifiers: $0) }
+            .backport.onKeyPress("G") { handleUpperGKey(modifiers: $0) }
             .onChange(of: viewModel.filterText) { text in
                 if text.isEmpty {
                     viewModel.deactivateRecursiveFilter()
@@ -78,10 +80,6 @@ struct FileBrowserPanel: View {
         HStack(spacing: 0) {
             // Left: File tree (always visible)
             VStack(spacing: 0) {
-                if let monitor = worktreeMonitor, monitor.worktrees.count > 1 {
-                    WorktreeNavigationBar(monitor: monitor, viewModel: viewModel)
-                    Divider()
-                }
                 filterBar
                 if !viewModel.gitStatuses.isEmpty {
                     FilterChipsView(viewModel: viewModel)
@@ -299,6 +297,12 @@ struct FileBrowserPanel: View {
     }
 
     private func handleGKey(modifiers: EventModifiers) -> BackportKeyPressResult {
+        guard isFocused else { return .ignored }
+        onSwitchToGitTab?()
+        return .handled
+    }
+
+    private func handleUpperGKey(modifiers: EventModifiers) -> BackportKeyPressResult {
         guard isFocused, !viewModel.gitStatuses.isEmpty else { return .ignored }
         viewModel.toggleUncommittedFilter()
         return .handled
@@ -653,7 +657,7 @@ struct FileBrowserPanel: View {
 // MARK: - Worktree Navigation Bar
 
 /// 显示当前所在 worktree 并提供快速切换的工具栏
-private struct WorktreeNavigationBar: View {
+struct WorktreeNavigationBar: View {
     @ObservedObject var monitor: GitWorktreeMonitor
     @ObservedObject var viewModel: FileBrowserViewModel
 
@@ -725,7 +729,7 @@ private struct WorktreeNavigationBar: View {
         .padding(.vertical, 5)
     }
 
-    private func currentDisplayLabel(for wt: GitWorktree?, fallback: String) -> String {
+    func currentDisplayLabel(for wt: GitWorktree?, fallback: String) -> String {
         guard let wt else { return URL(fileURLWithPath: fallback).lastPathComponent }
         if wt.isMain { return "Main" }
         return wt.branch ?? wt.path

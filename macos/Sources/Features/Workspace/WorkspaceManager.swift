@@ -36,7 +36,8 @@ class WorkspaceManager: ObservableObject {
 
     @MainActor func gitPanelViewModel(for workspaceId: UUID) -> GitPanelViewModel {
         if let vm = gitPanelViewModels[workspaceId] { return vm }
-        let vm = GitPanelViewModel()
+        let savedWidth = workspace(for: workspaceId)?.gitPanelWidth ?? 600
+        let vm = GitPanelViewModel(gitPanelWidth: savedWidth)
         gitPanelViewModels[workspaceId] = vm
         return vm
     }

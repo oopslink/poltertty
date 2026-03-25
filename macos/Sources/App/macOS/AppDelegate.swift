@@ -1136,7 +1136,7 @@ class AppDelegate: NSObject,
         toggleFileBrowser.keyEquivalentModifierMask = .command
         workspaceMenu.addItem(toggleFileBrowser)
 
-        let toggleGitPanel = NSMenuItem(title: "Toggle Git Panel", action: #selector(toggleGitPanel(_:)), keyEquivalent: "g")
+        let toggleGitPanel = NSMenuItem(title: "Toggle Git Tab", action: #selector(toggleGitPanel(_:)), keyEquivalent: "g")
         toggleGitPanel.keyEquivalentModifierMask = [.command, .shift]
         workspaceMenu.addItem(toggleGitPanel)
 
