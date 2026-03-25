@@ -31,6 +31,7 @@ struct DiffView: View {
                             }
                         }
                         .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     }
                 }
             } else {
