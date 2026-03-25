@@ -110,7 +110,6 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
                     if ctrlAPIStore.isMonitorVisible {
                         Divider()
                         CtrlAPIMonitorPanel()
-                            .frame(height: 220)
                     }
                 }
                 // Ignore safe area to extend up in to the titlebar region if we have the "hidden" titlebar style

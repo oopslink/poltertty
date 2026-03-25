@@ -1,27 +1,53 @@
 // macos/Sources/Features/Agent/CtrlServer/CtrlAPIMonitorPanel.swift
 import SwiftUI
+import AppKit
 
 struct CtrlAPIMonitorPanel: View {
     @StateObject private var viewModel = CtrlAPIMonitorViewModel()
+    @State private var panelHeight: CGFloat = 220
+    @GestureState private var dragOffset: CGFloat = 0
+
+    private var effectiveHeight: CGFloat {
+        max(120, min(600, panelHeight - dragOffset))
+    }
 
     var body: some View {
         VStack(spacing: 0) {
+            dragHandle
             toolbar
             Divider()
-            if viewModel.filteredRecords.isEmpty {
-                emptyState
-            } else {
-                VSplitView {
-                    recordList
-                        .frame(minHeight: 60)
-                    if viewModel.selectedRecord != nil {
-                        detailView
-                            .frame(minHeight: 60, idealHeight: 150)
-                    }
-                }
-            }
+            content
         }
-        .frame(minHeight: 100)
+        .frame(height: effectiveHeight)
+        .onChange(of: viewModel.selectedWorkspaceId) { _ in resetSelectionIfNeeded() }
+        .onChange(of: viewModel.selectedSurfaceId) { _ in resetSelectionIfNeeded() }
+    }
+
+    // MARK: - Drag Handle
+
+    private var dragHandle: some View {
+        HStack {
+            Spacer()
+            RoundedRectangle(cornerRadius: 1)
+                .fill(Color.primary.opacity(0.18))
+                .frame(width: 28, height: 2)
+            Spacer()
+        }
+        .frame(height: 4)
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.01))
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .updating($dragOffset) { value, state, _ in
+                    state = value.translation.height
+                }
+                .onEnded { value in
+                    panelHeight = max(120, min(600, panelHeight - value.translation.height))
+                }
+        )
+        .onHover { hovering in
+            if hovering { NSCursor.resizeUpDown.push() } else { NSCursor.pop() }
+        }
     }
 
     // MARK: - Toolbar
@@ -67,6 +93,24 @@ struct CtrlAPIMonitorPanel: View {
         .padding(.vertical, 5)
     }
 
+    // MARK: - Content
+
+    @ViewBuilder
+    private var content: some View {
+        if viewModel.filteredRecords.isEmpty {
+            emptyState
+        } else {
+            HSplitView {
+                recordList
+                    .frame(minWidth: 200)
+                if viewModel.selectedRecord != nil {
+                    detailPane
+                        .frame(minWidth: 240)
+                }
+            }
+        }
+    }
+
     // MARK: - Empty State
 
     private var emptyState: some View {
@@ -107,43 +151,78 @@ struct CtrlAPIMonitorPanel: View {
         }
     }
 
-    // MARK: - Detail View
+    // MARK: - Detail Pane
 
-    private var detailView: some View {
-        HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Request")
-                    .font(.system(size: 10, weight: .semibold))
+    private var detailPane: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Text("Detail")
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                Divider()
-                ScrollView([.horizontal, .vertical]) {
-                    Text(prettyJSON(viewModel.selectedRecord?.requestBody))
-                        .font(.system(size: 11, design: .monospaced))
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
+                Spacer()
+                Button {
+                    viewModel.selectedRecord = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
                 }
+                .buttonStyle(.plain)
+                .help("关闭详情")
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
             Divider()
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Response")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                Divider()
-                ScrollView([.horizontal, .vertical]) {
-                    Text(prettyJSON(viewModel.selectedRecord?.responseBody))
-                        .font(.system(size: 11, design: .monospaced))
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
+
+            if let record = viewModel.selectedRecord {
+                if let error = record.error {
+                    VSplitView {
+                        detailSection(title: "Request", body: record.requestBody, isError: false)
+                            .frame(minHeight: 40)
+                        detailSection(title: "Response", body: record.responseBody, isError: false)
+                            .frame(minHeight: 40)
+                        detailSection(title: "Error", body: error, isError: true)
+                            .frame(minHeight: 40, idealHeight: 80)
+                    }
+                } else {
+                    VSplitView {
+                        detailSection(title: "Request", body: record.requestBody, isError: false)
+                            .frame(minHeight: 40)
+                        detailSection(title: "Response", body: record.responseBody, isError: false)
+                            .frame(minHeight: 40)
+                    }
                 }
             }
         }
         .background(Color(nsColor: .textBackgroundColor).opacity(0.4))
+    }
+
+    private func detailSection(title: String, body: String?, isError: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(isError ? Color.red : Color.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+            Divider()
+            ScrollView([.horizontal, .vertical]) {
+                Text(prettyJSON(body))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(isError ? Color.red : Color.primary)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func resetSelectionIfNeeded() {
+        guard let selected = viewModel.selectedRecord else { return }
+        if !viewModel.filteredRecords.contains(where: { $0.id == selected.id }) {
+            viewModel.selectedRecord = nil
+        }
     }
 
     private func prettyJSON(_ str: String?) -> String {
@@ -193,10 +272,14 @@ struct CtrlAPIRecordRow: View {
         .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
     }
 
-    private var timeString: String {
+    private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "HH:mm:ss"
-        return f.string(from: record.timestamp)
+        return f
+    }()
+
+    private var timeString: String {
+        CtrlAPIRecordRow.timeFormatter.string(from: record.timestamp)
     }
 
     private var displayPath: String {
