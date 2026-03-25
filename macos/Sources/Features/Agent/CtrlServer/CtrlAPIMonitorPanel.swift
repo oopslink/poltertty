@@ -205,14 +205,7 @@ struct CtrlAPIMonitorPanel: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
             Divider()
-            ScrollView([.horizontal, .vertical]) {
-                Text(prettyJSON(body))
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(isError ? Color.red : Color.primary)
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-            }
+            JSONHighlightView(content: prettyJSON(body), isError: isError)
         }
     }
 

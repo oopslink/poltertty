@@ -6,7 +6,6 @@ import AppKit
 struct BottomStatusBarView: View {
     @ObservedObject var gitVM: GitPanelViewModel
     @EnvironmentObject var tabBarVM: TabBarViewModel
-    @ObservedObject private var ctrlAPIStore = CtrlAPIStore.shared
     @EnvironmentObject private var paneSelectorVM: PaneSelectorViewModel
     @State private var showAnnotationPopover: Bool = false
     let pwd: String
@@ -27,7 +26,7 @@ struct BottomStatusBarView: View {
                     .truncationMode(.head)
                     .foregroundColor(.secondary)
                 Spacer()
-                // 右：tmux 按钮 | agent 按钮 | ctrl api 按钮 | git 状态
+                // 右：tmux 按钮 | agent 按钮 | 注释按钮 | git 状态
                 if !hasTmuxAttached {
                     Button(action: {
                         NotificationCenter.default.post(
@@ -58,13 +57,6 @@ struct BottomStatusBarView: View {
                     AnnotationPopoverView(surfaceId: surfaceId)
                         .environmentObject(paneSelectorVM)
                 }
-                Button(action: { ctrlAPIStore.isMonitorVisible.toggle() }) {
-                    Image(systemName: "network")
-                        .font(.system(size: 11))
-                        .foregroundStyle(ctrlAPIStore.isMonitorVisible ? Color.accentColor : Color.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Ctrl API Monitor")
                 if gitVM.isGitRepo {
                     Text("|")
                         .foregroundColor(.secondary)
