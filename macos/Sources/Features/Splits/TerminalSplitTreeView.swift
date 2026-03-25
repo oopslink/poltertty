@@ -145,12 +145,18 @@ private struct TerminalSplitLeafContainer: View {
                       targetId == surfaceView.id else { return }
                 triggerPulse()
             }
-            .overlay(alignment: .topTrailing) {
+            .onAppear {
+                paneSelectorVM.registerPane(surfaceId: surfaceView.id, gitMonitor: statusMonitor)
+            }
+            .onDisappear {
+                paneSelectorVM.unregisterPane(surfaceId: surfaceView.id)
+            }
+            .overlay {
                 if paneSelectorVM.isActive,
-                   let idx = paneSelectorVM.assignments[surfaceView.id] {
-                    PaneBadgeView(label: PaneSelectorViewModel.label(for: idx))
-                        .padding(6)
-                        .transition(.opacity.animation(.easeInOut(duration: 0.15)))
+                   let info = paneSelectorVM.overlayInfos[surfaceView.id] {
+                    PaneOverlayCardView(info: info)
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                        .animation(.easeInOut(duration: 0.15), value: paneSelectorVM.isActive)
                 }
             }
     }
