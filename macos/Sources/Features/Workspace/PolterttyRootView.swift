@@ -480,13 +480,15 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
     private var fileBrowserDivider: some View {
         ZStack {
-            Color(nsColor: .separatorColor)
-                .frame(width: 1)
+            // 悬停时加深边框，方便用户找到拖拽区域
+            Color(nsColor: fileBrowserDividerHovered ? .controlAccentColor : .separatorColor)
+                .frame(width: fileBrowserDividerHovered ? 2 : 1)
+                .animation(.easeInOut(duration: 0.15), value: fileBrowserDividerHovered)
             if fileBrowserDividerHovered {
                 DividerGripHandle()
             }
         }
-        .frame(width: 16)
+        .frame(width: 24)
         .contentShape(Rectangle())
         .onHover { hovering in
             fileBrowserDividerHovered = hovering

@@ -1541,9 +1541,7 @@ extension Ghostty {
 
             // If we have a selection, add copy and path-related items
             if let text = self.accessibilitySelectedText(), text.count > 0 {
-                menu.addItem(withTitle: "Copy", action: #selector(copy(_:)), keyEquivalent: "")
-
-                // If the selected text is a valid file/directory path, add "Open in Finder"
+                // If the selected text is a valid file/directory path, add "Open in Finder" at the top
                 let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 let expandedPath = (trimmedText as NSString).expandingTildeInPath
                 if FileManager.default.fileExists(atPath: expandedPath) {
@@ -1551,6 +1549,8 @@ extension Ghostty {
                     item.setImageIfDesired(systemSymbolName: "folder")
                     item.representedObject = expandedPath
                 }
+
+                menu.addItem(withTitle: "Copy", action: #selector(copy(_:)), keyEquivalent: "")
             }
             menu.addItem(withTitle: "Paste", action: #selector(paste(_:)), keyEquivalent: "")
 

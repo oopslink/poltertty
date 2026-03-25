@@ -331,18 +331,6 @@ struct FileBrowserPanel: View {
                     ShortcutHelpView()
                 }
                 Button {
-                    viewModel.showShortcutHelp.toggle()
-                } label: {
-                    Image(systemName: "questionmark")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Keyboard Shortcuts (?)")
-                .popover(isPresented: $viewModel.showShortcutHelp, arrowEdge: .trailing) {
-                    ShortcutHelpView()
-                }
-                Button {
                     NotificationCenter.default.post(name: .toggleGitPanel, object: nil)
                 } label: {
                     Image(systemName: "arrow.triangle.branch")
