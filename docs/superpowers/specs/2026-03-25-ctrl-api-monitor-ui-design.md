@@ -20,7 +20,13 @@
 
 **文件**: `macos/Sources/Features/Workspace/BottomStatusBarView.swift`
 
-删除以下代码块：
+删除以下代码块（必须删除，否则编译器会报 unused property 警告）：
+
+```swift
+@ObservedObject private var ctrlAPIStore = CtrlAPIStore.shared
+```
+
+以及：
 
 ```swift
 Button(action: { ctrlAPIStore.isMonitorVisible.toggle() }) {
@@ -32,26 +38,25 @@ Button(action: { ctrlAPIStore.isMonitorVisible.toggle() }) {
 .help("Ctrl API Monitor")
 ```
 
-同时删除已不再使用的 `@ObservedObject private var ctrlAPIStore = CtrlAPIStore.shared` 属性声明。
-
 ---
 
-## 改动二：JSON 语法高亮（WKWebView + highlight.js）
+## 改动二：JSON 语法高亮（复用现有 SyntaxHighlighter）
 
-**方案**: 复用项目已有的 `highlight.min.js`（位于 `FileBrowser` 目录），用 `WKWebView` 渲染高亮 JSON。
+**方案**: 复用 `SyntaxHighlightView.swift` 中已有的 `SyntaxHighlighter`（JavaScriptCore + highlight.js），封装一个不带行号 gutter 的轻量 wrapper。
 
-**新增文件**: `macos/Sources/Features/Agent/CtrlServer/HighlightedJSONView.swift`
+**新增文件**: `macos/Sources/Features/Agent/CtrlServer/JSONHighlightView.swift`
 
 实现要点：
-- `NSViewRepresentable` 包装 `WKWebView`
-- 加载内联 HTML，注入 `highlight.min.js`，对 `<pre><code class="language-json">` 执行高亮
-- 使用 `prefers-color-scheme` CSS media query 自动适配系统深浅色
-- 背景色透明，与 detail pane 背景融合
-- WKWebView 原生提供文字选择能力
+- `NSViewRepresentable` 包装单个 `NSTextView`（无 gutter，无 `SyntaxContainerView`）
+- 直接调用 `SyntaxHighlighter().highlight(code, language: "json")` 得到 `NSAttributedString`
+- 背景色用 `AtomOneDark.background`，与现有 FileBrowser 高亮风格一致
+- `NSTextView.isSelectable = true`，支持文字选择
+- 竖向可滚动（`NSScrollView` 包裹），横向不需要（JSON pretty print 通常不超宽）
 
 **修改文件**: `macos/Sources/Features/Agent/CtrlServer/CtrlAPIMonitorPanel.swift`
 
 将 `detailSection` 函数内的：
+
 ```swift
 ScrollView([.horizontal, .vertical]) {
     Text(prettyJSON(body))
@@ -62,10 +67,14 @@ ScrollView([.horizontal, .vertical]) {
         .textSelection(.enabled)
 }
 ```
+
 替换为：
+
 ```swift
-HighlightedJSONView(content: prettyJSON(body), isError: isError)
+JSONHighlightView(content: prettyJSON(body), isError: isError)
 ```
+
+`isError` 为 true 时，跳过语法高亮，直接以红色纯文本渲染（与现有 error section 行为一致）。
 
 外层 `VStack` 结构（标题栏 + Divider + 内容区）保持不变。
 
@@ -86,31 +95,66 @@ Agent
 │   ├── Agent Dashboard                 ⌥⌘D
 │   ├── Agent Notification Center       ⌥⌘N
 │   ├── ─────────────────────────────
-│   └── Controller API Monitor          ⌥⌘I
+│   └── Controller API Monitor          ⌥⌘C
 └── ───────────────────────────────────
 └── Jump to Highest Priority Unread     ⌥⌘U
 ```
 
+注：`⌥⌘I` 已被 Ghostty 内建 Terminal Inspector 占用，Controller API Monitor 改用 `⌥⌘C`（C for Controller）。
+
 ### 具体改动
 
-1. 新建 `NSMenu(title: "Observability")`，将以下现有项移入：
-   - `toggleAgentMonitor` → 改名为 `Agents In Workspace`，保留 `⌥⌘M`
-   - `showAgentDashboard` → `Agent Dashboard`，保留 `⌥⌘D`
-   - `toggleNotificationCenter` → `Agent Notification Center`，保留 `⌥⌘N`
+删除当前 `agentMenu` 中以下 `addItem` 调用：
+- `agentMenu.addItem(toggleAgentMonitor)`
+- `agentMenu.addItem(toggleNotificationCenter)`
+- `agentMenu.addItem(.separator())` （两处 separator 中位于这两项前后的）
+- `agentMenu.addItem(agentDashboard)`
 
-2. 在子菜单末尾加 separator，新增：
-   - `Controller API Monitor`，快捷键 `⌥⌘I`，触发新 selector `toggleCtrlAPIMonitor(_:)`
+新建 `NSMenu(title: "Observability")`，按以下顺序添加：
 
-3. 新增 selector：
-   ```swift
-   @objc func toggleCtrlAPIMonitor(_ sender: Any?) {
-       CtrlAPIStore.shared.isMonitorVisible.toggle()
-   }
-   ```
+```swift
+let observabilityMenu = NSMenu(title: "Observability")
 
-4. `Agent Dashboard` 的行为保持不变（`showAgentDashboard` 打开独立窗口）。
+// Agents In Workspace（原 Toggle Agent Monitor，保留 selector 和快捷键）
+let agentsInWorkspace = NSMenuItem(title: "Agents In Workspace",
+    action: #selector(toggleAgentMonitor(_:)), keyEquivalent: "m")
+agentsInWorkspace.keyEquivalentModifierMask = [.command, .option]
+observabilityMenu.addItem(agentsInWorkspace)
 
-5. `Jump to Highest Priority Unread` 保留在 Agent 顶层菜单（通知操作，非观测工具）。
+// Agent Dashboard（原 showAgentDashboard，保留行为）
+let agentDashboard = NSMenuItem(title: "Agent Dashboard",
+    action: #selector(showAgentDashboard(_:)), keyEquivalent: "d")
+agentDashboard.keyEquivalentModifierMask = [.command, .option]
+observabilityMenu.addItem(agentDashboard)
+
+// Agent Notification Center（原 Toggle Notification Center）
+let notifCenter = NSMenuItem(title: "Agent Notification Center",
+    action: #selector(toggleNotificationCenter(_:)), keyEquivalent: "n")
+notifCenter.keyEquivalentModifierMask = [.command, .option]
+observabilityMenu.addItem(notifCenter)
+
+observabilityMenu.addItem(.separator())
+
+// Controller API Monitor（新增）
+let ctrlMonitor = NSMenuItem(title: "Controller API Monitor",
+    action: #selector(toggleCtrlAPIMonitor(_:)), keyEquivalent: "c")
+ctrlMonitor.keyEquivalentModifierMask = [.command, .option]
+observabilityMenu.addItem(ctrlMonitor)
+
+let observabilityItem = NSMenuItem(title: "Observability", action: nil, keyEquivalent: "")
+observabilityItem.submenu = observabilityMenu
+agentMenu.addItem(observabilityItem)
+```
+
+新增 selector：
+
+```swift
+@objc func toggleCtrlAPIMonitor(_ sender: Any?) {
+    CtrlAPIStore.shared.isMonitorVisible.toggle()
+}
+```
+
+`Jump to Highest Priority Unread`（`⌥⌘U`）保留在 Agent 顶层，位置在 Observability 之后加 separator 后。
 
 ---
 
@@ -118,4 +162,5 @@ Agent
 
 - `CtrlAPIStore`、`CtrlAPIRecord` 数据层不做改动
 - `CtrlAPIMonitorPanel` 布局（拖拽调整高度、HSplitView、过滤器）不做改动
-- highlight.js 本身不做升级或替换
+- `SyntaxHighlighter` / `SyntaxHighlightView` 本身不做改动
+- highlight.js 不做升级或替换
