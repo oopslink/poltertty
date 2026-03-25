@@ -99,15 +99,15 @@ struct CtrlAPIMonitorPanel: View {
     private var content: some View {
         if viewModel.filteredRecords.isEmpty {
             emptyState
-        } else if viewModel.selectedRecord != nil {
+        } else {
             HSplitView {
                 recordList
                     .frame(minWidth: 200)
-                detailPane
-                    .frame(minWidth: 240)
+                if viewModel.selectedRecord != nil {
+                    detailPane
+                        .frame(minWidth: 240)
+                }
             }
-        } else {
-            recordList
         }
     }
 
@@ -272,10 +272,14 @@ struct CtrlAPIRecordRow: View {
         .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
     }
 
-    private var timeString: String {
+    private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "HH:mm:ss"
-        return f.string(from: record.timestamp)
+        return f
+    }()
+
+    private var timeString: String {
+        CtrlAPIRecordRow.timeFormatter.string(from: record.timestamp)
     }
 
     private var displayPath: String {
