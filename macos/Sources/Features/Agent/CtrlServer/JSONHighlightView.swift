@@ -70,7 +70,8 @@ struct JSONHighlightView: NSViewRepresentable {
         }
 
         DispatchQueue.main.async {
-            (scrollView.documentView as? NSTextView)?.textStorage?.setAttributedString(attributed)
+            guard let textView = scrollView.documentView as? NSTextView else { return }
+            textView.textStorage?.setAttributedString(attributed)
         }
     }
 
