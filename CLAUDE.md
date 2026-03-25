@@ -14,3 +14,4 @@ make init-git-hooks
 - **特性开发**: 必须遵循 [docs/development-rules.md](docs/development-rules.md) 规范
 - **Workspace 开发**: 必须先阅读 [docs/workspace-rules.md](docs/workspace-rules.md)
 - **Titlebar 定制**: 必须先阅读 [docs/macos-titlebar-rules.md](docs/macos-titlebar-rules.md)
+- **UI/UX 设计**: 必须遵循 [docs/ui-ux-rules.md](docs/ui-ux-rules.md) 原则
