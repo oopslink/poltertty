@@ -4,7 +4,7 @@ import SwiftUI
 import AppKit
 
 struct BottomStatusBarView: View {
-    @ObservedObject var monitor: GitStatusMonitor
+    @ObservedObject var gitVM: GitPanelViewModel
     @EnvironmentObject var tabBarVM: TabBarViewModel
     @ObservedObject private var ctrlAPIStore = CtrlAPIStore.shared
     let pwd: String
@@ -16,7 +16,6 @@ struct BottomStatusBarView: View {
     }
 
     var body: some View {
-        let status = monitor.status
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 6) {
@@ -51,31 +50,16 @@ struct BottomStatusBarView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Ctrl API Monitor")
-                if status.isGitRepo {
+                if gitVM.isGitRepo {
                     Text("|")
                         .foregroundColor(.secondary)
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.branch")
-                            .foregroundColor(status.isLinkedWorktree ? Color(hex: "#cba6f7") ?? .purple : .secondary)
-                        if status.isLinkedWorktree {
-                            Text(String(localized: "worktree"))
-                                .font(.system(size: 9))
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .fill((Color(hex: "#cba6f7") ?? .purple).opacity(0.15))
-                                )
-                                .foregroundColor(Color(hex: "#cba6f7") ?? .purple)
-                        }
-                        Text(status.branch ?? "detached")
+                            .foregroundColor(.secondary)
+                        Text(gitVM.branch ?? "detached")
                             .foregroundColor(.primary)
-                        if status.added > 0 {
-                            Text("+\(status.added)")
-                                .foregroundColor(.green)
-                        }
-                        if status.modified > 0 {
-                            Text("~\(status.modified)")
+                        if gitVM.changedCount > 0 {
+                            Text("~\(gitVM.changedCount)")
                                 .foregroundColor(.yellow)
                         }
                     }
