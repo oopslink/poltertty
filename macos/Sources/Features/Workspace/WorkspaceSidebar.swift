@@ -405,16 +405,21 @@ struct WorkspaceSidebar: View {
                 }
                 .buttonStyle(.plain)
                 .help("Launch Agent")
-                SidebarToggleButton(symbol: "chevron.left") {
-                    isCollapsed = true
-                    UserDefaults.standard.set(true, forKey: "poltertty.sidebarCollapsed")
-                }
                 Button(action: { isCreating = true }) {
                     Image(systemName: "plus")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
+                SidebarHeaderButton(
+                    symbol: "arrow.triangle.branch",
+                    action: { NotificationCenter.default.post(name: .toggleGitPanel, object: nil) }
+                )
+                .help("Git Panel (⌘⇧G)")
+                SidebarToggleButton(symbol: "chevron.left") {
+                    isCollapsed = true
+                    UserDefaults.standard.set(true, forKey: "poltertty.sidebarCollapsed")
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -997,6 +1002,38 @@ struct CollapsedGroupIcon: View {
             Button("Delete Group", role: .destructive) { onDelete() }
         }
         .onTapGesture(count: 2) {}  // 阻止双击透传
+    }
+}
+
+// MARK: - Sidebar Header Button (带 hover 背景的通用图标按钮)
+
+private struct SidebarHeaderButton: View {
+    let symbol: String
+    let action: () -> Void
+    var isActive: Bool = false
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(
+                    isActive
+                        ? Color.accentColor
+                        : (isHovering ? Color.primary : Color.secondary)
+                )
+                .frame(width: 24, height: 24)
+                .background(
+                    isActive
+                        ? Color.accentColor.opacity(0.15)
+                        : (isHovering ? Color.primary.opacity(0.1) : Color.clear)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+                .animation(.easeInOut(duration: 0.15), value: isHovering)
+                .animation(.easeInOut(duration: 0.15), value: isActive)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
     }
 }
 

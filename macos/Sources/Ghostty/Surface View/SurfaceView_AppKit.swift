@@ -1545,10 +1545,11 @@ extension Ghostty {
 
                 // If the selected text is a valid file/directory path, add "Open in Finder"
                 let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                if FileManager.default.fileExists(atPath: trimmedText) {
+                let expandedPath = (trimmedText as NSString).expandingTildeInPath
+                if FileManager.default.fileExists(atPath: expandedPath) {
                     item = menu.addItem(withTitle: "Open in Finder", action: #selector(openInFinder(_:)), keyEquivalent: "")
                     item.setImageIfDesired(systemSymbolName: "folder")
-                    item.representedObject = trimmedText
+                    item.representedObject = expandedPath
                 }
             }
             menu.addItem(withTitle: "Paste", action: #selector(paste(_:)), keyEquivalent: "")
