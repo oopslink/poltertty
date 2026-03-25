@@ -497,6 +497,29 @@ final class CtrlServer {
                     ],
                     "required": ["paneId", "direction"]
                 ]
+            ],
+            [
+                "name": "set_pane_annotation",
+                "description": "Set or clear annotation (purpose label) for a pane",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "paneId": ["type": "string", "description": "UUID of the target pane"],
+                        "annotation": ["type": "string", "description": "Annotation text (empty or null to clear)"]
+                    ],
+                    "required": ["paneId"]
+                ]
+            ],
+            [
+                "name": "get_pane_annotation",
+                "description": "Get the annotation of a pane",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "paneId": ["type": "string", "description": "UUID of the target pane"]
+                    ],
+                    "required": ["paneId"]
+                ]
             ]
         ]
         sendRPCResult(connection, id: id, result: ["tools": tools], context: context)

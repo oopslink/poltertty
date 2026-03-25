@@ -4,8 +4,10 @@ import SwiftUI
 import AppKit
 
 struct BottomStatusBarView: View {
-    @ObservedObject var monitor: GitStatusMonitor
+    @ObservedObject var gitVM: GitPanelViewModel
     @EnvironmentObject var tabBarVM: TabBarViewModel
+    @EnvironmentObject private var paneSelectorVM: PaneSelectorViewModel
+    @State private var showAnnotationPopover: Bool = false
     let pwd: String
     let isFocused: Bool
     let surfaceId: UUID
@@ -15,7 +17,6 @@ struct BottomStatusBarView: View {
     }
 
     var body: some View {
-        let status = monitor.status
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 6) {
@@ -25,7 +26,7 @@ struct BottomStatusBarView: View {
                     .truncationMode(.head)
                     .foregroundColor(.secondary)
                 Spacer()
-                // 右：tmux 按钮 | agent 按钮 | git 状态
+                // 右：tmux 按钮 | agent 按钮 | 注释按钮 | git 状态
                 if !hasTmuxAttached {
                     Button(action: {
                         NotificationCenter.default.post(
@@ -43,31 +44,29 @@ struct BottomStatusBarView: View {
                     .help("Attach tmux session")
                 }
                 AgentButtonView(surfaceId: surfaceId)
-                if status.isGitRepo {
+                Button(action: { showAnnotationPopover = true }) {
+                    Image(systemName: "tag")
+                        .font(.system(size: 11))
+                        .foregroundStyle(
+                            paneSelectorVM.annotations[surfaceId] != nil ? Color.accentColor : Color.secondary
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("设置 pane 注释")
+                .popover(isPresented: $showAnnotationPopover) {
+                    AnnotationPopoverView(surfaceId: surfaceId)
+                        .environmentObject(paneSelectorVM)
+                }
+                if gitVM.isGitRepo {
                     Text("|")
                         .foregroundColor(.secondary)
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.triangle.branch")
-                            .foregroundColor(status.isLinkedWorktree ? Color(hex: "#cba6f7") ?? .purple : .secondary)
-                        if status.isLinkedWorktree {
-                            Text(String(localized: "worktree"))
-                                .font(.system(size: 9))
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 1)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 3)
-                                        .fill((Color(hex: "#cba6f7") ?? .purple).opacity(0.15))
-                                )
-                                .foregroundColor(Color(hex: "#cba6f7") ?? .purple)
-                        }
-                        Text(status.branch ?? "detached")
+                            .foregroundColor(.secondary)
+                        Text(gitVM.branch ?? "detached")
                             .foregroundColor(.primary)
-                        if status.added > 0 {
-                            Text("+\(status.added)")
-                                .foregroundColor(.green)
-                        }
-                        if status.modified > 0 {
-                            Text("~\(status.modified)")
+                        if gitVM.changedCount > 0 {
+                            Text("~\(gitVM.changedCount)")
                                 .foregroundColor(.yellow)
                         }
                     }

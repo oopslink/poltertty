@@ -2564,7 +2564,8 @@ extension TerminalController {
                     tabId: tab.id,
                     workspaceId: wsId,
                     isActive: isActive,
-                    title: tabBarViewModel.tabs.first(where: { $0.id == tab.id })?.title
+                    title: tabBarViewModel.tabs.first(where: { $0.id == tab.id })?.title,
+                    annotation: PaneSelectorViewModel.shared.annotations[surface.id]
                 ))
             }
         }

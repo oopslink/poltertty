@@ -18,6 +18,7 @@ extension Notification.Name {
     static let toggleNotificationCenter = Notification.Name("poltertty.toggleNotificationCenter")
     static let jumpToHighestPriorityUnread = Notification.Name("poltertty.jumpToHighestPriorityUnread")
     static let toggleAgentDashboard = Notification.Name("poltertty.toggleAgentDashboard")
+    static let toggleGitPanel = Notification.Name("poltertty.toggleGitPanel")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -55,6 +56,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
     @ObservedObject private var fileBrowserVM: FileBrowserViewModel
     @ObservedObject private var agentMonitorVM: AgentMonitorViewModel
+    @ObservedObject private var gitPanelVM: GitPanelViewModel
     @ObservedObject var tabBarViewModel: TabBarViewModel
     let workspaceAccentColor: Color
     let onSwitchTab: ((UUID) -> Void)?
@@ -115,6 +117,14 @@ struct PolterttyRootView<TerminalContent: View>: View {
             self._agentMonitorVM = ObservedObject(
                 wrappedValue: AgentMonitorViewModel(workspaceId: UUID())
             )
+        }
+
+        if let wsId = workspaceId {
+            self._gitPanelVM = ObservedObject(
+                wrappedValue: WorkspaceManager.shared.gitPanelViewModel(for: wsId)
+            )
+        } else {
+            self._gitPanelVM = ObservedObject(wrappedValue: GitPanelViewModel())
         }
 
     }
@@ -233,6 +243,13 @@ struct PolterttyRootView<TerminalContent: View>: View {
                             )
 
                             fileBrowserDivider
+
+                            if gitPanelVM.isVisible {
+                                GitPanelView(vm: gitPanelVM)
+                                    .frame(minWidth: 500, maxWidth: 900)
+                                Divider()
+                            }
+
                             terminalAreaView
                         }
                     } else {
@@ -313,6 +330,17 @@ struct PolterttyRootView<TerminalContent: View>: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleAgentMonitor)) { _ in
             agentMonitorVM.toggle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleGitPanel)) { _ in
+            gitPanelVM.isVisible.toggle()
+        }
+        .task(id: workspaceId) {
+            if let wsId = workspaceId,
+               let ws = WorkspaceManager.shared.workspace(for: wsId),
+               !ws.rootDir.isEmpty {
+                await gitPanelVM.load(rootDir: ws.rootDirExpanded)
+                fileBrowserVM.updateGitRepo(gitPanelVM.repo)
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleNotificationCenter)) { _ in
             notificationCenterVisible.toggle()
@@ -422,6 +450,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
         // tab 切换通过 onSwitchTab 回调更新 controller 的 surfaceTree
         terminalView
             .environmentObject(tabBarViewModel)
+            .environmentObject(gitPanelVM)
     }
 
     private var fileBrowserDivider: some View {

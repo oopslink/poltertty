@@ -14,6 +14,9 @@ class WorkspaceManager: ObservableObject {
     // MARK: - File Browser ViewModels (per-workspace)
     private var fileBrowserViewModels: [UUID: FileBrowserViewModel] = [:]
 
+    // MARK: - Git Panel ViewModels (per-workspace)
+    private var gitPanelViewModels: [UUID: GitPanelViewModel] = [:]
+
     func fileBrowserViewModel(for workspaceId: UUID) -> FileBrowserViewModel {
         if let existing = fileBrowserViewModels[workspaceId] { return existing }
         let ws = workspace(for: workspaceId)
@@ -29,6 +32,17 @@ class WorkspaceManager: ObservableObject {
     func removeFileBrowserViewModel(for workspaceId: UUID) {
         fileBrowserViewModels[workspaceId]?.stop()
         fileBrowserViewModels.removeValue(forKey: workspaceId)
+    }
+
+    func gitPanelViewModel(for workspaceId: UUID) -> GitPanelViewModel {
+        if let vm = gitPanelViewModels[workspaceId] { return vm }
+        let vm = GitPanelViewModel()
+        gitPanelViewModels[workspaceId] = vm
+        return vm
+    }
+
+    func removeGitPanelViewModel(for workspaceId: UUID) {
+        gitPanelViewModels.removeValue(forKey: workspaceId)
     }
 
     /// Only formal (non-temporary) workspaces
@@ -157,6 +171,7 @@ class WorkspaceManager: ObservableObject {
         for id in tempIds {
             activeWindows.removeValue(forKey: id)
             removeFileBrowserViewModel(for: id)
+            removeGitPanelViewModel(for: id)
         }
         workspaces.removeAll { $0.isTemporary }
     }
@@ -193,6 +208,7 @@ class WorkspaceManager: ObservableObject {
         workspaces.removeAll { $0.id == id }
         activeWindows.removeValue(forKey: id)
         removeFileBrowserViewModel(for: id)
+        removeGitPanelViewModel(for: id)
         let dirPath = workspaceDir(for: id)
         try? FileManager.default.removeItem(atPath: dirPath)
         let legacyPath = legacySnapshotPath(for: id)

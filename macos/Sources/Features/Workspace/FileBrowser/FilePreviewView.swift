@@ -8,12 +8,14 @@ struct FilePreviewView: View {
     let isFullscreen: Bool
     let onToggleFullscreen: () -> Void
     var onClose: (() -> Void)? = nil
-    var rootDir: String = ""
-    var gitStatus: GitStatus? = nil
+    var gitDelta: GitDelta? = nil
+    var gitRepo: GitRepository? = nil
 
     @State private var content: PreviewContent = .loading
     @State private var fileInfo: FileInfo?
     @State private var showDiff: Bool = false
+    @State private var loadedDiff: GitFileDiff? = nil
+    @State private var isDiffLoading: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -39,6 +41,17 @@ struct FilePreviewView: View {
             fileInfo = nil
             // Load preview (automatically cancelled when URL changes or view disappears)
             await loadPreview()
+        }
+        .task(id: "\(url.path)-\(showDiff)-\(gitDelta.map { $0.symbol } ?? "nil")") {
+            guard showDiff, let repo = gitRepo,
+                  gitDelta == .modified || gitDelta == .added || gitDelta == .untracked else {
+                return
+            }
+            isDiffLoading = true
+            loadedDiff = nil
+            let staged = gitDelta == .added
+            loadedDiff = try? await repo.workingDiff(path: url.path, staged: staged)
+            isDiffLoading = false
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             // Enable keyboard shortcuts when window is active
@@ -69,8 +82,8 @@ struct FilePreviewView: View {
 
             Spacer()
 
-            // Diff 切换按钮（仅修改/已添加文件显示）
-            if gitStatus == .modified || gitStatus == .added {
+            // Diff 切换按钮（仅修改/已添加/未追踪文件显示）
+            if gitDelta == .modified || gitDelta == .added || gitDelta == .untracked {
                 Button(action: { showDiff.toggle() }) {
                     Text("Diff")
                         .font(.system(size: 10, weight: showDiff ? .semibold : .regular))
@@ -135,12 +148,13 @@ struct FilePreviewView: View {
 
     @ViewBuilder
     private var contentView: some View {
-        if showDiff && (gitStatus == .modified || gitStatus == .added) {
-            DiffView(
-                rootDir: rootDir,
-                fileURL: url,
-                isStaged: gitStatus == .added
-            )
+        if showDiff && (gitDelta == .modified || gitDelta == .added || gitDelta == .untracked) {
+            if isDiffLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                DiffView(diff: loadedDiff, title: nil)
+            }
         } else {
             switch content {
             case .loading:

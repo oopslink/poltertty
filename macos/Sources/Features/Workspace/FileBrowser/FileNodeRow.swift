@@ -5,7 +5,7 @@ import AppKit
 struct FileNodeRow: View {
     let node: FileNode
     let depth: Int
-    let gitStatus: GitStatus?
+    let gitDelta: GitDelta?
     let isSelected: Bool
     let onToggleExpand: () -> Void
     let onSingleClick: () -> Void
@@ -24,6 +24,8 @@ struct FileNodeRow: View {
     let onMoveSelected: (() -> Void)?   // 触发"移动到…"面板
     var onStage: (() -> Void)? = nil
     var onUnstage: (() -> Void)? = nil
+    var onShowFileHistory: ((String) -> Void)? = nil
+    var onDiscardChanges: ((String) -> Void)? = nil
 
     var isRenaming: Bool = false
     var renameText: Binding<String>? = nil
@@ -77,7 +79,7 @@ struct FileNodeRow: View {
             Spacer(minLength: 4)
 
             // Git status badge
-            if let status = gitStatus {
+            if let status = gitDelta {
                 Text(status.symbol)
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(Color(hex: status.colorHex) ?? .secondary)
@@ -137,13 +139,24 @@ struct FileNodeRow: View {
                 // Git 操作（仅非目录文件）
                 if !node.isDirectory {
                     Divider()
-                    if gitStatus == .modified || gitStatus == .untracked {
+                    if gitDelta == .modified || gitDelta == .untracked {
                         Button("Stage") { onStage?() }
-                    } else if gitStatus == .added {
+                    } else if gitDelta == .added {
                         Button("Unstage") { onUnstage?() }
-                    } else if gitStatus == .deleted {
+                    } else if gitDelta == .deleted {
                         Button("Stage Deletion") { onStage?() }
                         Button("Unstage") { onUnstage?() }
+                    }
+                    if let status = gitDelta, status != .untracked {
+                        Divider()
+                        Button("Show File History") {
+                            onShowFileHistory?(node.url.path)
+                        }
+                        if status == .modified || status == .deleted {
+                            Button("Discard Changes") {
+                                onDiscardChanges?(node.url.path)
+                            }
+                        }
                     }
                 }
             }

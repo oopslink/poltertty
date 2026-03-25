@@ -8,4 +8,5 @@ struct PaneInfo {
     let workspaceId: UUID
     let isActive: Bool
     let title: String?
+    let annotation: String?
 }

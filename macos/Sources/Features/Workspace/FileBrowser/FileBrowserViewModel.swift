@@ -6,10 +6,10 @@ final class FileBrowserViewModel: ObservableObject {
     // MARK: - Published State
 
     @Published var rootNodes: [FileNode] = []
-    @Published var gitStatuses: [String: GitStatus] = [:]
+    @Published var gitStatuses: [String: GitDelta] = [:]
     @Published var filterText: String = ""
     @Published var activeExtensions: Set<String> = []
-    @Published var activeGitStatuses: Set<GitStatus> = []
+    @Published var activeGitStatuses: Set<GitDelta> = []
     @Published var showHiddenFiles: Bool = false
     @Published var isVisible: Bool
     @Published var panelWidth: CGFloat
@@ -43,6 +43,7 @@ final class FileBrowserViewModel: ObservableObject {
 
     let rootDir: String
     private var monitor: FileSystemMonitor?
+    private(set) var gitRepo: GitRepository?
     private var isRecursiveFilter: Bool = false
     private var savedExpandedUrls: Set<URL> = []
 
@@ -242,7 +243,7 @@ final class FileBrowserViewModel: ObservableObject {
                 }
                 // Git 状态过滤
                 if !activeGitStatuses.isEmpty {
-                    let status = gitStatus(for: node.url)
+                    let status = gitDelta(for: node.url)
                     guard let status, activeGitStatuses.contains(status) else { continue }
                 }
                 result.append(node)
@@ -307,27 +308,66 @@ final class FileBrowserViewModel: ObservableObject {
 
     // MARK: - Git Status
 
-    func refreshGitStatus() async {
-        let statuses = await GitStatusService.fetchStatus(rootDir: rootDir)
-        await MainActor.run { gitStatuses = statuses }
+    func updateGitRepo(_ repo: GitRepository?) {
+        self.gitRepo = repo
     }
+
+    func refreshGitStatus() async {
+        guard let repo = gitRepo else {
+            // 无 GitRepository 时回退到 GitStatusService（过渡期兼容）
+            let statuses = await GitStatusService.fetchStatus(rootDir: rootDir)
+            await MainActor.run { gitStatuses = statuses }
+            return
+        }
+        guard let changes = try? await repo.status() else { return }
+        // 将 GitChange[] 转换为 [absolutePath: GitDelta] 字典
+        var newStatuses: [String: GitDelta] = [:]
+        for change in changes {
+            let fullPath = rootDir + "/" + change.path
+            // 同一文件可能同时出现在 staged 和 unstaged，取 staged 优先（优先级更高的保留）
+            if let existing = newStatuses[fullPath] {
+                newStatuses[fullPath] = max(existing, change.delta)
+            } else {
+                newStatuses[fullPath] = change.delta
+            }
+        }
+        await MainActor.run { gitStatuses = newStatuses }
+    }
+
+    @Published var gitError: String?
 
     func stageFiles(_ urls: [URL]) {
         Task {
-            try? await GitStatusService.stage(rootDir: rootDir, urls: urls)
+            do {
+                if let repo = gitRepo {
+                    try await repo.stage(paths: urls.map(\.path))
+                } else {
+                    try await GitStatusService.stage(rootDir: rootDir, urls: urls)
+                }
+            } catch {
+                await MainActor.run { gitError = error.localizedDescription }
+            }
             await refreshGitStatus()
         }
     }
 
     func unstageFiles(_ urls: [URL]) {
         Task {
-            try? await GitStatusService.unstage(rootDir: rootDir, urls: urls)
+            do {
+                if let repo = gitRepo {
+                    try await repo.unstage(paths: urls.map(\.path))
+                } else {
+                    try await GitStatusService.unstage(rootDir: rootDir, urls: urls)
+                }
+            } catch {
+                await MainActor.run { gitError = error.localizedDescription }
+            }
             await refreshGitStatus()
         }
     }
 
-    /// Returns git status for a URL; for directories returns max of children's statuses
-    func gitStatus(for url: URL) -> GitStatus? {
+    /// 返回 URL 对应的 GitDelta；目录返回子文件中优先级最高的状态
+    func gitDelta(for url: URL) -> GitDelta? {
         if let direct = gitStatuses[url.path] { return direct }
         let prefix = url.path + "/"
         return gitStatuses
@@ -582,7 +622,7 @@ final class FileBrowserViewModel: ObservableObject {
         }
     }
 
-    func toggleGitStatusFilter(_ status: GitStatus) {
+    func toggleGitStatusFilter(_ status: GitDelta) {
         if activeGitStatuses.contains(status) {
             activeGitStatuses.remove(status)
         } else {

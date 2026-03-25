@@ -22,6 +22,27 @@ final class PaneSelectorViewModel: ObservableObject {
     /// surfaceId → 0-indexed pane 序号（0-35）
     @Published var assignments: [UUID: Int] = [:]
 
+    // MARK: - 概览面板数据
+
+    struct PaneOverlayInfo {
+        let index: Int
+        let annotation: String?
+        let shellName: String
+        let foregroundProcess: String?  // nil = 空闲（与 shellName 相同时省略）
+        let duration: TimeInterval
+        let pwd: String
+        let gitBranch: String?
+        let gitDirty: Bool
+    }
+
+    @Published var overlayInfos: [UUID: PaneOverlayInfo] = [:]
+
+    // MARK: - Annotation 存储
+
+    @Published var annotations: [UUID: String] = [:]
+    var createdAtMap: [UUID: Date] = [:]
+    var gitMonitors: [UUID: GitStatusMonitor] = [:]
+
     private var keyMonitor: Any?
     private var cancellables: Set<AnyCancellable> = []
     private var activeWindow: NSWindow?
@@ -88,6 +109,52 @@ final class PaneSelectorViewModel: ObservableObject {
 
         assignments = newAssignments
         activeLeaves = leaves
+
+        // 采集概览面板信息（一次性快照）
+        let shellPids: [pid_t] = leaves.prefix(36).map { surface in
+            // 优先从 AgentSession 获取 shellPid
+            let agentPid = AgentService.shared.sessionManager.sessions[surface.id]?.shellPid ?? 0
+            if agentPid > 0 { return pid_t(agentPid) }
+            // fallback: 从 GitStatusMonitor 的 shellPid 获取（如果已设置）
+            return gitMonitors[surface.id]?.shellPid ?? 0
+        }
+
+        // 批量查询进程信息（只扫描一次进程表）
+        let processInfos = ProcessTreeCwd.foregroundProcesses(shellPids: shellPids)
+
+        var newOverlayInfos: [UUID: PaneOverlayInfo] = [:]
+        for (index, surface) in leaves.prefix(36).enumerated() {
+            let sid = surface.id
+            let shellPid = shellPids[index]
+            let procInfo = processInfos[shellPid]
+
+            let shellName = procInfo?.shellName ?? "shell"
+            let fgProcess: String? = {
+                guard let info = procInfo else { return nil }
+                return info.processName != info.shellName ? info.processName : nil
+            }()
+
+            let now = Date()
+            let duration = createdAtMap[sid].map { now.timeIntervalSince($0) } ?? 0
+
+            let pwd = surface.pwd ?? "~"
+            let gitStatus = gitMonitors[sid]?.status
+            let gitBranch = gitStatus?.isGitRepo == true ? gitStatus?.branch : nil
+            let gitDirty = (gitStatus?.added ?? 0) + (gitStatus?.modified ?? 0) > 0
+
+            newOverlayInfos[sid] = PaneOverlayInfo(
+                index: index,
+                annotation: annotations[sid],
+                shellName: shellName,
+                foregroundProcess: fgProcess,
+                duration: duration,
+                pwd: pwd,
+                gitBranch: gitBranch,
+                gitDirty: gitDirty
+            )
+        }
+        overlayInfos = newOverlayInfos
+
         isActive = true
 
         // 注册 keyDown monitor（必须保存引用以便移除）
@@ -102,10 +169,38 @@ final class PaneSelectorViewModel: ObservableObject {
     func deactivate() {
         isActive = false
         assignments = [:]
+        overlayInfos = [:]
         activeLeaves = []
         activeWindow = nil
         if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
         Self.logger.debug("deactivated")
+    }
+
+    // MARK: - Pane 注册（由 TerminalSplitLeafContainer 调用）
+
+    func registerPane(surfaceId: UUID, gitMonitor: GitStatusMonitor) {
+        if createdAtMap[surfaceId] == nil {
+            createdAtMap[surfaceId] = Date()
+        }
+        gitMonitors[surfaceId] = gitMonitor
+    }
+
+    func unregisterPane(surfaceId: UUID) {
+        gitMonitors.removeValue(forKey: surfaceId)
+        // 不移除 createdAtMap 和 annotations——pane 可能只是暂时 disappear（如 zoom 切换）
+    }
+
+    // MARK: - 格式化
+
+    static func formatDuration(_ interval: TimeInterval) -> String {
+        let totalSeconds = Int(interval)
+        if totalSeconds < 60 { return "< 1m" }
+        let minutes = totalSeconds / 60
+        let hours = minutes / 60
+        let days = hours / 24
+        if days > 0 { return "\(days)d\(hours % 24)h" }
+        if hours > 0 { return "\(hours)h\(minutes % 60)m" }
+        return "\(minutes)m"
     }
 
     // MARK: - 键盘事件处理

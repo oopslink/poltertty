@@ -24,7 +24,7 @@ struct FilterChipsView: View {
                 }
 
                 // Git 状态 Chips
-                ForEach(gitStatusItems, id: \.status.rawValue) { item in
+                ForEach(gitStatusItems, id: \.status.symbol) { item in
                     FileBrowserFilterChip(
                         label: item.label,
                         count: nil,
@@ -53,7 +53,7 @@ struct FilterChipsView: View {
     }
 
     private struct GitStatusItem {
-        let status: GitStatus
+        let status: GitDelta
         let label: String
     }
 
