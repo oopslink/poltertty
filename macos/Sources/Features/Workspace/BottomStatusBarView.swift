@@ -7,6 +7,8 @@ struct BottomStatusBarView: View {
     @ObservedObject var gitVM: GitPanelViewModel
     @EnvironmentObject var tabBarVM: TabBarViewModel
     @ObservedObject private var ctrlAPIStore = CtrlAPIStore.shared
+    @EnvironmentObject private var paneSelectorVM: PaneSelectorViewModel
+    @State private var showAnnotationPopover: Bool = false
     let pwd: String
     let isFocused: Bool
     let surfaceId: UUID
@@ -43,6 +45,19 @@ struct BottomStatusBarView: View {
                     .help("Attach tmux session")
                 }
                 AgentButtonView(surfaceId: surfaceId)
+                Button(action: { showAnnotationPopover = true }) {
+                    Image(systemName: "tag")
+                        .font(.system(size: 11))
+                        .foregroundStyle(
+                            paneSelectorVM.annotations[surfaceId] != nil ? Color.accentColor : Color.secondary
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("设置 pane 注释")
+                .popover(isPresented: $showAnnotationPopover) {
+                    AnnotationPopoverView(surfaceId: surfaceId)
+                        .environmentObject(paneSelectorVM)
+                }
                 Button(action: { ctrlAPIStore.isMonitorVisible.toggle() }) {
                     Image(systemName: "network")
                         .font(.system(size: 11))
