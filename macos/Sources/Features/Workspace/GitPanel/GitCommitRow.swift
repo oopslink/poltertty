@@ -28,13 +28,16 @@ struct GitCommitRow: View {
 
                 Spacer()
 
-                Text(relativeDate(commit.date))
+                Text(commit.date.relativeShort)
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Commit \(commit.shortId): \(commit.message)")
+            .accessibilityHint(isExpanded ? "Collapse" : "Expand to see changed files")
             .onTapGesture { onExpand() }
 
             // 展开后的文件列表
@@ -74,10 +77,4 @@ struct GitCommitRow: View {
         }
     }
 
-    private func relativeDate(_ date: Date) -> String {
-        let interval = Date().timeIntervalSince(date)
-        if interval < 3600 { return "\(Int(interval / 60))m" }
-        if interval < 86400 { return "\(Int(interval / 3600))h" }
-        return "\(Int(interval / 86400))d"
-    }
 }

@@ -52,7 +52,7 @@ struct FileHistorySheet: View {
                                     .font(.system(size: 10, design: .monospaced))
                                     .foregroundColor(.secondary)
                                 Spacer()
-                                Text(relativeDate(commit.date))
+                                Text(commit.date.relativeShortAgo)
                                     .font(.system(size: 10))
                                     .foregroundColor(.secondary)
                             }
@@ -112,10 +112,4 @@ struct FileHistorySheet: View {
         }
     }
 
-    private func relativeDate(_ date: Date) -> String {
-        let interval = Date().timeIntervalSince(date)
-        if interval < 3600 { return "\(Int(interval / 60))m ago" }
-        if interval < 86400 { return "\(Int(interval / 3600))h ago" }
-        return "\(Int(interval / 86400))d ago"
-    }
 }

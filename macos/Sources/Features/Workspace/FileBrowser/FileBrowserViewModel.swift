@@ -334,12 +334,18 @@ final class FileBrowserViewModel: ObservableObject {
         await MainActor.run { gitStatuses = newStatuses }
     }
 
+    @Published var gitError: String?
+
     func stageFiles(_ urls: [URL]) {
         Task {
-            if let repo = gitRepo {
-                try? await repo.stage(paths: urls.map(\.path))
-            } else {
-                try? await GitStatusService.stage(rootDir: rootDir, urls: urls)
+            do {
+                if let repo = gitRepo {
+                    try await repo.stage(paths: urls.map(\.path))
+                } else {
+                    try await GitStatusService.stage(rootDir: rootDir, urls: urls)
+                }
+            } catch {
+                await MainActor.run { gitError = error.localizedDescription }
             }
             await refreshGitStatus()
         }
@@ -347,10 +353,14 @@ final class FileBrowserViewModel: ObservableObject {
 
     func unstageFiles(_ urls: [URL]) {
         Task {
-            if let repo = gitRepo {
-                try? await repo.unstage(paths: urls.map(\.path))
-            } else {
-                try? await GitStatusService.unstage(rootDir: rootDir, urls: urls)
+            do {
+                if let repo = gitRepo {
+                    try await repo.unstage(paths: urls.map(\.path))
+                } else {
+                    try await GitStatusService.unstage(rootDir: rootDir, urls: urls)
+                }
+            } catch {
+                await MainActor.run { gitError = error.localizedDescription }
             }
             await refreshGitStatus()
         }

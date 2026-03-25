@@ -50,7 +50,7 @@ struct FilePreviewView: View {
             isDiffLoading = true
             loadedDiff = nil
             let staged = gitDelta == .added
-            loadedDiff = try? repo.workingDiff(path: url.path, staged: staged)
+            loadedDiff = try? await repo.workingDiff(path: url.path, staged: staged)
             isDiffLoading = false
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in

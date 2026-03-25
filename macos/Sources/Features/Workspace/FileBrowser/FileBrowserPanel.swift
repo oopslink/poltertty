@@ -500,7 +500,14 @@ struct FileBrowserPanel: View {
             },
             onDiscardChanges: { path in
                 Task {
-                    try? await viewModel.gitRepo?.discard(paths: [path])
+                    do {
+                        try await viewModel.gitRepo?.discard(paths: [path])
+                    } catch {
+                        await MainActor.run {
+                            moveErrorMessage = "Discard failed: \(error.localizedDescription)"
+                            showMoveError = true
+                        }
+                    }
                     await viewModel.refreshGitStatus()
                 }
             },

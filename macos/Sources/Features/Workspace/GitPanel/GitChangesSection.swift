@@ -79,6 +79,7 @@ struct GitChangesSection: View {
                 .buttonStyle(.plain)
                 .foregroundColor(.secondary)
                 .help("Unstage")
+                .accessibilityLabel("Unstage \(URL(fileURLWithPath: change.path).lastPathComponent)")
             } else {
                 Button(action: { Task { await vm.stage(change) } }) {
                     Image(systemName: "plus.circle")
@@ -87,6 +88,7 @@ struct GitChangesSection: View {
                 .buttonStyle(.plain)
                 .foregroundColor(.secondary)
                 .help("Stage")
+                .accessibilityLabel("Stage \(URL(fileURLWithPath: change.path).lastPathComponent)")
 
                 Button(action: { discardConfirm = change }) {
                     Image(systemName: "xmark.circle")
@@ -95,11 +97,14 @@ struct GitChangesSection: View {
                 .buttonStyle(.plain)
                 .foregroundColor(.secondary)
                 .help("Discard Changes")
+                .accessibilityLabel("Discard changes to \(URL(fileURLWithPath: change.path).lastPathComponent)")
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(change.delta.symbol) \(URL(fileURLWithPath: change.path).lastPathComponent)")
         .onTapGesture {
             Task { await vm.selectWorkingFile(change) }
         }

@@ -70,7 +70,8 @@ struct GitFileDiff {
     // untracked 文件：patch header 为 @@ -0,0 +1,N @@，oldLineNo 全部 nil
 }
 
-struct GitPatch {
+struct GitPatch: Identifiable {
+    let id = UUID()
     let header: String      // @@ -a,b +c,d @@
     let lines: [GitDiffLine]
 }
@@ -98,5 +99,27 @@ struct GitChange: Identifiable {
         self.path = path
         self.delta = delta
         self.isStaged = isStaged
+    }
+}
+
+// MARK: - Date 工具
+
+extension Date {
+    /// 简短相对时间（如 "3m", "2h", "5d"）
+    var relativeShort: String {
+        let interval = Date().timeIntervalSince(self)
+        if interval < 60 { return "now" }
+        if interval < 3600 { return "\(Int(interval / 60))m" }
+        if interval < 86400 { return "\(Int(interval / 3600))h" }
+        return "\(Int(interval / 86400))d"
+    }
+
+    /// 带 "ago" 后缀的相对时间（如 "3m ago", "2h ago"）
+    var relativeShortAgo: String {
+        let interval = Date().timeIntervalSince(self)
+        if interval < 60 { return "just now" }
+        if interval < 3600 { return "\(Int(interval / 60))m ago" }
+        if interval < 86400 { return "\(Int(interval / 3600))h ago" }
+        return "\(Int(interval / 86400))d ago"
     }
 }

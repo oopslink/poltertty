@@ -26,7 +26,7 @@ struct DiffView: View {
                 } else {
                     ScrollView([.horizontal, .vertical]) {
                         VStack(alignment: .leading, spacing: 0) {
-                            ForEach(diff.patches, id: \.header) { patch in
+                            ForEach(diff.patches) { patch in
                                 patchView(patch)
                             }
                         }

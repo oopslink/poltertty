@@ -26,9 +26,13 @@ class GitPanelViewModel: ObservableObject {
     @Published var isVisible = false  // Git panel 显隐
 
     private(set) var repo: GitRepository?
-    private var headSource: DispatchSourceFileSystemObject?
-    private var indexSource: DispatchSourceFileSystemObject?
+
+    // nonisolated(unsafe) 保证 deinit 可以安全访问（H-1 修复）
+    nonisolated(unsafe) private var headSource: DispatchSourceFileSystemObject?
+    nonisolated(unsafe) private var indexSource: DispatchSourceFileSystemObject?
     private let queue = DispatchQueue(label: "poltertty.git-panel-vm")
+    private var pendingRefreshTask: Task<Void, Never>?
+    private var currentGitDir: String?
 
     init() {}
 
@@ -41,7 +45,10 @@ class GitPanelViewModel: ObservableObject {
             repo = newRepo
             isGitRepo = true
             await refresh()
-            setupWatching(gitDir: await newRepo.gitDir)
+            if let gitDir = await newRepo.gitDir {
+                currentGitDir = gitDir
+                setupWatching(gitDir: gitDir)
+            }
         } catch {
             isGitRepo = false
             self.error = error.localizedDescription
@@ -141,8 +148,28 @@ class GitPanelViewModel: ObservableObject {
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd, eventMask: [.write, .rename, .delete], queue: queue
         )
-        source.setEventHandler {
-            Task { [weak self] in await self?.refresh() }
+        source.setEventHandler { [weak self] in
+            let data = source.data
+            // H-3 修复：文件被删除/重命名后 fd 失效，需要重建监听
+            if data.contains(.delete) || data.contains(.rename) {
+                // M-5 修复：防抖 200ms，避免高频 git 操作导致大量并发刷新
+                self?.pendingRefreshTask?.cancel()
+                self?.pendingRefreshTask = Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    guard !Task.isCancelled else { return }
+                    if let gitDir = await self?.currentGitDir {
+                        await self?.setupWatching(gitDir: gitDir)
+                    }
+                    await self?.refresh()
+                }
+            } else {
+                self?.pendingRefreshTask?.cancel()
+                self?.pendingRefreshTask = Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    guard !Task.isCancelled else { return }
+                    await self?.refresh()
+                }
+            }
         }
         source.setCancelHandler { close(fd) }
         store = source

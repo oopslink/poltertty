@@ -30,9 +30,9 @@ actor GitRepository {
     }
 
     // git dir 路径（供 ViewModel 用于 DispatchSource 监听）
-    var gitDir: String {
+    var gitDir: String? {
         guard let r = repo,
-              let gitdir = git_repository_path(r) else { return "" }
+              let gitdir = git_repository_path(r) else { return nil }
         return String(cString: gitdir)
     }
 
@@ -200,14 +200,16 @@ actor GitRepository {
             var parent: OpaquePointer?
             git_commit_parent(&parent, c, 0)
             if let p = parent {
-                git_commit_tree(&parentTree, p)
+                let ptCode = git_commit_tree(&parentTree, p)
                 git_commit_free(p)
+                if ptCode != 0 { parentTree = nil }
             }
         }
         defer { git_tree_free(parentTree) }
 
         var diff: OpaquePointer?
-        git_diff_tree_to_tree(&diff, r, parentTree, tree, nil)
+        let diffCode = git_diff_tree_to_tree(&diff, r, parentTree, tree, nil)
+        guard diffCode == 0 else { throw GitError.fromLibgit2(diffCode) }
         defer { git_diff_free(diff) }
         guard let d = diff else { return [] }
 
@@ -243,7 +245,11 @@ actor GitRepository {
         if git_commit_parentcount(c) > 0 {
             var parent: OpaquePointer?
             git_commit_parent(&parent, c, 0)
-            if let p = parent { git_commit_tree(&parentTree, p); git_commit_free(p) }
+            if let p = parent {
+                let ptCode = git_commit_tree(&parentTree, p)
+                git_commit_free(p)
+                if ptCode != 0 { parentTree = nil }
+            }
         }
         defer { git_tree_free(parentTree) }
         var diff: OpaquePointer?
@@ -340,8 +346,11 @@ actor GitRepository {
 
         var tree: OpaquePointer?
         var parentTree: OpaquePointer?
-        git_commit_tree(&tree, c)
-        git_commit_tree(&parentTree, p)
+        guard git_commit_tree(&tree, c) == 0, tree != nil else { return false }
+        guard git_commit_tree(&parentTree, p) == 0, parentTree != nil else {
+            git_tree_free(tree)
+            return false
+        }
         defer { git_tree_free(tree); git_tree_free(parentTree) }
 
         var opts = git_diff_options()
