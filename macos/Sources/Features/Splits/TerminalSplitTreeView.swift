@@ -98,7 +98,6 @@ private struct TerminalSplitLeafContainer: View {
     let isSplit: Bool
     let action: (TerminalSplitOperation) -> Void
 
-    @EnvironmentObject private var gitPanelVM: GitPanelViewModel
     @Environment(\.showStatusBar) private var showStatusBar
     @FocusedValue(\.ghosttySurfaceView) private var focusedSurface
     @EnvironmentObject private var paneSelectorVM: PaneSelectorViewModel
@@ -117,7 +116,6 @@ private struct TerminalSplitLeafContainer: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if showStatusBar {
                     BottomStatusBarView(
-                        gitVM: gitPanelVM,
                         pwd: surfaceView.pwd ?? "",
                         isFocused: isFocused,
                         surfaceId: surfaceView.id
