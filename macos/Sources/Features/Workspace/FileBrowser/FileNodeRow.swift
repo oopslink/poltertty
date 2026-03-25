@@ -24,6 +24,8 @@ struct FileNodeRow: View {
     let onMoveSelected: (() -> Void)?   // 触发"移动到…"面板
     var onStage: (() -> Void)? = nil
     var onUnstage: (() -> Void)? = nil
+    var onShowFileHistory: ((String) -> Void)? = nil
+    var onDiscardChanges: ((String) -> Void)? = nil
 
     var isRenaming: Bool = false
     var renameText: Binding<String>? = nil
@@ -144,6 +146,17 @@ struct FileNodeRow: View {
                     } else if gitDelta == .deleted {
                         Button("Stage Deletion") { onStage?() }
                         Button("Unstage") { onUnstage?() }
+                    }
+                    if let status = gitDelta, status != .untracked {
+                        Divider()
+                        Button("Show File History") {
+                            onShowFileHistory?(node.url.path)
+                        }
+                        if status == .modified || status == .deleted {
+                            Button("Discard Changes") {
+                                onDiscardChanges?(node.url.path)
+                            }
+                        }
                     }
                 }
             }

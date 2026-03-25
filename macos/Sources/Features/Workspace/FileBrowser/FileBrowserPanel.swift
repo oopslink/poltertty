@@ -13,6 +13,8 @@ struct FileBrowserPanel: View {
     @State private var showBatchDeleteAlert = false
     @State private var showMoveError = false
     @State private var moveErrorMessage = ""
+    @State private var showFileHistorySheet = false
+    @State private var fileHistoryPath: String?
 
     var body: some View {
         panelContent
@@ -61,6 +63,11 @@ struct FileBrowserPanel: View {
                 Button("OK") {}
             } message: {
                 Text(moveErrorMessage)
+            }
+            .sheet(isPresented: $showFileHistorySheet) {
+                if let path = fileHistoryPath, let repo = viewModel.gitRepo {
+                    FileHistorySheet(path: path, repo: repo)
+                }
             }
     }
 
@@ -486,6 +493,16 @@ struct FileBrowserPanel: View {
                     ? viewModel.selectedURLs
                     : [entry.node.url]
                 viewModel.unstageFiles(urls)
+            },
+            onShowFileHistory: { path in
+                fileHistoryPath = path
+                showFileHistorySheet = true
+            },
+            onDiscardChanges: { path in
+                Task {
+                    try? await viewModel.gitRepo?.discard(paths: [path])
+                    await viewModel.refreshGitStatus()
+                }
             },
             isRenaming: viewModel.renamingURL == entry.node.url,
             renameText: renamingBinding,

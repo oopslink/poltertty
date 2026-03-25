@@ -339,6 +339,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
                let ws = WorkspaceManager.shared.workspace(for: wsId),
                !ws.rootDir.isEmpty {
                 await gitPanelVM.load(rootDir: ws.rootDirExpanded)
+                fileBrowserVM.updateGitRepo(gitPanelVM.repo)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleNotificationCenter)) { _ in
