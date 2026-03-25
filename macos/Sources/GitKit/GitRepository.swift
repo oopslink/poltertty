@@ -395,6 +395,111 @@ actor GitRepository {
         return GitFileDiff(path: path, oldPath: oldPath, delta: gitDelta, patches: patches)
     }
 
+    // MARK: - Stage / Unstage / Discard / Restore
+
+    /// 将指定路径加入暂存区（git add <path>）
+    func stage(paths: [String]) throws {
+        guard let r = repo else { return }
+        var index: OpaquePointer?
+        var code = git_repository_index(&index, r)
+        guard code == 0, let idx = index else { throw GitError.fromLibgit2(code) }
+        defer { git_index_free(idx) }
+        for path in paths {
+            let relativePath = makeRelative(path: path)
+            code = git_index_add_bypath(idx, relativePath)
+            if code != 0 { throw GitError.fromLibgit2(code) }
+        }
+        code = git_index_write(idx)
+        if code != 0 { throw GitError.fromLibgit2(code) }
+    }
+
+    /// 从暂存区移除指定路径（git reset HEAD <path>）
+    func unstage(paths: [String]) throws {
+        guard let r = repo else { return }
+        var headRef: OpaquePointer?
+        let headCode = git_repository_head(&headRef, r)
+        if headCode == GIT_EUNBORNBRANCH.rawValue {
+            // 尚无提交 — 直接从 index 移除
+            var index: OpaquePointer?
+            guard git_repository_index(&index, r) == 0, let idx = index else { return }
+            defer { git_index_free(idx) }
+            for path in paths {
+                git_index_remove_bypath(idx, makeRelative(path: path))
+            }
+            git_index_write(idx)
+            return
+        }
+        guard headCode == 0, let h = headRef else { throw GitError.fromLibgit2(headCode) }
+        defer { git_reference_free(h) }
+        let headOid = git_reference_target(h)?.pointee ?? git_oid()
+        var mutableOid = headOid
+        var headCommit: OpaquePointer?
+        let lookupCode = git_commit_lookup(&headCommit, r, &mutableOid)
+        guard lookupCode == 0, let hc = headCommit else { throw GitError.fromLibgit2(lookupCode) }
+        defer { git_commit_free(hc) }
+        // git_reset_default 将 index entry 重置到 HEAD；git_commit* 可直接作为 git_object* 传入
+        for path in paths {
+            let relative = makeRelative(path: path)
+            relative.withCString { cPath in
+                var mutableCPath: UnsafePointer<CChar>? = cPath
+                var pathStrArray = git_strarray(strings: &mutableCPath, count: 1)
+                git_reset_default(r, hc, &pathStrArray)
+            }
+        }
+    }
+
+    /// 丢弃工作区变更，恢复到暂存区状态（git checkout -- <path>）
+    func discard(paths: [String]) throws {
+        guard let r = repo else { return }
+        var opts = git_checkout_options()
+        git_checkout_options_init(&opts, UInt32(GIT_CHECKOUT_OPTIONS_VERSION))
+        opts.checkout_strategy = UInt32(GIT_CHECKOUT_FORCE.rawValue)
+        for path in paths {
+            let relative = makeRelative(path: path)
+            let code = relative.withCString { cPath -> Int32 in
+                var mutableCPath: UnsafePointer<CChar>? = cPath
+                opts.paths.strings = &mutableCPath
+                opts.paths.count = 1
+                return git_checkout_index(r, nil, &opts)
+            }
+            if code != 0 { throw GitError.fromLibgit2(code) }
+        }
+    }
+
+    /// 将指定文件恢复到某个 commit 的版本
+    func restoreToCommit(path: String, oid: String) throws {
+        guard let r = repo else { return }
+        var gitOid = git_oid()
+        guard git_oid_fromstr(&gitOid, oid) == 0 else { throw GitError.invalidOid(oid) }
+        var commit: OpaquePointer?
+        let lookupCode = git_commit_lookup(&commit, r, &gitOid)
+        guard lookupCode == 0, let c = commit else { throw GitError.fromLibgit2(lookupCode) }
+        defer { git_commit_free(c) }
+        // git_checkout_tree 接受 git_object*；git_commit* 可直接作为 git_object* 传入（均为 OpaquePointer）
+        // libgit2 会自动从 commit 中提取 tree 进行 checkout
+        var opts = git_checkout_options()
+        git_checkout_options_init(&opts, UInt32(GIT_CHECKOUT_OPTIONS_VERSION))
+        opts.checkout_strategy = UInt32(GIT_CHECKOUT_FORCE.rawValue)
+        let relative = makeRelative(path: path)
+        let code = relative.withCString { cPath -> Int32 in
+            var mutableCPath: UnsafePointer<CChar>? = cPath
+            opts.paths.strings = &mutableCPath
+            opts.paths.count = 1
+            return git_checkout_tree(r, c, &opts)
+        }
+        if code != 0 { throw GitError.fromLibgit2(code) }
+    }
+
+    /// 将绝对路径转换为相对于仓库根目录的路径
+    private func makeRelative(path: String) -> String {
+        if path.hasPrefix(rootDir) {
+            var rel = String(path.dropFirst(rootDir.count))
+            if rel.hasPrefix("/") { rel = String(rel.dropFirst()) }
+            return rel
+        }
+        return path
+    }
+
     /// 从 diff 对象的指定 delta 索引中提取所有 hunk 和行
     private func patchesFromDiff(_ diff: OpaquePointer, deltaIndex: Int) throws -> [GitPatch] {
         var patch: OpaquePointer?
