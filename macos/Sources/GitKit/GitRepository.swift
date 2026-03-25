@@ -184,13 +184,15 @@ actor GitRepository {
         guard git_oid_fromstr(&gitOid, oid) == 0 else { throw GitError.invalidOid(oid) }
 
         var commit: OpaquePointer?
-        guard git_commit_lookup(&commit, r, &gitOid) == 0, let c = commit else {
-            throw GitError.fromLibgit2(-1)
+        let lookupCode = git_commit_lookup(&commit, r, &gitOid)
+        guard lookupCode == 0, let c = commit else {
+            throw GitError.fromLibgit2(lookupCode)
         }
         defer { git_commit_free(c) }
 
         var tree: OpaquePointer?
-        git_commit_tree(&tree, c)
+        let treeCode = git_commit_tree(&tree, c)
+        guard treeCode == 0 else { throw GitError.fromLibgit2(treeCode) }
         defer { git_tree_free(tree) }
 
         var parentTree: OpaquePointer?
@@ -228,12 +230,14 @@ actor GitRepository {
         var gitOid = git_oid()
         guard git_oid_fromstr(&gitOid, oid) == 0 else { throw GitError.invalidOid(oid) }
         var commit: OpaquePointer?
-        guard git_commit_lookup(&commit, r, &gitOid) == 0, let c = commit else {
-            throw GitError.fromLibgit2(-1)
+        let lookupCode = git_commit_lookup(&commit, r, &gitOid)
+        guard lookupCode == 0, let c = commit else {
+            throw GitError.fromLibgit2(lookupCode)
         }
         defer { git_commit_free(c) }
         var tree: OpaquePointer?
-        git_commit_tree(&tree, c)
+        let treeCode = git_commit_tree(&tree, c)
+        guard treeCode == 0 else { throw GitError.fromLibgit2(treeCode) }
         defer { git_tree_free(tree) }
         var parentTree: OpaquePointer?
         if git_commit_parentcount(c) > 0 {
