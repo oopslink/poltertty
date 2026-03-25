@@ -24,6 +24,7 @@ class GitPanelViewModel: ObservableObject {
     @Published var error: String?
     @Published var isGitRepo = false
     @Published var isVisible = false  // Git panel 显隐
+    @Published var lastAttemptedDir: String = ""
 
     private(set) var repo: GitRepository?
 
@@ -38,6 +39,7 @@ class GitPanelViewModel: ObservableObject {
 
     func load(rootDir: String) async {
         guard !rootDir.isEmpty else { return }
+        lastAttemptedDir = rootDir
         isLoading = true
         error = nil
         do {

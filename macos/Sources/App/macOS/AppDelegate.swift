@@ -209,6 +209,11 @@ class AppDelegate: NSObject,
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 初始化 libgit2，在任何 GitKit API 调用之前必须执行
+        if git_libgit2_init() < 0 {
+            AppDelegate.logger.warning("git_libgit2_init failed")
+        }
+
         // System settings overrides
         UserDefaults.ghostty.register(defaults: [
             // Disable this so that repeated key events make it through to our terminal views.
@@ -482,6 +487,9 @@ class AppDelegate: NSObject,
         // so remove them all now. In the future we may want to be
         // more selective and only remove surface-targeted notifications.
         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+
+        // libgit2 最后关闭，确保没有其他代码再使用它
+        git_libgit2_shutdown()
     }
 
     /// This is called when the application is already open and someone double-clicks the icon

@@ -6,7 +6,7 @@ struct GitPanelView: View {
 
     var body: some View {
         if !vm.isGitRepo {
-            VStack {
+            VStack(spacing: 0) {
                 Spacer()
                 Image(systemName: "arrow.triangle.branch")
                     .font(.system(size: 32))
@@ -15,6 +15,16 @@ struct GitPanelView: View {
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .padding(.top, 8)
+                if !vm.lastAttemptedDir.isEmpty {
+                    Text(vm.lastAttemptedDir.replacingOccurrences(
+                        of: NSHomeDirectory(), with: "~"))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.7))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 4)
+                }
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
