@@ -44,8 +44,8 @@ actor GitRepository {
         let code = git_repository_head(&ref, r)
         defer { git_reference_free(ref) }
         guard code == 0, let ref = ref else {
-            if code == GIT_EUNBORNBRANCH.rawValue || code == GIT_EDETACHED.rawValue {
-                return nil // detached HEAD
+            if code == GIT_EUNBORNBRANCH.rawValue {
+                return nil // unborn branch (HEAD points to non-existing branch)
             }
             throw GitError.fromLibgit2(code)
         }
@@ -358,13 +358,15 @@ actor GitRepository {
         // pathspec 的 CString 生命周期必须覆盖 git_diff_tree_to_tree 调用
         var pathCopy = path
         return pathCopy.withCString { cPath in
-            var cStrings: [UnsafePointer<CChar>?] = [cPath]
-            opts.pathspec.strings = &cStrings
-            opts.pathspec.count = 1
-            var diff: OpaquePointer?
-            git_diff_tree_to_tree(&diff, repo, parentTree, tree, &opts)
-            defer { git_diff_free(diff) }
-            return (diff.map { git_diff_num_deltas($0) } ?? 0) > 0
+            var mutableCPath: UnsafeMutablePointer<CChar>? = UnsafeMutablePointer(mutating: cPath)
+            return withUnsafeMutablePointer(to: &mutableCPath) { ptr -> Bool in
+                opts.pathspec.strings = ptr
+                opts.pathspec.count = 1
+                var diff: OpaquePointer?
+                git_diff_tree_to_tree(&diff, repo, parentTree, tree, &opts)
+                defer { git_diff_free(diff) }
+                return (diff.map { git_diff_num_deltas($0) } ?? 0) > 0
+            }
         }
     }
 
@@ -453,9 +455,11 @@ actor GitRepository {
         for path in paths {
             let relative = makeRelative(path: path)
             let resetCode = relative.withCString { cPath -> Int32 in
-                var mutableCPath: UnsafePointer<CChar>? = cPath
-                var pathStrArray = git_strarray(strings: &mutableCPath, count: 1)
-                return git_reset_default(r, hc, &pathStrArray)
+                var mutableCPath: UnsafeMutablePointer<CChar>? = UnsafeMutablePointer(mutating: cPath)
+                return withUnsafeMutablePointer(to: &mutableCPath) { ptr -> Int32 in
+                    var pathStrArray = git_strarray(strings: ptr, count: 1)
+                    return git_reset_default(r, hc, &pathStrArray)
+                }
             }
             if resetCode != 0 { throw GitError.fromLibgit2(resetCode) }
         }
@@ -480,10 +484,12 @@ actor GitRepository {
             if git_index_get_bypath(idx, relative, GIT_INDEX_STAGE_NORMAL.rawValue) != nil {
                 // tracked 文件：用 checkout 恢复到 index 状态
                 let code = relative.withCString { cPath -> Int32 in
-                    var mutableCPath: UnsafePointer<CChar>? = cPath
-                    opts.paths.strings = &mutableCPath
-                    opts.paths.count = 1
-                    return git_checkout_index(r, idx, &opts)
+                    var mutableCPath: UnsafeMutablePointer<CChar>? = UnsafeMutablePointer(mutating: cPath)
+                    return withUnsafeMutablePointer(to: &mutableCPath) { ptr -> Int32 in
+                        opts.paths.strings = ptr
+                        opts.paths.count = 1
+                        return git_checkout_index(r, idx, &opts)
+                    }
                 }
                 if code != 0 { throw GitError.fromLibgit2(code) }
             } else {
@@ -510,10 +516,12 @@ actor GitRepository {
         opts.checkout_strategy = UInt32(GIT_CHECKOUT_FORCE.rawValue)
         let relative = makeRelative(path: path)
         let code = relative.withCString { cPath -> Int32 in
-            var mutableCPath: UnsafePointer<CChar>? = cPath
-            opts.paths.strings = &mutableCPath
-            opts.paths.count = 1
-            return git_checkout_tree(r, c, &opts)
+            var mutableCPath: UnsafeMutablePointer<CChar>? = UnsafeMutablePointer(mutating: cPath)
+            return withUnsafeMutablePointer(to: &mutableCPath) { ptr -> Int32 in
+                opts.paths.strings = ptr
+                opts.paths.count = 1
+                return git_checkout_tree(r, c, &opts)
+            }
         }
         if code != 0 { throw GitError.fromLibgit2(code) }
     }
@@ -541,21 +549,29 @@ actor GitRepository {
             var hunk: UnsafePointer<git_diff_hunk>?
             var lineCount = 0
             git_patch_get_hunk(&hunk, &lineCount, p, h)
-            let header = hunk.map { String(cString: $0.pointee.header) }?
-                .trimmingCharacters(in: .newlines) ?? ""
+            let header = hunk.map { h -> String in
+                withUnsafePointer(to: h.pointee.header) { ptr in
+                    String(cString: UnsafeRawPointer(ptr).assumingMemoryBound(to: CChar.self))
+                }
+            }.map { $0.trimmingCharacters(in: .newlines) } ?? ""
             var lines: [GitDiffLine] = []
             for l in 0..<lineCount {
                 var line: UnsafePointer<git_diff_line>?
                 git_patch_get_line_in_hunk(&line, p, h, l)
                 guard let ln = line else { continue }
-                let content = String(bytes: UnsafeBufferPointer(
-                    start: ln.pointee.content, count: ln.pointee.content_len), encoding: .utf8) ?? ""
-                let origin: GitDiffLine.Origin
-                switch Int32(ln.pointee.origin) {
-                case GIT_DIFF_LINE_ADDITION.rawValue: origin = .added
-                case GIT_DIFF_LINE_DELETION.rawValue: origin = .removed
-                default: origin = .context
+                let content: String
+                if let contentPtr = ln.pointee.content {
+                    let bytes = UnsafeBufferPointer(
+                        start: UnsafeRawPointer(contentPtr).assumingMemoryBound(to: UInt8.self),
+                        count: ln.pointee.content_len)
+                    content = String(bytes: bytes, encoding: .utf8) ?? ""
+                } else {
+                    content = ""
                 }
+                let originRaw = Int32(ln.pointee.origin)
+                let origin: GitDiffLine.Origin =
+                    originRaw == Int32(GIT_DIFF_LINE_ADDITION.rawValue) ? .added :
+                    originRaw == Int32(GIT_DIFF_LINE_DELETION.rawValue) ? .removed : .context
                 // old_lineno == -1 表示新增行（无旧行号），new_lineno == -1 表示删除行
                 let oldNo = ln.pointee.old_lineno > 0 ? Int(ln.pointee.old_lineno) : nil
                 let newNo = ln.pointee.new_lineno > 0 ? Int(ln.pointee.new_lineno) : nil

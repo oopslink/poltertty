@@ -137,7 +137,7 @@ private struct TerminalSplitLeafContainer: View {
                 triggerPulse()
             }
             .onAppear {
-                paneSelectorVM.registerPane(surfaceId: surfaceView.id, gitMonitor: statusMonitor)
+                paneSelectorVM.registerPane(surfaceId: surfaceView.id)
             }
             .onDisappear {
                 paneSelectorVM.unregisterPane(surfaceId: surfaceView.id)

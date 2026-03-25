@@ -41,7 +41,6 @@ final class PaneSelectorViewModel: ObservableObject {
 
     @Published var annotations: [UUID: String] = [:]
     var createdAtMap: [UUID: Date] = [:]
-    var gitMonitors: [UUID: GitStatusMonitor] = [:]
 
     private var keyMonitor: Any?
     private var cancellables: Set<AnyCancellable> = []
@@ -115,8 +114,7 @@ final class PaneSelectorViewModel: ObservableObject {
             // 优先从 AgentSession 获取 shellPid
             let agentPid = AgentService.shared.sessionManager.sessions[surface.id]?.shellPid ?? 0
             if agentPid > 0 { return pid_t(agentPid) }
-            // fallback: 从 GitStatusMonitor 的 shellPid 获取（如果已设置）
-            return gitMonitors[surface.id]?.shellPid ?? 0
+            return 0
         }
 
         // 批量查询进程信息（只扫描一次进程表）
@@ -138,9 +136,8 @@ final class PaneSelectorViewModel: ObservableObject {
             let duration = createdAtMap[sid].map { now.timeIntervalSince($0) } ?? 0
 
             let pwd = surface.pwd ?? "~"
-            let gitStatus = gitMonitors[sid]?.status
-            let gitBranch = gitStatus?.isGitRepo == true ? gitStatus?.branch : nil
-            let gitDirty = (gitStatus?.added ?? 0) + (gitStatus?.modified ?? 0) > 0
+            let gitBranch: String? = nil
+            let gitDirty = false
 
             newOverlayInfos[sid] = PaneOverlayInfo(
                 index: index,
@@ -178,15 +175,13 @@ final class PaneSelectorViewModel: ObservableObject {
 
     // MARK: - Pane 注册（由 TerminalSplitLeafContainer 调用）
 
-    func registerPane(surfaceId: UUID, gitMonitor: GitStatusMonitor) {
+    func registerPane(surfaceId: UUID) {
         if createdAtMap[surfaceId] == nil {
             createdAtMap[surfaceId] = Date()
         }
-        gitMonitors[surfaceId] = gitMonitor
     }
 
     func unregisterPane(surfaceId: UUID) {
-        gitMonitors.removeValue(forKey: surfaceId)
         // 不移除 createdAtMap 和 annotations——pane 可能只是暂时 disappear（如 zoom 切换）
     }
 
