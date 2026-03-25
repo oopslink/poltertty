@@ -263,6 +263,67 @@ gh release create v0.1.1 \
 
 ---
 
+## ⚠️ Vendor 第三方静态库规范
+
+项目中多次因 vendor 静态库不规范导致 Release 构建失败（libgit2 SSH 依赖、iconv、架构不匹配等），以下规则为强制要求。
+
+### 编译静态库的必要参数
+
+从源码编译 `.a` 时，**必须**同时指定以下 cmake 参数（或对应构建系统的等价参数）：
+
+```bash
+cmake <source_dir> \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 \           # 必须与项目架构一致
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \        # 必须与项目 MACOSX_DEPLOYMENT_TARGET 一致
+  -DBUILD_SHARED_LIBS=OFF \                   # 必须静态
+  -DUSE_<OPTIONAL_FEATURE>=OFF \              # 禁用所有可选的外部依赖
+  -DBUILD_TESTS=OFF \
+  -DBUILD_CLI=OFF
+```
+
+**可选特性的原则**：凡是需要链接额外 `.a`（非系统框架）的特性，一律禁用，除非同时 vendor 了该依赖。
+
+### vendor 后的必检清单
+
+提交 `.a` 文件之前，**必须**逐项确认：
+
+```bash
+# 1. 检查未解析符号（最关键）——结果不能出现非系统库的 "U _xxx"
+nm macos/vendor/<lib>/lib/<libname>.a | grep " U _" | grep -v \
+  -e "^objc_" -e "^_objc" -e "^_CC" -e "_Security" -e "_CFStr" \
+  | sort -u
+
+# 2. 检查架构是否正确（必须含 arm64，不能有不支持的架构）
+lipo -info macos/vendor/<lib>/lib/<libname>.a
+
+# 3. 检查部署目标（LC_BUILD_VERSION 中的 minos 应 ≤ 13.0）
+otool -l macos/vendor/<lib>/lib/<libname>.a | grep -A4 "LC_BUILD_VERSION" | head -20
+```
+
+未通过任意一项，**禁止提交**，需重新编译。
+
+### 更新 Xcode 链接标志
+
+引入新 vendor 库后，必须在 `project.pbxproj` 的 **所有构建配置**（Debug / ReleaseLocal / Release 等）中同步添加链接标志和搜索路径：
+
+```
+OTHER_LDFLAGS = (...现有标志... "-l<libname>" "-l<transitive_dep>");
+LIBRARY_SEARCH_PATHS = ("$(PROJECT_DIR)/vendor/<lib>/lib");
+```
+
+添加后必须先跑 `make dev`，再跑 `make release`，两者都成功才算完成。
+
+### 历史教训速查
+
+| 时间 | 问题 | 根因 | 修复 |
+|------|------|------|------|
+| 2026-03-25 | Release 链接 `_libssh2_exit` 未找到 | libgit2 编译时启用了 SSH，未 vendor libssh2 | 重新编译 libgit2，`-DUSE_SSH=OFF` |
+| 2026-03-25 | Release 链接 `_iconv_open` 相关 | libgit2 依赖 iconv，但 Xcode 未加 `-liconv` | project.pbxproj 全配置加 `-liconv` |
+| 2026-03-25 | Release 架构报错 | libgit2.a 仅 arm64，但未限制 ARCHS | project.pbxproj ReleaseLocal 加 `ARCHS=arm64` |
+
+---
+
 ## 构建要求
 
 ### 环境依赖
