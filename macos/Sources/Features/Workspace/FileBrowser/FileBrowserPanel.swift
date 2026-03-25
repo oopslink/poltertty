@@ -36,6 +36,7 @@ struct FileBrowserPanel: View {
             .backport.onKeyPress(KeyEquivalent.return)    { handleReturnKey(modifiers: $0) }
             .backport.onKeyPress("a") { handleAKey(modifiers: $0) }
             .backport.onKeyPress("?") { handleQuestionKey(modifiers: $0) }
+            .backport.onKeyPress("g") { handleGKey(modifiers: $0) }
             .onChange(of: viewModel.filterText) { text in
                 if text.isEmpty {
                     viewModel.deactivateRecursiveFilter()
@@ -82,7 +83,7 @@ struct FileBrowserPanel: View {
                     Divider()
                 }
                 filterBar
-                if !viewModel.availableExtensions.isEmpty || !viewModel.gitStatuses.isEmpty {
+                if !viewModel.gitStatuses.isEmpty {
                     FilterChipsView(viewModel: viewModel)
                     Divider()
                 }
@@ -297,6 +298,12 @@ struct FileBrowserPanel: View {
         return .handled
     }
 
+    private func handleGKey(modifiers: EventModifiers) -> BackportKeyPressResult {
+        guard isFocused, !viewModel.gitStatuses.isEmpty else { return .ignored }
+        viewModel.toggleUncommittedFilter()
+        return .handled
+    }
+
     // MARK: - Filter Bar
 
     private var filterBar: some View {
@@ -308,6 +315,21 @@ struct FileBrowserPanel: View {
                 TextField("Filter", text: $viewModel.filterText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
+                if !viewModel.availableExtensions.isEmpty || !viewModel.gitStatuses.isEmpty {
+                    filterButtonGroup
+                }
+                Button {
+                    viewModel.showShortcutHelp.toggle()
+                } label: {
+                    Image(systemName: "questionmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Keyboard Shortcuts (?)")
+                .popover(isPresented: $viewModel.showShortcutHelp, arrowEdge: .trailing) {
+                    ShortcutHelpView()
+                }
                 Button {
                     viewModel.showShortcutHelp.toggle()
                 } label: {
@@ -349,6 +371,77 @@ struct FileBrowserPanel: View {
             }
         }
     }
+
+    // MARK: - Filter Button Group
+
+    /// 过滤器按钮组：文件类型下拉菜单（左）+ 未提交文件快速过滤（右）
+    private var filterButtonGroup: some View {
+        HStack(spacing: 0) {
+            // 文件类型下拉菜单
+            if !viewModel.availableExtensions.isEmpty {
+                Menu {
+                    ForEach(viewModel.availableExtensions, id: \.ext) { item in
+                        Button {
+                            viewModel.toggleExtensionFilter(item.ext)
+                        } label: {
+                            Label {
+                                Text(".\(item.ext)  ×\(item.count)")
+                            } icon: {
+                                if viewModel.activeExtensions.contains(item.ext) {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                    if !viewModel.activeExtensions.isEmpty {
+                        Divider()
+                        Button("Clear Extension Filters") {
+                            viewModel.activeExtensions = []
+                        }
+                    }
+                } label: {
+                    Image(systemName: viewModel.activeExtensions.isEmpty
+                          ? "line.3.horizontal.decrease.circle"
+                          : "line.3.horizontal.decrease.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(viewModel.activeExtensions.isEmpty ? .secondary : .accentColor)
+                        .frame(width: 20, height: 20)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Filter by File Type")
+            }
+
+            // 分隔线
+            if !viewModel.availableExtensions.isEmpty && !viewModel.gitStatuses.isEmpty {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.15))
+                    .frame(width: 1, height: 12)
+                    .padding(.horizontal, 2)
+            }
+
+            // 未提交文件过滤按钮
+            if !viewModel.gitStatuses.isEmpty {
+                Button {
+                    viewModel.toggleUncommittedFilter()
+                } label: {
+                    Image(systemName: viewModel.isUncommittedFilterActive
+                          ? "exclamationmark.circle.fill"
+                          : "exclamationmark.circle")
+                        .font(.system(size: 11))
+                        .foregroundColor(viewModel.isUncommittedFilterActive ? .orange : .secondary)
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.plain)
+                .help("Show Uncommitted Files Only (g)")
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+        .background(Color.primary.opacity(0.06))
+        .cornerRadius(5)
+    }
+
 
     // MARK: - Root Path Status Bar
 

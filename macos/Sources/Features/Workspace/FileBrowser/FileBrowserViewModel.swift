@@ -636,6 +636,19 @@ final class FileBrowserViewModel: ObservableObject {
         filterText = ""
     }
 
+    /// 切换「仅显示未提交文件」过滤（modified / untracked / added / deleted）
+    func toggleUncommittedFilter() {
+        if isUncommittedFilterActive {
+            activeGitStatuses = []
+        } else {
+            activeGitStatuses = [.modified, .untracked, .added, .deleted]
+        }
+    }
+
+    var isUncommittedFilterActive: Bool {
+        activeGitStatuses == [.modified, .untracked, .added, .deleted]
+    }
+
     var hasActiveFilters: Bool {
         !activeExtensions.isEmpty || !activeGitStatuses.isEmpty || !filterText.isEmpty
     }
