@@ -158,6 +158,16 @@ struct WorkspaceSidebar: View {
                 }
                 .buttonStyle(.plain)
                 .help("Launch Agent")
+
+                Button(action: {
+                    NotificationCenter.default.post(name: .toggleGitPanel, object: nil)
+                }) {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Git Panel (⌘⇧G)")
             }
             .padding(.vertical, 8)
 

@@ -1128,6 +1128,10 @@ class AppDelegate: NSObject,
         toggleFileBrowser.keyEquivalentModifierMask = .command
         workspaceMenu.addItem(toggleFileBrowser)
 
+        let toggleGitPanel = NSMenuItem(title: "Toggle Git Panel", action: #selector(toggleGitPanel(_:)), keyEquivalent: "g")
+        toggleGitPanel.keyEquivalentModifierMask = [.command, .shift]
+        workspaceMenu.addItem(toggleGitPanel)
+
         let workspaceMenuItem = NSMenuItem(title: "Workspace", action: nil, keyEquivalent: "")
         workspaceMenuItem.submenu = workspaceMenu
 
@@ -1197,6 +1201,10 @@ class AppDelegate: NSObject,
 
     @objc func toggleAgentMonitor(_ sender: Any?) {
         NotificationCenter.default.post(name: .toggleAgentMonitor, object: nil)
+    }
+
+    @objc func toggleGitPanel(_ sender: Any?) {
+        NotificationCenter.default.post(name: .toggleGitPanel, object: nil)
     }
 
     @objc func showAgentDashboard(_ sender: Any?) {
