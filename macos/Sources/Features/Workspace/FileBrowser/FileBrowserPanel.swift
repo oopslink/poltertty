@@ -331,6 +331,18 @@ struct FileBrowserPanel: View {
                     ShortcutHelpView()
                 }
                 Button {
+                    viewModel.showShortcutHelp.toggle()
+                } label: {
+                    Image(systemName: "questionmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Keyboard Shortcuts (?)")
+                .popover(isPresented: $viewModel.showShortcutHelp, arrowEdge: .trailing) {
+                    ShortcutHelpView()
+                }
+                Button {
                     viewModel.isVisible = false
                 } label: {
                     Image(systemName: "xmark")
@@ -429,6 +441,7 @@ struct FileBrowserPanel: View {
         .background(Color.primary.opacity(0.06))
         .cornerRadius(5)
     }
+
 
     // MARK: - Root Path Status Bar
 
