@@ -159,15 +159,6 @@ struct WorkspaceSidebar: View {
                 .buttonStyle(.plain)
                 .help("Launch Agent")
 
-                Button(action: {
-                    NotificationCenter.default.post(name: .toggleGitPanel, object: nil)
-                }) {
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.system(size: 16))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Git Panel (⌘⇧G)")
             }
             .padding(.vertical, 8)
 
@@ -411,11 +402,6 @@ struct WorkspaceSidebar: View {
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
-                SidebarHeaderButton(
-                    symbol: "arrow.triangle.branch",
-                    action: { NotificationCenter.default.post(name: .toggleGitPanel, object: nil) }
-                )
-                .help("Git Panel (⌘⇧G)")
                 SidebarToggleButton(symbol: "chevron.left") {
                     isCollapsed = true
                     UserDefaults.standard.set(true, forKey: "poltertty.sidebarCollapsed")

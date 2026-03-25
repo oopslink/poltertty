@@ -343,6 +343,15 @@ struct FileBrowserPanel: View {
                     ShortcutHelpView()
                 }
                 Button {
+                    NotificationCenter.default.post(name: .toggleGitPanel, object: nil)
+                } label: {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Git Panel (⌘⇧G)")
+                Button {
                     viewModel.isVisible = false
                 } label: {
                     Image(systemName: "xmark")
