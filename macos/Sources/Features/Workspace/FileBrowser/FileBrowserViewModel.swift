@@ -43,6 +43,7 @@ final class FileBrowserViewModel: ObservableObject {
 
     let rootDir: String
     private var monitor: FileSystemMonitor?
+    private var gitRepo: GitRepository?
     private var isRecursiveFilter: Bool = false
     private var savedExpandedUrls: Set<URL> = []
 
@@ -307,21 +308,50 @@ final class FileBrowserViewModel: ObservableObject {
 
     // MARK: - Git Status
 
+    func updateGitRepo(_ repo: GitRepository?) {
+        self.gitRepo = repo
+    }
+
     func refreshGitStatus() async {
-        let statuses = await GitStatusService.fetchStatus(rootDir: rootDir)
-        await MainActor.run { gitStatuses = statuses }
+        guard let repo = gitRepo else {
+            // 无 GitRepository 时回退到 GitStatusService（过渡期兼容）
+            let statuses = await GitStatusService.fetchStatus(rootDir: rootDir)
+            await MainActor.run { gitStatuses = statuses }
+            return
+        }
+        guard let changes = try? await repo.status() else { return }
+        // 将 GitChange[] 转换为 [absolutePath: GitDelta] 字典
+        var newStatuses: [String: GitDelta] = [:]
+        for change in changes {
+            let fullPath = rootDir + "/" + change.path
+            // 同一文件可能同时出现在 staged 和 unstaged，取 staged 优先（优先级更高的保留）
+            if let existing = newStatuses[fullPath] {
+                newStatuses[fullPath] = max(existing, change.delta)
+            } else {
+                newStatuses[fullPath] = change.delta
+            }
+        }
+        await MainActor.run { gitStatuses = newStatuses }
     }
 
     func stageFiles(_ urls: [URL]) {
         Task {
-            try? await GitStatusService.stage(rootDir: rootDir, urls: urls)
+            if let repo = gitRepo {
+                try? await repo.stage(paths: urls.map(\.path))
+            } else {
+                try? await GitStatusService.stage(rootDir: rootDir, urls: urls)
+            }
             await refreshGitStatus()
         }
     }
 
     func unstageFiles(_ urls: [URL]) {
         Task {
-            try? await GitStatusService.unstage(rootDir: rootDir, urls: urls)
+            if let repo = gitRepo {
+                try? await repo.unstage(paths: urls.map(\.path))
+            } else {
+                try? await GitStatusService.unstage(rootDir: rootDir, urls: urls)
+            }
             await refreshGitStatus()
         }
     }
