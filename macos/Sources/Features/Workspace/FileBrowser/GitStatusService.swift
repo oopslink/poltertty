@@ -2,9 +2,9 @@
 import Foundation
 
 struct GitStatusService {
-    /// 异步跑 `git -C rootDir status --porcelain`，返回 [absolutePath: GitStatus]
+    /// 异步跑 `git -C rootDir status --porcelain`，返回 [absolutePath: GitDelta]
     /// rootDir 不是 git repo 时（exit code ≠ 0）静默返回空字典
-    static func fetchStatus(rootDir: String) async -> [String: GitStatus] {
+    static func fetchStatus(rootDir: String) async -> [String: GitDelta] {
         guard !rootDir.isEmpty else { return [:] }
         return await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
@@ -13,7 +13,7 @@ struct GitStatusService {
         }
     }
 
-    private static func fetchStatusSync(rootDir: String) -> [String: GitStatus] {
+    private static func fetchStatusSync(rootDir: String) -> [String: GitDelta] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         process.arguments = ["-C", rootDir, "status", "--porcelain"]
@@ -35,7 +35,7 @@ struct GitStatusService {
         let data = outPipe.fileHandleForReading.readDataToEndOfFile()
         guard let output = String(data: data, encoding: .utf8) else { return [:] }
 
-        var result: [String: GitStatus] = [:]
+        var result: [String: GitDelta] = [:]
         for line in output.components(separatedBy: "\n") {
             guard line.count >= 3 else { continue }
             let chars = Array(line)

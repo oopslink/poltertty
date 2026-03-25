@@ -98,7 +98,7 @@ private struct TerminalSplitLeafContainer: View {
     let isSplit: Bool
     let action: (TerminalSplitOperation) -> Void
 
-    @StateObject private var statusMonitor = GitStatusMonitor(pwd: "")
+    @EnvironmentObject private var gitPanelVM: GitPanelViewModel
     @Environment(\.showStatusBar) private var showStatusBar
     @FocusedValue(\.ghosttySurfaceView) private var focusedSurface
     @EnvironmentObject private var paneSelectorVM: PaneSelectorViewModel
@@ -117,7 +117,7 @@ private struct TerminalSplitLeafContainer: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if showStatusBar {
                     BottomStatusBarView(
-                        monitor: statusMonitor,
+                        gitVM: gitPanelVM,
                         pwd: surfaceView.pwd ?? "",
                         isFocused: isFocused,
                         surfaceId: surfaceView.id
@@ -131,15 +131,6 @@ private struct TerminalSplitLeafContainer: View {
                     .opacity(highlightOpacity)
                     .allowsHitTesting(false)
             )
-            .onReceive(surfaceView.$pwd.compactMap { $0 }.removeDuplicates()) { pwd in
-                statusMonitor.updatePwd(pwd)
-            }
-            .onReceive(AgentService.shared.sessionManager.$sessions) { sessions in
-                // AgentService 是 @MainActor，SwiftUI onReceive 也在 MainActor 执行，直接访问合法
-                // sessions 的 key 就是 surfaceId（[UUID: AgentSession]），直接下标 O(1)
-                let pid = sessions[surfaceView.id]?.shellPid ?? 0
-                statusMonitor.shellPid = pid_t(pid)
-            }
             .onReceive(NotificationCenter.default.publisher(for: PaneLocator.highlightSurface)) { notif in
                 guard let targetId = notif.userInfo?["surfaceId"] as? UUID,
                       targetId == surfaceView.id else { return }
