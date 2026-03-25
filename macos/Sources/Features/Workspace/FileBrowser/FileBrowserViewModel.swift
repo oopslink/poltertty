@@ -43,7 +43,7 @@ final class FileBrowserViewModel: ObservableObject {
 
     let rootDir: String
     private var monitor: FileSystemMonitor?
-    private var gitRepo: GitRepository?
+    private(set) var gitRepo: GitRepository?
     private var isRecursiveFilter: Bool = false
     private var savedExpandedUrls: Set<URL> = []
 

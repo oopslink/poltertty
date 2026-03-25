@@ -118,8 +118,8 @@ struct FileBrowserPanel: View {
                             viewModel.isPreviewFullscreen = false
                         }
                     },
-                    rootDir: viewModel.rootDir,
-                    gitDelta: viewModel.gitDelta(for: url)
+                    gitDelta: viewModel.gitDelta(for: url),
+                    gitRepo: viewModel.gitRepo
                 )
                 .frame(minWidth: 200)
             }

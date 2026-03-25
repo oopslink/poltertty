@@ -2,137 +2,115 @@
 import SwiftUI
 
 struct DiffView: View {
-    let rootDir: String
-    let fileURL: URL
-    let isStaged: Bool
-
-    @State private var diffContent: String = ""
-    @State private var isLoading: Bool = true
+    let diff: GitFileDiff?
+    let title: String?
 
     var body: some View {
-        Group {
-            if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if diffContent.isEmpty {
-                Text("No changes")
+        VStack(alignment: .leading, spacing: 0) {
+            if let t = title {
+                Text(t)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(nsColor: .windowBackgroundColor))
+                Divider()
+            }
+            if let diff = diff {
+                if diff.patches.isEmpty {
+                    Text("No changes")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView([.horizontal, .vertical]) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(diff.patches, id: \.header) { patch in
+                                patchView(patch)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            } else {
+                Text("Select a file to view diff")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView([.horizontal, .vertical]) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(parsedLines.enumerated()), id: \.offset) { _, line in
-                            diffLineView(line)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
             }
         }
-        .task(id: "\(fileURL.path)-\(isStaged)") {
-            isLoading = true
-            diffContent = await GitStatusService.fetchDiff(
-                rootDir: rootDir,
-                fileURL: fileURL,
-                staged: isStaged
-            )
-            isLoading = false
-        }
-    }
-
-    private struct DiffLine {
-        enum Kind { case added, removed, context, header, hunk }
-        let kind: Kind
-        let text: String
-        let lineNum: String
-    }
-
-    private var parsedLines: [DiffLine] {
-        var result: [DiffLine] = []
-        var oldNum = 0
-        var newNum = 0
-
-        for line in diffContent.components(separatedBy: "\n") {
-            if line.hasPrefix("@@") {
-                // 解析 @@ -a,b +c,d @@ 格式
-                let numbers = line.components(separatedBy: CharacterSet(charactersIn: "-+,@ "))
-                    .compactMap { Int($0) }
-                if numbers.count >= 2 {
-                    oldNum = numbers[0]
-                    newNum = numbers[1]
-                }
-                result.append(DiffLine(kind: .hunk, text: line, lineNum: ""))
-            } else if line.hasPrefix("diff ") || line.hasPrefix("index ") ||
-                      line.hasPrefix("--- ") || line.hasPrefix("+++ ") {
-                result.append(DiffLine(kind: .header, text: line, lineNum: ""))
-            } else if line.hasPrefix("+") {
-                result.append(DiffLine(kind: .added, text: String(line.dropFirst()), lineNum: "\(newNum)"))
-                newNum += 1
-            } else if line.hasPrefix("-") {
-                result.append(DiffLine(kind: .removed, text: String(line.dropFirst()), lineNum: "\(oldNum)"))
-                oldNum += 1
-            } else if !line.isEmpty {
-                result.append(DiffLine(kind: .context, text: String(line.dropFirst()), lineNum: "\(newNum)"))
-                oldNum += 1
-                newNum += 1
-            }
-        }
-        return result
     }
 
     @ViewBuilder
-    private func diffLineView(_ line: DiffLine) -> some View {
+    private func patchView(_ patch: GitPatch) -> some View {
+        // Hunk header
+        Text(patch.header)
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundColor(Color(hex: "#60a5fa") ?? .blue)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background((Color(hex: "#60a5fa") ?? .blue).opacity(0.06))
+
+        ForEach(patch.lines) { line in
+            diffLineView(line)
+        }
+    }
+
+    @ViewBuilder
+    private func diffLineView(_ line: GitDiffLine) -> some View {
         HStack(spacing: 0) {
-            // 行号
-            Text(line.lineNum)
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.secondary.opacity(0.6))
-                .frame(width: 40, alignment: .trailing)
-                .padding(.trailing, 8)
-
+            // 旧行号
+            Text(line.oldLineNo.map { "\($0)" } ?? "")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.secondary.opacity(0.5))
+                .frame(width: 36, alignment: .trailing)
+                .padding(.trailing, 4)
+            // 新行号
+            Text(line.newLineNo.map { "\($0)" } ?? "")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.secondary.opacity(0.5))
+                .frame(width: 36, alignment: .trailing)
+                .padding(.trailing, 6)
             // 前缀符号
-            Text(linePrefix(line.kind))
+            Text(linePrefix(for: line.origin))
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(lineForeground(line.kind))
+                .foregroundColor(lineForeground(for: line.origin))
                 .frame(width: 12)
-
             // 内容
-            Text(line.text)
+            Text(line.content)
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(lineForeground(line.kind))
+                .foregroundColor(lineForeground(for: line.origin))
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.vertical, 1)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(lineBackground(line.kind))
+        .background(lineBackground(for: line.origin))
     }
 
-    private func linePrefix(_ kind: DiffLine.Kind) -> String {
-        switch kind {
+    private func linePrefix(for origin: GitDiffLine.Origin) -> String {
+        switch origin {
         case .added:   return "+"
         case .removed: return "-"
-        case .hunk:    return "↕"
-        default:       return " "
+        case .context: return " "
         }
     }
 
-    private func lineForeground(_ kind: DiffLine.Kind) -> Color {
-        switch kind {
+    private func lineForeground(for origin: GitDiffLine.Origin) -> Color {
+        switch origin {
         case .added:   return Color(hex: "#4ade80") ?? .green
         case .removed: return Color(hex: "#f87171") ?? .red
-        case .hunk:    return Color(hex: "#60a5fa") ?? .blue
-        case .header:  return .secondary
         case .context: return .primary.opacity(0.8)
         }
     }
 
-    private func lineBackground(_ kind: DiffLine.Kind) -> Color {
-        switch kind {
+    private func lineBackground(for origin: GitDiffLine.Origin) -> Color {
+        switch origin {
         case .added:   return (Color(hex: "#4ade80") ?? .green).opacity(0.08)
         case .removed: return (Color(hex: "#f87171") ?? .red).opacity(0.08)
-        default:       return .clear
+        case .context: return .clear
         }
     }
 }
