@@ -9,7 +9,7 @@ struct FilePreviewView: View {
     let onToggleFullscreen: () -> Void
     var onClose: (() -> Void)? = nil
     var rootDir: String = ""
-    var gitStatus: GitStatus? = nil
+    var gitDelta: GitDelta? = nil
 
     @State private var content: PreviewContent = .loading
     @State private var fileInfo: FileInfo?
@@ -70,7 +70,7 @@ struct FilePreviewView: View {
             Spacer()
 
             // Diff 切换按钮（仅修改/已添加文件显示）
-            if gitStatus == .modified || gitStatus == .added {
+            if gitDelta == .modified || gitDelta == .added {
                 Button(action: { showDiff.toggle() }) {
                     Text("Diff")
                         .font(.system(size: 10, weight: showDiff ? .semibold : .regular))
@@ -135,11 +135,11 @@ struct FilePreviewView: View {
 
     @ViewBuilder
     private var contentView: some View {
-        if showDiff && (gitStatus == .modified || gitStatus == .added) {
+        if showDiff && (gitDelta == .modified || gitDelta == .added) {
             DiffView(
                 rootDir: rootDir,
                 fileURL: url,
-                isStaged: gitStatus == .added
+                isStaged: gitDelta == .added
             )
         } else {
             switch content {

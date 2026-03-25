@@ -5,7 +5,7 @@ import AppKit
 struct FileNodeRow: View {
     let node: FileNode
     let depth: Int
-    let gitStatus: GitStatus?
+    let gitDelta: GitDelta?
     let isSelected: Bool
     let onToggleExpand: () -> Void
     let onSingleClick: () -> Void
@@ -77,7 +77,7 @@ struct FileNodeRow: View {
             Spacer(minLength: 4)
 
             // Git status badge
-            if let status = gitStatus {
+            if let status = gitDelta {
                 Text(status.symbol)
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(Color(hex: status.colorHex) ?? .secondary)
@@ -137,11 +137,11 @@ struct FileNodeRow: View {
                 // Git 操作（仅非目录文件）
                 if !node.isDirectory {
                     Divider()
-                    if gitStatus == .modified || gitStatus == .untracked {
+                    if gitDelta == .modified || gitDelta == .untracked {
                         Button("Stage") { onStage?() }
-                    } else if gitStatus == .added {
+                    } else if gitDelta == .added {
                         Button("Unstage") { onUnstage?() }
-                    } else if gitStatus == .deleted {
+                    } else if gitDelta == .deleted {
                         Button("Stage Deletion") { onStage?() }
                         Button("Unstage") { onUnstage?() }
                     }

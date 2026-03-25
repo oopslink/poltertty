@@ -18,7 +18,7 @@ struct GitCommitFile: Identifiable {
     let oldPath: String?    // renamed/copied 时的旧路径
 }
 
-enum GitDelta: Equatable {
+enum GitDelta: Equatable, Comparable {
     case added, modified, deleted, renamed, copied, untracked
     // untracked 仅用于 GitChange 和 workingDiff 场景
     // commit diff（GitCommitFile/GitFileDiff）中不会出现 untracked
@@ -43,6 +43,22 @@ enum GitDelta: Equatable {
         case .copied:    return "#a78bfa"
         case .untracked: return "#9ca3af"
         }
+    }
+
+    // 优先级（用于目录聚合：取子文件中最高优先级的状态）
+    var priority: Int {
+        switch self {
+        case .deleted:   return 5
+        case .modified:  return 4
+        case .added:     return 3
+        case .renamed:   return 2
+        case .copied:    return 1
+        case .untracked: return 0
+        }
+    }
+
+    static func < (lhs: GitDelta, rhs: GitDelta) -> Bool {
+        lhs.priority < rhs.priority
     }
 }
 

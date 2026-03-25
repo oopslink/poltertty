@@ -6,10 +6,10 @@ final class FileBrowserViewModel: ObservableObject {
     // MARK: - Published State
 
     @Published var rootNodes: [FileNode] = []
-    @Published var gitStatuses: [String: GitStatus] = [:]
+    @Published var gitStatuses: [String: GitDelta] = [:]
     @Published var filterText: String = ""
     @Published var activeExtensions: Set<String> = []
-    @Published var activeGitStatuses: Set<GitStatus> = []
+    @Published var activeGitStatuses: Set<GitDelta> = []
     @Published var showHiddenFiles: Bool = false
     @Published var isVisible: Bool
     @Published var panelWidth: CGFloat
@@ -242,7 +242,7 @@ final class FileBrowserViewModel: ObservableObject {
                 }
                 // Git 状态过滤
                 if !activeGitStatuses.isEmpty {
-                    let status = gitStatus(for: node.url)
+                    let status = gitDelta(for: node.url)
                     guard let status, activeGitStatuses.contains(status) else { continue }
                 }
                 result.append(node)
@@ -326,8 +326,8 @@ final class FileBrowserViewModel: ObservableObject {
         }
     }
 
-    /// Returns git status for a URL; for directories returns max of children's statuses
-    func gitStatus(for url: URL) -> GitStatus? {
+    /// 返回 URL 对应的 GitDelta；目录返回子文件中优先级最高的状态
+    func gitDelta(for url: URL) -> GitDelta? {
         if let direct = gitStatuses[url.path] { return direct }
         let prefix = url.path + "/"
         return gitStatuses
@@ -582,7 +582,7 @@ final class FileBrowserViewModel: ObservableObject {
         }
     }
 
-    func toggleGitStatusFilter(_ status: GitStatus) {
+    func toggleGitStatusFilter(_ status: GitDelta) {
         if activeGitStatuses.contains(status) {
             activeGitStatuses.remove(status)
         } else {

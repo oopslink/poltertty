@@ -119,7 +119,7 @@ struct FileBrowserPanel: View {
                         }
                     },
                     rootDir: viewModel.rootDir,
-                    gitStatus: viewModel.gitStatus(for: url)
+                    gitDelta: viewModel.gitDelta(for: url)
                 )
                 .frame(minWidth: 200)
             }
@@ -412,7 +412,7 @@ struct FileBrowserPanel: View {
         return FileNodeRow(
             node: entry.node,
             depth: entry.depth,
-            gitStatus: viewModel.gitStatus(for: entry.node.url),
+            gitDelta: viewModel.gitDelta(for: entry.node.url),
             isSelected: viewModel.selectedNodeIds.contains(entry.node.id),
             onToggleExpand: {
                 viewModel.toggleExpand(nodeId: entry.node.id)
