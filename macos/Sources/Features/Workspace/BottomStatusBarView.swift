@@ -25,7 +25,7 @@ struct BottomStatusBarView: View {
                     .truncationMode(.head)
                     .foregroundColor(.secondary)
                 Spacer()
-                // 右：tmux 按钮 | agent 按钮 | ctrl api 按钮 | git 状态
+                // 右：tmux 按钮 | agent 按钮 | git 状态
                 if !hasTmuxAttached {
                     Button(action: {
                         NotificationCenter.default.post(
