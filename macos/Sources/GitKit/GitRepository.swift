@@ -451,18 +451,33 @@ actor GitRepository {
     /// 丢弃工作区变更，恢复到暂存区状态（git checkout -- <path>）
     func discard(paths: [String]) throws {
         guard let r = repo else { return }
+        // 获取 index 用于判断文件是否被跟踪
+        var index: OpaquePointer?
+        guard git_repository_index(&index, r) == 0, let idx = index else { return }
+        defer { git_index_free(idx) }
+        git_index_read(idx, 1)  // 确保 index 是最新状态
+
         var opts = git_checkout_options()
         git_checkout_options_init(&opts, UInt32(GIT_CHECKOUT_OPTIONS_VERSION))
         opts.checkout_strategy = UInt32(GIT_CHECKOUT_FORCE.rawValue)
+
         for path in paths {
             let relative = makeRelative(path: path)
-            let code = relative.withCString { cPath -> Int32 in
-                var mutableCPath: UnsafePointer<CChar>? = cPath
-                opts.paths.strings = &mutableCPath
-                opts.paths.count = 1
-                return git_checkout_index(r, nil, &opts)
+            // 判断文件是否在 index 中（GIT_INDEX_STAGE_NORMAL = 0）
+            if git_index_get_bypath(idx, relative, GIT_INDEX_STAGE_NORMAL.rawValue) != nil {
+                // tracked 文件：用 checkout 恢复到 index 状态
+                let code = relative.withCString { cPath -> Int32 in
+                    var mutableCPath: UnsafePointer<CChar>? = cPath
+                    opts.paths.strings = &mutableCPath
+                    opts.paths.count = 1
+                    return git_checkout_index(r, idx, &opts)
+                }
+                if code != 0 { throw GitError.fromLibgit2(code) }
+            } else {
+                // untracked 文件：直接删除
+                let fullPath = rootDir + "/" + relative
+                try? FileManager.default.removeItem(atPath: fullPath)
             }
-            if code != 0 { throw GitError.fromLibgit2(code) }
         }
     }
 
