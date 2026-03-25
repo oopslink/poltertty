@@ -1140,23 +1140,51 @@ class AppDelegate: NSObject,
 
         agentMenu.addItem(.separator())
 
-        let toggleAgentMonitor = NSMenuItem(title: "Toggle Agent Monitor", action: #selector(toggleAgentMonitor(_:)), keyEquivalent: "m")
-        toggleAgentMonitor.keyEquivalentModifierMask = [.command, .option]
-        agentMenu.addItem(toggleAgentMonitor)
+        // Observability 子菜单
+        let observabilityMenu = NSMenu(title: "Observability")
 
-        let toggleNotificationCenter = NSMenuItem(title: "Toggle Notification Center", action: #selector(toggleNotificationCenter(_:)), keyEquivalent: "n")
-        toggleNotificationCenter.keyEquivalentModifierMask = [.command, .option]
-        agentMenu.addItem(toggleNotificationCenter)
+        let agentsInWorkspace = NSMenuItem(
+            title: "Agents In Workspace",
+            action: #selector(toggleAgentMonitor(_:)),
+            keyEquivalent: "m")
+        agentsInWorkspace.keyEquivalentModifierMask = [.command, .option]
+        observabilityMenu.addItem(agentsInWorkspace)
 
-        let jumpToUnread = NSMenuItem(title: "Jump to Highest Priority Unread", action: #selector(jumpToHighestPriorityUnread(_:)), keyEquivalent: "u")
-        jumpToUnread.keyEquivalentModifierMask = [.command, .option]
-        agentMenu.addItem(jumpToUnread)
+        let agentDashboard = NSMenuItem(
+            title: "Agent Dashboard",
+            action: #selector(showAgentDashboard(_:)),
+            keyEquivalent: "d")
+        agentDashboard.keyEquivalentModifierMask = [.command, .option]
+        observabilityMenu.addItem(agentDashboard)
+
+        let notifCenter = NSMenuItem(
+            title: "Agent Notification Center",
+            action: #selector(toggleNotificationCenter(_:)),
+            keyEquivalent: "n")
+        notifCenter.keyEquivalentModifierMask = [.command, .option]
+        observabilityMenu.addItem(notifCenter)
+
+        observabilityMenu.addItem(.separator())
+
+        let ctrlMonitor = NSMenuItem(
+            title: "Controller API Monitor",
+            action: #selector(toggleCtrlAPIMonitor(_:)),
+            keyEquivalent: "c")
+        ctrlMonitor.keyEquivalentModifierMask = [.command, .option]
+        observabilityMenu.addItem(ctrlMonitor)
+
+        let observabilityItem = NSMenuItem(title: "Observability", action: nil, keyEquivalent: "")
+        observabilityItem.submenu = observabilityMenu
+        agentMenu.addItem(observabilityItem)
 
         agentMenu.addItem(.separator())
 
-        let agentDashboard = NSMenuItem(title: "Agent Dashboard", action: #selector(showAgentDashboard(_:)), keyEquivalent: "d")
-        agentDashboard.keyEquivalentModifierMask = [.command, .option]
-        agentMenu.addItem(agentDashboard)
+        let jumpToUnread = NSMenuItem(
+            title: "Jump to Highest Priority Unread",
+            action: #selector(jumpToHighestPriorityUnread(_:)),
+            keyEquivalent: "u")
+        jumpToUnread.keyEquivalentModifierMask = [.command, .option]
+        agentMenu.addItem(jumpToUnread)
 
         let agentMenuItem = NSMenuItem(title: "Agent", action: nil, keyEquivalent: "")
         agentMenuItem.submenu = agentMenu
@@ -1197,6 +1225,12 @@ class AppDelegate: NSObject,
 
     @objc func toggleAgentMonitor(_ sender: Any?) {
         NotificationCenter.default.post(name: .toggleAgentMonitor, object: nil)
+    }
+
+    @objc func toggleCtrlAPIMonitor(_ sender: Any?) {
+        Task { @MainActor in
+            CtrlAPIStore.shared.isMonitorVisible.toggle()
+        }
     }
 
     @objc func showAgentDashboard(_ sender: Any?) {
