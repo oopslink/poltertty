@@ -520,6 +520,17 @@ final class CtrlServer {
                     ],
                     "required": ["paneId"]
                 ]
+            ],
+            [
+                "name": "screenshot",
+                "description": "Take a screenshot of a pane or the entire window; saves as PNG and returns the file path",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "target": ["type": "string", "enum": ["pane", "window"], "description": "Capture target: 'pane' for a single terminal pane, 'window' for the entire window (default: pane)"],
+                        "paneId": ["type": "string", "description": "UUID of the target pane (optional; defaults to focused pane for target=pane, key window for target=window)"]
+                    ]
+                ]
             ]
         ]
         sendRPCResult(connection, id: id, result: ["tools": tools], context: context)
