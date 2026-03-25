@@ -19,12 +19,6 @@ struct FileBrowserPanel: View {
     var body: some View {
         panelContent
             .background(Color(nsColor: .windowBackgroundColor))
-            .overlay {
-                if viewModel.showShortcutHelp {
-                    ShortcutHelpView(onDismiss: { viewModel.showShortcutHelp = false })
-                        .transition(.opacity)
-                }
-            }
             .focusable()
             .focused($isFocused)
             .backport.onKeyPress(".") { handleDotKey(modifiers: $0) }
@@ -83,12 +77,6 @@ struct FileBrowserPanel: View {
         HStack(spacing: 0) {
             // Left: File tree (always visible)
             VStack(spacing: 0) {
-                if !viewModel.breadcrumbSegments.isEmpty {
-                    BreadcrumbView(segments: viewModel.breadcrumbSegments) { segment in
-                        viewModel.focusDirectory(segment.url)
-                    }
-                    Divider()
-                }
                 if let monitor = worktreeMonitor, monitor.worktrees.count > 1 {
                     WorktreeNavigationBar(monitor: monitor, viewModel: viewModel)
                     Divider()
@@ -98,12 +86,20 @@ struct FileBrowserPanel: View {
                     FilterChipsView(viewModel: viewModel)
                     Divider()
                 }
+                if !viewModel.breadcrumbSegments.isEmpty {
+                    BreadcrumbView(segments: viewModel.breadcrumbSegments) { segment in
+                        viewModel.focusDirectory(segment.url)
+                    }
+                    Divider()
+                }
                 Divider()
                 if viewModel.rootDir.isEmpty || !FileManager.default.fileExists(atPath: viewModel.rootDir) {
                     emptyStateView
                 } else {
                     treeScrollView
                 }
+                Divider()
+                rootPathStatusBar
             }
             .frame(minWidth: 200, maxWidth: isPreviewVisible ? viewModel.treeWidth : .infinity)
             .frame(width: isPreviewVisible ? viewModel.treeWidth : nil)
@@ -313,6 +309,18 @@ struct FileBrowserPanel: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
                 Button {
+                    viewModel.showShortcutHelp.toggle()
+                } label: {
+                    Image(systemName: "questionmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Keyboard Shortcuts (?)")
+                .popover(isPresented: $viewModel.showShortcutHelp, arrowEdge: .trailing) {
+                    ShortcutHelpView()
+                }
+                Button {
                     viewModel.isVisible = false
                 } label: {
                     Image(systemName: "xmark")
@@ -340,6 +348,24 @@ struct FileBrowserPanel: View {
                 .padding(.bottom, 4)
             }
         }
+    }
+
+    // MARK: - Root Path Status Bar
+
+    private var rootPathStatusBar: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "folder")
+                .font(.system(size: 9))
+                .foregroundColor(.secondary.opacity(0.6))
+            Text(viewModel.effectiveRootDir)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.secondary.opacity(0.6))
+                .lineLimit(1)
+                .truncationMode(.head)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Empty State

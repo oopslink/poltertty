@@ -263,19 +263,15 @@ struct FilePreviewView: View {
                 // Fallback: Check file extension when UTType doesn't help
                 await loadText()
             } else {
-                guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    content = .notSupported("Preview not available for this file type")
-                }
+                // 未知类型，尝试按文本读取
+                await loadText()
             }
         } else if isKnownTextExtension() {
             // No content type, but has known text extension
             await loadText()
         } else {
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                content = .notSupported("Unknown file type")
-            }
+            // 无法识别内容类型，尝试按文本读取
+            await loadText()
         }
     }
 

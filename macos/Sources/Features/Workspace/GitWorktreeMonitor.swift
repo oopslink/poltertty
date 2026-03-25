@@ -4,7 +4,8 @@ import Foundation
 // MARK: - Data Model
 
 struct GitWorktree: Identifiable, Equatable {
-    let id: UUID
+    // path 作为稳定 ID，避免每次 refresh() 生成新 UUID 导致 SwiftUI 视图重建闪烁
+    var id: String { path }
     let path: String        // absolute path to the worktree
     let branch: String?     // nil when HEAD is detached
     let isMain: Bool        // true for the primary worktree
@@ -49,7 +50,6 @@ enum GitWorktreeParser {
 
             let normalizedPath = URL(fileURLWithPath: wtPath).standardized.path
             worktrees.append(GitWorktree(
-                id: UUID(),
                 path: normalizedPath,
                 branch: isDetached ? nil : branch,
                 isMain: isFirst,
