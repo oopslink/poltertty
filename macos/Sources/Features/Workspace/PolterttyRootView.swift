@@ -48,6 +48,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
     @State private var showConvertAlert = false
     @State private var fileBrowserDividerHovered = false
+    @State private var gitPanelDividerHovered = false
+    @State private var gitPanelWidth: CGFloat = 600
     @State private var showTmuxPicker = false
     @State private var tmuxPickerAttachInCurrentPane = false
     @State private var launcherVisible = false
@@ -246,8 +248,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
                             if gitPanelVM.isVisible {
                                 GitPanelView(vm: gitPanelVM)
-                                    .frame(minWidth: 500, maxWidth: 900)
-                                Divider()
+                                    .frame(width: gitPanelWidth)
+                                gitPanelDivider
                             }
 
                             terminalAreaView
@@ -334,13 +336,12 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .onReceive(NotificationCenter.default.publisher(for: .toggleGitPanel)) { _ in
             gitPanelVM.isVisible.toggle()
         }
-        .task(id: workspaceId) {
-            if let wsId = workspaceId,
-               let ws = WorkspaceManager.shared.workspace(for: wsId),
-               !ws.rootDir.isEmpty {
-                await gitPanelVM.load(rootDir: ws.rootDirExpanded)
-                fileBrowserVM.updateGitRepo(gitPanelVM.repo)
-            }
+        // 跟随文件浏览器当前路径（切换 worktree 时自动更新）
+        .task(id: fileBrowserVM.effectiveRootDir) {
+            let dir = fileBrowserVM.effectiveRootDir
+            guard !dir.isEmpty else { return }
+            await gitPanelVM.load(rootDir: dir)
+            fileBrowserVM.updateGitRepo(gitPanelVM.repo)
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleNotificationCenter)) { _ in
             notificationCenterVisible.toggle()
@@ -451,6 +452,30 @@ struct PolterttyRootView<TerminalContent: View>: View {
         terminalView
             .environmentObject(tabBarViewModel)
             .environmentObject(gitPanelVM)
+    }
+
+    private var gitPanelDivider: some View {
+        ZStack {
+            Color(nsColor: .separatorColor)
+                .frame(width: 1)
+            if gitPanelDividerHovered {
+                DividerGripHandle()
+            }
+        }
+        .frame(width: 16)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            gitPanelDividerHovered = hovering
+            if hovering { NSCursor.resizeLeftRight.push() }
+            else { NSCursor.pop() }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    let newWidth = gitPanelWidth + value.translation.width
+                    gitPanelWidth = max(400, min(1200, newWidth))
+                }
+        )
     }
 
     private var fileBrowserDivider: some View {
