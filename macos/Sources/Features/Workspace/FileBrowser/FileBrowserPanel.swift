@@ -36,6 +36,7 @@ struct FileBrowserPanel: View {
             .backport.onKeyPress(KeyEquivalent.return)    { handleReturnKey(modifiers: $0) }
             .backport.onKeyPress("a") { handleAKey(modifiers: $0) }
             .backport.onKeyPress("?") { handleQuestionKey(modifiers: $0) }
+            .backport.onKeyPress("g") { handleGKey(modifiers: $0) }
             .onChange(of: viewModel.filterText) { text in
                 if text.isEmpty {
                     viewModel.deactivateRecursiveFilter()
@@ -297,6 +298,12 @@ struct FileBrowserPanel: View {
         return .handled
     }
 
+    private func handleGKey(modifiers: EventModifiers) -> BackportKeyPressResult {
+        guard isFocused, !viewModel.gitStatuses.isEmpty else { return .ignored }
+        viewModel.toggleUncommittedFilter()
+        return .handled
+    }
+
     // MARK: - Filter Bar
 
     private var filterBar: some View {
@@ -308,6 +315,19 @@ struct FileBrowserPanel: View {
                 TextField("Filter", text: $viewModel.filterText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
+                if !viewModel.gitStatuses.isEmpty {
+                    Button {
+                        viewModel.toggleUncommittedFilter()
+                    } label: {
+                        Image(systemName: viewModel.isUncommittedFilterActive
+                              ? "exclamationmark.circle.fill"
+                              : "exclamationmark.circle")
+                            .font(.system(size: 11))
+                            .foregroundColor(viewModel.isUncommittedFilterActive ? .orange : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show Uncommitted Files Only (g)")
+                }
                 Button {
                     viewModel.showShortcutHelp.toggle()
                 } label: {
