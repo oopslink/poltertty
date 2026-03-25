@@ -7,22 +7,6 @@ struct FilterChipsView: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                // 扩展名 Chips
-                ForEach(viewModel.availableExtensions, id: \.ext) { item in
-                    FileBrowserFilterChip(
-                        label: ".\(item.ext)",
-                        count: item.count,
-                        isActive: viewModel.activeExtensions.contains(item.ext),
-                        color: .accentColor
-                    ) {
-                        viewModel.toggleExtensionFilter(item.ext)
-                    }
-                }
-
-                if !viewModel.availableExtensions.isEmpty && !gitStatusItems.isEmpty {
-                    Divider().frame(height: 16)
-                }
-
                 // Git 状态 Chips
                 ForEach(gitStatusItems, id: \.status.symbol) { item in
                     FileBrowserFilterChip(
