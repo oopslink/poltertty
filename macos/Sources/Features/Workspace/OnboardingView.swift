@@ -15,7 +15,7 @@ struct OnboardingView: View {
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(.primary)
 
-                Text("创建你的第一个 Workspace")
+                Text("Create your first Workspace")
                     .font(.system(size: 14))
                     .foregroundColor(.secondary)
             }
@@ -37,7 +37,7 @@ struct OnboardingView: View {
 
             // Temporary option
             Button(action: onCreateTemporary) {
-                Text("或 新建临时 Workspace")
+                Text("Or create a temporary Workspace")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
             }

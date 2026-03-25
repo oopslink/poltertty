@@ -23,7 +23,7 @@ struct SubagentMessagesView: View {
                 } else if let t = transcript, !t.turns.isEmpty {
                     messageList(t)
                 } else {
-                    Text("暂无对话记录")
+                    Text("No messages")
                         .font(.system(size: 10)).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(20)

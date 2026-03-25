@@ -53,7 +53,7 @@ struct SessionOverviewContent: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 4) {
-                    statCell("总耗时", value: elapsedSinceStart)
+                    statCell("Total Duration", value: elapsedSinceStart)
                     statCell("Cost", value: costLabel)
                     statCell("Tokens", value: tokensLabel)
                     statCell("Context", value: String(format: "%.0f%%", session.tokenUsage.contextUtilization * 100))
@@ -66,7 +66,7 @@ struct SessionOverviewContent: View {
                 subagentsSection
 
                 Divider().padding(.vertical, 6)
-                Text("点击 subagent 查看详情 · Cmd+Click 并排对比")
+                Text("Click to view details · Cmd+Click to compare")
                     .font(.system(size: 9)).foregroundStyle(.tertiary)
 
                 // MARK: - Activity Log（可折叠，固定高度）

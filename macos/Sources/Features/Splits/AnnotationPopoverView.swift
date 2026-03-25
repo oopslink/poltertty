@@ -11,7 +11,7 @@ struct AnnotationPopoverView: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            TextField("设置 pane 注释...", text: $text)
+            TextField("Set pane label...", text: $text)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .onSubmit { save(); dismiss() }

@@ -57,7 +57,7 @@ struct TmuxSessionPicker: View {
     @ViewBuilder
     private var existingSessionList: some View {
         if viewModel.sessions.isEmpty {
-            Text("没有可用的 tmux session")
+            Text("No tmux sessions available")
                 .foregroundStyle(.secondary)
                 .font(.system(size: 12))
                 .frame(height: 80)
@@ -71,7 +71,7 @@ struct TmuxSessionPicker: View {
                         Circle()
                             .fill(Color.green)
                             .frame(width: 6, height: 6)
-                            .help("已有 client 连接")
+                            .help("Client already connected")
                     }
                 }
                 .tag(session.id)
@@ -87,7 +87,7 @@ struct TmuxSessionPicker: View {
         HStack {
             Text("Session name:")
                 .font(.system(size: 12))
-            TextField("留空自动命名", text: $viewModel.newSessionName)
+            TextField("Leave empty to auto-name", text: $viewModel.newSessionName)
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 12))
         }

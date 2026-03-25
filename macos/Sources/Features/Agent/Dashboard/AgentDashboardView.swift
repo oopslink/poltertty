@@ -41,18 +41,18 @@ struct AgentDashboardView: View {
 
             Spacer()
 
-            Toggle("已完成", isOn: $viewModel.showInactive)
+            Toggle("Completed", isOn: $viewModel.showInactive)
                 .toggleStyle(.checkbox)
                 .controlSize(.small)
                 .font(.system(size: 11))
 
             Picker("", selection: $viewModel.viewMode) {
                 ForEach(AgentDashboardViewModel.ViewMode.allCases, id: \.self) { mode in
-                    Text(mode.rawValue).tag(mode)
+                    Image(systemName: mode.icon).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
-            .frame(width: 100)
+            .frame(width: 64)
             .controlSize(.small)
         }
         .padding(.horizontal, 14)
@@ -156,10 +156,10 @@ struct AgentDashboardView: View {
                 .font(.system(size: 36, weight: .thin))
                 .foregroundStyle(.quaternary)
             VStack(spacing: 3) {
-                Text("当前没有活跃的 Agent")
+                Text("No active agents")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-                Text("双击 Option 键打开 / 关闭 · ⌘⇧A 启动")
+                Text("Double-tap Option to toggle · ⌘⇧A to launch")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -216,12 +216,12 @@ struct AgentDashboardView: View {
         HStack(spacing: 0) {
             Spacer().frame(width: 3)
             Text("AGENT").frame(width: 124, alignment: .leading).padding(.leading, 8)
-            Text("状态").frame(width: 68, alignment: .leading)
-            Text("时长").frame(width: 54, alignment: .leading)
-            Text("上下文").frame(width: 88, alignment: .leading)
-            Text("TOKEN / 费用").frame(width: 104, alignment: .leading)
-            Text("子 Agent").frame(width: 56, alignment: .center)
-            Text("任务").frame(maxWidth: .infinity, alignment: .leading)
+            Text("STATUS").frame(width: 68, alignment: .leading)
+            Text("DURATION").frame(width: 54, alignment: .leading)
+            Text("CONTEXT").frame(width: 88, alignment: .leading)
+            Text("TOKEN / COST").frame(width: 104, alignment: .leading)
+            Text("SUBAGENTS").frame(width: 56, alignment: .center)
+            Text("TASK").frame(maxWidth: .infinity, alignment: .leading)
         }
         .font(.system(size: 9, weight: .medium))
         .foregroundStyle(.quaternary)
@@ -459,7 +459,7 @@ struct AgentDashboardView: View {
                 VStack(spacing: 2) {
                     ContextUtilBar(utilization: ctx)
                     HStack {
-                        Text("上下文").font(.system(size: 8)).foregroundStyle(.quaternary)
+                        Text("CONTEXT").font(.system(size: 8)).foregroundStyle(.quaternary)
                         Spacer()
                         Text(String(format: "%.0f%%", ctx * 100))
                             .font(.system(size: 8, design: .monospaced))

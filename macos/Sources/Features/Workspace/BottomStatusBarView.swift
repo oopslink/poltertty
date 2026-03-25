@@ -143,7 +143,7 @@ struct BottomStatusBarView: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .help("设置 pane 注释")
+                .help("Set pane label")
                 .popover(isPresented: $showAnnotationPopover) {
                     AnnotationPopoverView(surfaceId: surfaceId)
                         .environmentObject(paneSelectorVM)

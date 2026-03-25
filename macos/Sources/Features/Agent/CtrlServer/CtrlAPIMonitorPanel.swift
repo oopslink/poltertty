@@ -168,7 +168,7 @@ struct CtrlAPIMonitorPanel: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .help("关闭详情")
+                .help("Close")
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)

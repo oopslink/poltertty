@@ -72,7 +72,7 @@ struct AgentDrawer: View {
 
     private var headerTitle: String {
         guard viewModel.selectedItems.count == 1, let first = viewModel.selectedItems.first else {
-            return "对比模式"
+            return "Compare"
         }
         switch first {
         case .sessionOverview(let s):       return s.definition.name

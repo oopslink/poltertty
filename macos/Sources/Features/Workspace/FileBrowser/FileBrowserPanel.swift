@@ -673,13 +673,13 @@ private struct WorktreeNavigationBar: View {
                     HStack(spacing: 3) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 9, weight: .semibold))
-                        Text("主仓库")
+                        Text("Main")
                             .font(.system(size: 11))
                     }
                     .foregroundColor(.accentColor)
                 }
                 .buttonStyle(.plain)
-                .help("返回主仓库根目录")
+                .help("Go to main repo root")
             }
 
             Spacer()
@@ -696,7 +696,7 @@ private struct WorktreeNavigationBar: View {
                         }
                     } label: {
                         Label {
-                            Text(wt.isMain ? "主仓库" : (wt.branch ?? wt.path))
+                            Text(wt.isMain ? "Main" : (wt.branch ?? wt.path))
                         } icon: {
                             if isActive {
                                 Image(systemName: "checkmark")
@@ -719,7 +719,7 @@ private struct WorktreeNavigationBar: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .help("切换 Worktree")
+            .help("Switch worktree")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
@@ -727,7 +727,7 @@ private struct WorktreeNavigationBar: View {
 
     private func currentDisplayLabel(for wt: GitWorktree?, fallback: String) -> String {
         guard let wt else { return URL(fileURLWithPath: fallback).lastPathComponent }
-        if wt.isMain { return "主仓库" }
+        if wt.isMain { return "Main" }
         return wt.branch ?? wt.path
     }
 }

@@ -5,8 +5,15 @@ import Combine
 @MainActor
 final class AgentDashboardViewModel: ObservableObject {
     enum ViewMode: String, CaseIterable {
-        case table = "表格"
-        case cards = "卡片"
+        case table = "table"
+        case cards = "cards"
+
+        var icon: String {
+            switch self {
+            case .table: return "list.bullet.rectangle"
+            case .cards: return "square.grid.2x2"
+            }
+        }
     }
 
     struct WorkspaceSessionGroup: Identifiable {

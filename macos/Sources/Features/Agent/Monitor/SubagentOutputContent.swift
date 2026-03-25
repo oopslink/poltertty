@@ -29,7 +29,7 @@ struct SubagentOutputContent: View {
                     case .working, .launching:
                         runningView
                     default:
-                        Text("等待输出…").font(.system(size: 10)).foregroundStyle(.tertiary)
+                        Text("Waiting for output…").font(.system(size: 10)).foregroundStyle(.tertiary)
                     }
                 }
             }
@@ -60,7 +60,7 @@ struct SubagentOutputContent: View {
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Label("已完成", systemImage: "checkmark.circle.fill")
+                Label("Done", systemImage: "checkmark.circle.fill")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(Color(hex: "#4caf50") ?? .green)
                 completedCallsView
@@ -70,7 +70,7 @@ struct SubagentOutputContent: View {
 
     private func errorView(_ msg: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("中断于错误", systemImage: "xmark.circle.fill")
+            Label("Failed", systemImage: "xmark.circle.fill")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(Color(hex: "#f44336") ?? .red)
             Text(msg)
@@ -86,7 +86,7 @@ struct SubagentOutputContent: View {
 
     private var runningView: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Label("运行中", systemImage: "bolt.circle.fill")
+            Label("Running", systemImage: "bolt.circle.fill")
                 .font(.system(size: 10)).foregroundStyle(Color(hex: "#ff9800") ?? .orange)
             completedCallsView
         }
@@ -98,7 +98,7 @@ struct SubagentOutputContent: View {
         let total = subagent.toolCalls.count
         if !done.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
-                Text("工具调用 (\(done.count)/\(total))")
+                Text("Tool calls (\(done.count)/\(total))")
                     .font(.system(size: 9)).foregroundStyle(.secondary)
                 ForEach(done) { call in
                     HStack(spacing: 4) {
@@ -111,7 +111,7 @@ struct SubagentOutputContent: View {
                     HStack(spacing: 4) {
                         Image(systemName: "minus.circle")
                             .font(.system(size: 8)).foregroundStyle(.orange)
-                        Text("进行中: \(total - done.count) 个").font(.system(size: 9)).foregroundStyle(.tertiary)
+                        Text("\(total - done.count) in progress").font(.system(size: 9)).foregroundStyle(.tertiary)
                     }
                 }
             }

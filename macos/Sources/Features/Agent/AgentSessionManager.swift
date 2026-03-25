@@ -125,7 +125,7 @@ final class AgentSessionManager: ObservableObject {
                         id: UUID(), timestamp: Date(),
                         workspaceId: session.workspaceId, surfaceId: surfaceId,
                         agentDefinitionId: session.definition.id, sessionId: sid,
-                        type: .done, title: "\(session.definition.name) 会话结束",
+                        type: .done, title: "\(session.definition.name) session ended",
                         body: nil, priority: .normal
                     ))
                 }
@@ -146,7 +146,7 @@ final class AgentSessionManager: ObservableObject {
 
             // 延迟 2 秒发通知：若 postToolUse 先到则取消（自动批准工具不产生通知）
             if let toolUseId = payload.toolUseId {
-                let toolName = payload.toolName ?? "工具"
+                let toolName = payload.toolName ?? "tool"
                 // 优先用 claudeSessionId 查找，找不到则用 cwd 兜底，仍找不到则用 nil（全局通知）
                 let toolSession = session(forClaudeSessionId: sid)
                     ?? payload.cwd.flatMap { c in
@@ -164,7 +164,7 @@ final class AgentSessionManager: ObservableObject {
                         id: UUID(), timestamp: Date(),
                         workspaceId: wsId, surfaceId: surfaceId,
                         agentDefinitionId: defId, sessionId: sid,
-                        type: .waiting, title: "\(agentName) 等待确认：\(toolName)",
+                        type: .waiting, title: "\(agentName) waiting: \(toolName)",
                         body: payload.toolInputRaw, priority: .high
                     ))
                 }
@@ -242,7 +242,7 @@ final class AgentSessionManager: ObservableObject {
                         id: UUID(), timestamp: Date(),
                         workspaceId: session.workspaceId, surfaceId: claudeSessionIndex[sid],
                         agentDefinitionId: session.definition.id, sessionId: sid,
-                        type: .waiting, title: "\(session.definition.name) 等待操作",
+                        type: .waiting, title: "\(session.definition.name) needs attention",
                         body: nil, priority: .high
                     ))
                 }

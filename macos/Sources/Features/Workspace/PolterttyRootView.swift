@@ -420,10 +420,10 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @ViewBuilder
     private var convertToFormalSheet: some View {
         VStack(spacing: 16) {
-            Text("转为正式 Workspace")
+            Text("Convert to Workspace")
                 .font(.system(size: 14, weight: .semibold))
 
-            TextField("名称", text: Binding(
+            TextField("Name", text: Binding(
                 get: { convertName },
                 set: { convertName = WorkspaceNameValidator.filterInput($0) }
             ))
@@ -431,8 +431,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
             .frame(width: 240)
 
             HStack {
-                Button("取消") { showConvertAlert = false }
-                Button("确认") {
+                Button("Cancel") { showConvertAlert = false }
+                Button("Confirm") {
                     if let id = convertTargetId {
                         manager.convertToFormal(id: id, newName: convertName)
                     }

@@ -93,14 +93,14 @@ struct SessionDetailView: View {
         } else if session.subagents.isEmpty {
             VStack(spacing: 8) {
                 Spacer()
-                Text("等待 subagent 启动…")
+                Text("Waiting for subagent to start…")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                 Spacer()
             }
         } else {
             VStack(spacing: 8) {
                 Spacer()
-                Text("点击左侧 subagent 查看详情")
+                Text("Click a subagent to view details")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                 Spacer()
             }

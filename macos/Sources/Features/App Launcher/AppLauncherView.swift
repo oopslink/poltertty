@@ -163,7 +163,7 @@ struct AppLauncherView: View {
             .frame(width: 0, height: 0)
             .accessibilityHidden(true)
 
-            TextField("输入想找的功能…", text: $query)
+            TextField("Search features…", text: $query)
                 .padding()
                 .font(.system(size: 20, weight: .light))
                 .frame(height: 48)

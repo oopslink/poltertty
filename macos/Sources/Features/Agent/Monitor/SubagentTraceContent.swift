@@ -12,10 +12,10 @@ struct SubagentTraceContent: View {
                 if subagent.toolCalls.isEmpty {
                     if subagent.isHistorical {
                         // 历史记录：toolCalls 为空是因为持久化不保留详情（isHistorical 标记由 toAgentSession() 设置）
-                        Text("历史记录不保留工具调用详情")
+                        Text("Tool call details not retained in history")
                             .font(.system(size: 10)).foregroundStyle(.tertiary).padding(12)
                         if let output = subagent.output {
-                            Text("最终输出：")
+                            Text("Final output:")
                                 .font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                                 .padding(.horizontal, 12)
                             Text(output)
@@ -24,7 +24,7 @@ struct SubagentTraceContent: View {
                                 .padding(.horizontal, 12).padding(.top, 4)
                         }
                     } else {
-                        Text(subagent.state.isActive ? "等待工具调用…" : "无工具调用记录")
+                        Text(subagent.state.isActive ? "Waiting for tool calls…" : "No tool calls")
                             .font(.system(size: 10)).foregroundStyle(.tertiary)
                             .padding(12)
                     }

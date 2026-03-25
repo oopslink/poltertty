@@ -62,7 +62,7 @@ struct AgentMonitorPanel: View {
     private var externalSessionsSectionView: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
-                Text("外部会话")
+                Text("External Session")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Text("\(viewModel.externalSessions.count)")
@@ -232,7 +232,7 @@ private struct ExternalSessionRow: View {
     }
 
     private func rolePrefix(_ role: ExternalSessionRecord.LastMessage.Role) -> String {
-        role == .user ? "你：" : "助手："
+        role == .user ? "You:" : "Assistant:"
     }
 }
 
@@ -296,7 +296,7 @@ private struct ExternalSessionDetailView: View {
             Circle()
                 .fill(session.isAlive ? Color.green : Color.gray)
                 .frame(width: 6, height: 6)
-            Text(session.isAlive ? "运行中" : "已停止")
+            Text(session.isAlive ? "Running" : "Stopped")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(session.isAlive ? .primary : .secondary)
         }
@@ -318,12 +318,12 @@ private struct ExternalSessionDetailView: View {
                 detailRow("PID", value: "\(pid)")
             }
 
-            detailRow("工作目录", value: session.cwd, monospaced: true)
+            detailRow("Working Dir", value: session.cwd, monospaced: true)
 
-            detailRow("启动时间",
+            detailRow("Started",
                       value: Self.dateFormatter.string(from: session.startedAt))
 
-            detailRow("运行时长", value: durationText)
+            detailRow("Duration", value: durationText)
         }
     }
 
@@ -344,7 +344,7 @@ private struct ExternalSessionDetailView: View {
     private func lastMessageView(_ msg: ExternalSessionRecord.LastMessage) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                Text("最后消息")
+                Text("Last Message")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(.tertiary)
                 Spacer()
@@ -354,7 +354,7 @@ private struct ExternalSessionDetailView: View {
             }
 
             HStack(alignment: .top, spacing: 4) {
-                Text(msg.role == .user ? "用户" : "助手")
+                Text(msg.role == .user ? "User" : "Assistant")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(msg.role == .user ? .blue : .orange)
                     .frame(width: 24, alignment: .leading)
@@ -369,10 +369,10 @@ private struct ExternalSessionDetailView: View {
 
     private var durationText: String {
         let secs = Int(Date().timeIntervalSince(session.startedAt))
-        if secs < 60     { return "\(secs)秒" }
-        if secs < 3600   { return "\(secs / 60)分\(secs % 60)秒" }
+        if secs < 60     { return "\(secs)s" }
+        if secs < 3600   { return "\(secs / 60)m \(secs % 60)s" }
         let h = secs / 3600
         let m = (secs % 3600) / 60
-        return "\(h)时\(m)分"
+        return "\(h)h \(m)m"
     }
 }

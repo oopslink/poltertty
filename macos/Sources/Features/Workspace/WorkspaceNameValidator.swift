@@ -19,10 +19,10 @@ struct WorkspaceNameValidator {
     static func validate(_ name: String, existingNames: [String]) -> String? {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty {
-            return "请输入名称"
+            return "Name is required"
         }
         if existingNames.contains(where: { $0.lowercased() == trimmed.lowercased() }) {
-            return "该名称已存在"
+            return "Name already exists"
         }
         return nil
     }

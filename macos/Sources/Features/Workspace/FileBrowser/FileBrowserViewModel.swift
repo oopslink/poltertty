@@ -443,12 +443,12 @@ final class FileBrowserViewModel: ObservableObject {
             let destStd = destination.standardized
             let urlStd = url.standardized
             if destStd.path.hasPrefix(urlStd.path + "/") || destStd.path == urlStd.path {
-                return ["目标路径不合法：不能移动到自身子目录"]
+                return ["Invalid destination: cannot move to own subdirectory"]
             }
         }
         // 校验：目标目录可写
         guard FileManager.default.isWritableFile(atPath: destination.path) else {
-            return ["目标目录无写入权限"]
+            return ["No write permission for destination"]
         }
 
         var errors: [String] = []

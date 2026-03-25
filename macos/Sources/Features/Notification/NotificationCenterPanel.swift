@@ -31,11 +31,11 @@ struct NotificationCenterPanel: View {
 
     private var header: some View {
         HStack {
-            Text("通知")
+            Text("Notifications")
                 .font(.system(size: 12, weight: .semibold))
             Spacer()
             if let wsId = workspaceId {
-                Button("全部已读") {
+                Button("Mark all read") {
                     store.markAllRead(workspace: wsId)
                 }
                 .font(.system(size: 11))
@@ -57,16 +57,16 @@ struct NotificationCenterPanel: View {
 
     private var filterBar: some View {
         HStack(spacing: 6) {
-            FilterChip("全部", isSelected: typeFilter == nil) {
+            FilterChip("All", isSelected: typeFilter == nil) {
                 typeFilter = nil
             }
-            FilterChip("等待中", isSelected: typeFilter == .waiting) {
+            FilterChip("Waiting", isSelected: typeFilter == .waiting) {
                 typeFilter = .waiting
             }
-            FilterChip("错误", isSelected: typeFilter == .error) {
+            FilterChip("Error", isSelected: typeFilter == .error) {
                 typeFilter = .error
             }
-            FilterChip("已完成", isSelected: typeFilter == .done) {
+            FilterChip("Done", isSelected: typeFilter == .done) {
                 typeFilter = .done
             }
             Spacer()
@@ -82,7 +82,7 @@ struct NotificationCenterPanel: View {
         let items = store.filtered(workspace: workspaceId, type: typeFilter)
         if items.isEmpty {
             Spacer()
-            Text("暂无通知")
+            Text("No notifications")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
             Spacer()

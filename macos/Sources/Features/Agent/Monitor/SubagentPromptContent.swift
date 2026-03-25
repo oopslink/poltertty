@@ -25,7 +25,7 @@ struct SubagentPromptContent: View {
             } else if isLoading {
                 HStack { Spacer(); ProgressView(); Spacer() }.padding(20)
             } else {
-                Text("Prompt 未记录")
+                Text("Prompt not recorded")
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
                     .padding(12)
             }

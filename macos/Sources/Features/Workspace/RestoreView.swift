@@ -13,7 +13,7 @@ struct RestoreView: View {
             Spacer()
 
             VStack(spacing: 8) {
-                Text("📂 恢复 Workspaces")
+                Text("Restore Workspaces")
                     .font(.system(size: 20, weight: .bold))
             }
 
@@ -63,7 +63,7 @@ struct RestoreView: View {
             Button(action: {
                 onRestore(Array(selected))
             }) {
-                Text("恢复选中的 (\(selected.count))")
+                Text("Restore selected (\(selected.count))")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
@@ -78,7 +78,7 @@ struct RestoreView: View {
 
             // Quick actions
             HStack(spacing: 16) {
-                Button("只恢复最近一个") {
+                Button("Restore latest only") {
                     if let first = workspaces.first {
                         onRestore([first.id])
                     }
@@ -89,7 +89,7 @@ struct RestoreView: View {
 
                 Text("|").foregroundColor(.secondary.opacity(0.3))
 
-                Button("全部恢复") {
+                Button("Restore all") {
                     onRestore(workspaces.map { $0.id })
                 }
                 .font(.system(size: 12))
@@ -104,7 +104,7 @@ struct RestoreView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "plus")
                         .font(.system(size: 11))
-                    Text("新建 Workspace")
+                    Text("New Workspace")
                         .font(.system(size: 12))
                 }
                 .foregroundColor(selected.isEmpty ? .accentColor : .secondary)

@@ -30,14 +30,14 @@ final class TmuxSessionPickerViewModel: ObservableObject {
         } catch let error as TmuxError {
             switch error {
             case .notInstalled:
-                errorMessage = "tmux 未安装"
+                errorMessage = "tmux not installed"
             case .serverNotRunning:
                 sessions = []
             case .timeout:
-                errorMessage = "tmux 响应超时"
+                errorMessage = "tmux timed out"
             }
         } catch {
-            errorMessage = "未知错误"
+            errorMessage = "Unknown error"
         }
         if sessions.isEmpty && errorMessage == nil {
             mode = .createNew
@@ -67,7 +67,7 @@ final class TmuxSessionPickerViewModel: ObservableObject {
                     )
                     return output.trimmingCharacters(in: .whitespacesAndNewlines)
                 } catch {
-                    errorMessage = "创建 session 失败"
+                    errorMessage = "Failed to create session"
                     return nil
                 }
             } else {
@@ -77,7 +77,7 @@ final class TmuxSessionPickerViewModel: ObservableObject {
                     )
                     return name
                 } catch {
-                    errorMessage = "创建 session \"\(name)\" 失败（可能已存在）"
+                    errorMessage = "Failed to create session \"\(name)\" (may already exist)"
                     return nil
                 }
             }

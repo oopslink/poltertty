@@ -50,7 +50,7 @@ struct TmuxWindowBar: View {
             }
         } message: {
             if let w = windowToClose {
-                Text("确定关闭 window \(w.index):\(w.name)？")
+                Text("Close window \(w.index): \(w.name)?")
             }
         }
     }

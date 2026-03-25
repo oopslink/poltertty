@@ -1123,14 +1123,14 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     private func showTabCloseConfirmation(tabName: String? = nil, onConfirm: @escaping () -> Void) {
         guard let window else { return }
         let alert = NSAlert()
-        alert.messageText = "关闭标签页"
+        alert.messageText = "Close Tab"
         if let name = tabName, !name.isEmpty {
-            alert.informativeText = "确定要关闭「\(name)」吗？"
+            alert.informativeText = "Close \"\(name)\"?"
         } else {
-            alert.informativeText = "确定要关闭该标签页吗？"
+            alert.informativeText = "Close this tab?"
         }
-        alert.addButton(withTitle: "关闭")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: "Close")
+        alert.addButton(withTitle: "Cancel")
         alert.buttons[0].hasDestructiveAction = true
         alert.beginSheetModal(for: window) { response in
             if response == .alertFirstButtonReturn {
@@ -1164,10 +1164,10 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         guard let window else { return }
         let alert = NSAlert()
         alert.messageText = "Tmux Session \"\(sessionName)\""
-        alert.informativeText = "该 tab 已 attach 到 tmux session，你想要："
+        alert.informativeText = "This tab is attached to a tmux session:"
         alert.addButton(withTitle: "Detach")
         alert.addButton(withTitle: "Kill Session")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: "Cancel")
         alert.buttons[1].hasDestructiveAction = true
 
         alert.beginSheetModal(for: window) { response in

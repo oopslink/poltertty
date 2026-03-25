@@ -100,11 +100,11 @@ struct TerminalTabItem: View {
                 }
             }
             .contextMenu {
-                Button("重命名") { startRename() }
+                Button("Rename") { startRename() }
                 Divider()
-                Button("关闭标签页") { onClose() }
+                Button("Close Tab") { onClose() }
                 if !isLastTab {
-                    Button("关闭其他标签页") { onCloseOthers() }
+                    Button("Close Other Tabs") { onCloseOthers() }
                 }
             }
             .draggable(tab.id.uuidString)

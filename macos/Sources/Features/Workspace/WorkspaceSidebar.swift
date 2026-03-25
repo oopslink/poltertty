@@ -878,7 +878,7 @@ struct ExpandedWorkspaceItem: View {
             }
             Divider()
             if workspace.isTemporary {
-                Button("转为正式 Workspace") { onConvert() }
+                Button("Convert to Workspace") { onConvert() }
                 Divider()
             }
             if isOpen {
