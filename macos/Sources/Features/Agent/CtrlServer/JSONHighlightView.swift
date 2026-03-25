@@ -26,7 +26,7 @@ struct JSONHighlightView: NSViewRepresentable {
         textView.isEditable = false
         textView.isSelectable = true
         textView.isRichText = true
-        textView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        textView.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
         textView.drawsBackground = true
         textView.backgroundColor = AtomOneDark.background
         textView.textContainerInset = NSSize(width: 8, height: 8)
@@ -54,7 +54,7 @@ struct JSONHighlightView: NSViewRepresentable {
             attributed = NSAttributedString(
                 string: content,
                 attributes: [
-                    .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
+                    .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
                     .foregroundColor: NSColor.systemRed,
                 ]
             )
@@ -63,7 +63,7 @@ struct JSONHighlightView: NSViewRepresentable {
                 ?? NSAttributedString(
                     string: content,
                     attributes: [
-                        .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
+                        .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
                         .foregroundColor: AtomOneDark.defaultText,
                     ]
                 )
