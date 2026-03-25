@@ -749,6 +749,7 @@
 		3B39CAA32B33946300DABEB8 /* ReleaseLocal */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
@@ -803,6 +804,7 @@
 				"OTHER_LDFLAGS[arch=*]" = (
 					"-lstdc++",
 					"-lgit2",
+					"-liconv",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.oopslink.poltertty;
 				PRODUCT_MODULE_NAME = Ghostty;
@@ -1212,6 +1214,7 @@
 				"OTHER_LDFLAGS[arch=*]" = (
 					"-lstdc++",
 					"-lgit2",
+					"-liconv",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.oopslink.poltertty.debug;
 				PRODUCT_MODULE_NAME = Ghostty;
@@ -1279,6 +1282,7 @@
 				"OTHER_LDFLAGS[arch=*]" = (
 					"-lstdc++",
 					"-lgit2",
+					"-liconv",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.oopslink.poltertty;
 				PRODUCT_MODULE_NAME = Ghostty;

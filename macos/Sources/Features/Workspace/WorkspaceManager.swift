@@ -34,7 +34,7 @@ class WorkspaceManager: ObservableObject {
         fileBrowserViewModels.removeValue(forKey: workspaceId)
     }
 
-    func gitPanelViewModel(for workspaceId: UUID) -> GitPanelViewModel {
+    @MainActor func gitPanelViewModel(for workspaceId: UUID) -> GitPanelViewModel {
         if let vm = gitPanelViewModels[workspaceId] { return vm }
         let vm = GitPanelViewModel()
         gitPanelViewModels[workspaceId] = vm
