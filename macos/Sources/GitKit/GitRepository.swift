@@ -257,6 +257,7 @@ actor GitRepository {
         var opts = git_diff_options()
         git_diff_options_init(&opts, UInt32(GIT_DIFF_OPTIONS_VERSION))
         opts.flags |= UInt32(GIT_DIFF_INCLUDE_UNTRACKED.rawValue)
+        opts.flags |= UInt32(GIT_DIFF_SHOW_UNTRACKED_CONTENT.rawValue)
 
         if staged {
             // 暂存区 vs HEAD
