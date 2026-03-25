@@ -421,12 +421,15 @@ actor GitRepository {
         if headCode == GIT_EUNBORNBRANCH.rawValue {
             // 尚无提交 — 直接从 index 移除
             var index: OpaquePointer?
-            guard git_repository_index(&index, r) == 0, let idx = index else { return }
+            var idxCode = git_repository_index(&index, r)
+            guard idxCode == 0, let idx = index else { throw GitError.fromLibgit2(idxCode) }
             defer { git_index_free(idx) }
             for path in paths {
-                git_index_remove_bypath(idx, makeRelative(path: path))
+                idxCode = git_index_remove_bypath(idx, makeRelative(path: path))
+                if idxCode != 0 { throw GitError.fromLibgit2(idxCode) }
             }
-            git_index_write(idx)
+            idxCode = git_index_write(idx)
+            if idxCode != 0 { throw GitError.fromLibgit2(idxCode) }
             return
         }
         guard headCode == 0, let h = headRef else { throw GitError.fromLibgit2(headCode) }
@@ -440,11 +443,12 @@ actor GitRepository {
         // git_reset_default 将 index entry 重置到 HEAD；git_commit* 可直接作为 git_object* 传入
         for path in paths {
             let relative = makeRelative(path: path)
-            relative.withCString { cPath in
+            let resetCode = relative.withCString { cPath -> Int32 in
                 var mutableCPath: UnsafePointer<CChar>? = cPath
                 var pathStrArray = git_strarray(strings: &mutableCPath, count: 1)
-                git_reset_default(r, hc, &pathStrArray)
+                return git_reset_default(r, hc, &pathStrArray)
             }
+            if resetCode != 0 { throw GitError.fromLibgit2(resetCode) }
         }
     }
 
@@ -476,7 +480,7 @@ actor GitRepository {
             } else {
                 // untracked 文件：直接删除
                 let fullPath = rootDir + "/" + relative
-                try? FileManager.default.removeItem(atPath: fullPath)
+                try FileManager.default.removeItem(atPath: fullPath)
             }
         }
     }
