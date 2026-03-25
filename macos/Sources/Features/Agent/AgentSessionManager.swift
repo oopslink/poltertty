@@ -141,6 +141,8 @@ final class AgentSessionManager: ObservableObject {
             let indexed = claudeSessionIndex[sid] != nil
             Self.logger.warning("preToolUse: sid=\(sid) indexed=\(indexed) tool=\(payload.toolName ?? "nil") toolUseId=\(payload.toolUseId ?? "nil") agentId=\(payload.agentId ?? "-")")
             updateFromClaudeSession(sid) { $0.state = .working }
+            // 新工具调用开始，说明用户已响应上一个 idle_prompt，清除 waiting 通知
+            AgentNotificationStore.shared.markWaitingRead(sessionId: sid)
 
             // 延迟 2 秒发通知：若 postToolUse 先到则取消（自动批准工具不产生通知）
             if let toolUseId = payload.toolUseId {
@@ -163,7 +165,7 @@ final class AgentSessionManager: ObservableObject {
                         workspaceId: wsId, surfaceId: surfaceId,
                         agentDefinitionId: defId, sessionId: sid,
                         type: .waiting, title: "\(agentName) 等待确认：\(toolName)",
-                        body: nil, priority: .high
+                        body: payload.toolInputRaw, priority: .high
                     ))
                 }
                 pendingToolConfirmTasks[toolUseId] = task
@@ -199,11 +201,12 @@ final class AgentSessionManager: ObservableObject {
             Self.logger.info("postToolUse: sid=\(sid) tool=\(payload.toolName ?? "nil") toolUseId=\(payload.toolUseId ?? "nil") agentId=\(payload.agentId ?? "-")")
             updateFromClaudeSession(sid) { $0.state = .working }
 
-            // 工具已执行完成，取消对应的等待确认通知
+            // 工具已执行完成，取消对应的等待确认通知；若通知已发出则标记已读
             if let toolUseId = payload.toolUseId {
                 pendingToolConfirmTasks[toolUseId]?.cancel()
                 pendingToolConfirmTasks.removeValue(forKey: toolUseId)
             }
+            AgentNotificationStore.shared.markWaitingRead(sessionId: sid)
             if payload.toolName == "Agent" {
                 // Agent tool 完成 → 标记 subagent done，保存输出
                 let toolUseId = payload.toolUseId ?? ""

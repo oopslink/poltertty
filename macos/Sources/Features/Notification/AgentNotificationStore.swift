@@ -99,6 +99,19 @@ final class AgentNotificationStore: ObservableObject {
         if changed { persistToDisk() }
     }
 
+    /// 用户在 CLI 响应后，将该 session 的所有 waiting 通知标记为已读
+    func markWaitingRead(sessionId: String) {
+        var changed = false
+        for i in notifications.indices
+            where !notifications[i].isRead
+            && notifications[i].type == .waiting
+            && notifications[i].sessionId == sessionId {
+            notifications[i].isRead = true
+            changed = true
+        }
+        if changed { persistToDisk() }
+    }
+
     // MARK: - 持久化（JSON 文件，复用 SessionStore 同款模式）
 
     private var storePath: String {

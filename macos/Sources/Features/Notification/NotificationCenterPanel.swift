@@ -91,11 +91,14 @@ struct NotificationCenterPanel: View {
                 LazyVStack(spacing: 0) {
                     ForEach(items) { notification in
                         NotificationRow(notification: notification)
-                            .onTapGesture {
+                            .onTapGesture(count: 2) {
                                 store.markRead(notification.id)
                                 if let sid = notification.surfaceId {
                                     onJumpToSurface(sid)
                                 }
+                            }
+                            .onTapGesture {
+                                store.markRead(notification.id)
                             }
                             .background(
                                 notification.isRead

@@ -3,6 +3,7 @@ import SwiftUI
 
 struct NotificationRow: View {
     let notification: AgentNotification
+    @State private var isExpanded = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -26,10 +27,24 @@ struct NotificationRow: View {
                 }
 
                 if let body = notification.body, !body.isEmpty {
-                    Text(body)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
+                    let isLong = body.count > 80
+                    let displayText = (!isExpanded && isLong)
+                        ? String(body.prefix(80)) + "…"
+                        : body
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(displayText)
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .lineLimit(isExpanded ? nil : 2)
+                        if isLong {
+                            Button(isExpanded ? "收起" : "展开") {
+                                isExpanded.toggle()
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 10))
+                            .foregroundColor(.accentColor)
+                        }
+                    }
                 }
             }
 
