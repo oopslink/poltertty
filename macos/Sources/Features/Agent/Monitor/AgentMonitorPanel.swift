@@ -4,101 +4,59 @@ import SwiftUI
 struct AgentMonitorPanel: View {
     @ObservedObject var viewModel: AgentMonitorViewModel
 
-    /// 外部会话区域高度（可拖拽调整）
-    @State private var externalSessionsHeight: CGFloat = 0
-    /// 是否已初始化默认高度
-    @State private var didInitHeight = false
     /// 当前弹出详情的外部会话
     @State private var selectedExternalSession: ExternalSessionRecord?
 
-    private let minExternalHeight: CGFloat = 60
-    private let maxExternalHeightRatio: CGFloat = 0.6
-
     var body: some View {
-        GeometryReader { geo in
-            VStack(alignment: .leading, spacing: 0) {
-                // 标题栏
-                HStack {
-                    Text("Agents").font(.system(size: 11, weight: .semibold))
-                    Spacer()
-                    Button { viewModel.toggle() } label: {
-                        Image(systemName: "xmark").font(.system(size: 10))
-                    }
-                    .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 0) {
+            // 标题栏
+            HStack {
+                Text("Agents").font(.system(size: 11, weight: .semibold))
+                Spacer()
+                Button { viewModel.toggle() } label: {
+                    Image(systemName: "xmark").font(.system(size: 10))
                 }
-                .padding(.horizontal, 10).padding(.vertical, 8)
-                .background(Color(.windowBackgroundColor))
-                Divider()
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .background(Color(.windowBackgroundColor))
+            Divider()
 
-                if viewModel.sessions.isEmpty && !viewModel.hasExternalSessions {
-                    VStack(spacing: 5) {
-                        Spacer()
-                        Image(systemName: "circle.hexagongrid")
-                            .font(.system(size: 24, weight: .thin))
-                            .foregroundStyle(.quaternary)
-                            .padding(.bottom, 3)
-                        Text("No active agents").font(.system(size: 11)).foregroundStyle(.secondary)
-                        Text("⌘⇧A to launch").font(.system(size: 10)).foregroundStyle(.tertiary)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                } else {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(viewModel.sessions) { session in
-                                AgentSessionGroup(session: session, viewModel: viewModel)
-                                Divider()
-                            }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
+                    if viewModel.sessions.isEmpty && !viewModel.hasExternalSessions {
+                        // 空状态
+                        VStack(spacing: 5) {
+                            Image(systemName: "circle.hexagongrid")
+                                .font(.system(size: 24, weight: .thin))
+                                .foregroundStyle(.quaternary)
+                                .padding(.bottom, 3)
+                            Text("No active agents").font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text("⌘⇧A to launch").font(.system(size: 10)).foregroundStyle(.tertiary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                    } else {
+                        // Agents 列表
+                        ForEach(viewModel.sessions) { session in
+                            AgentSessionGroup(session: session, viewModel: viewModel)
+                            Divider()
                         }
                     }
-                }
-                // 外部会话 section（FSEvents 监控独立启动的 AI 工具实例）
-                if viewModel.hasExternalSessions {
-                    externalSessionsDivider(totalHeight: geo.size.height)
-                    externalSessionsSectionView
-                        .frame(height: externalSessionsHeight)
-                }
-                // F5: HISTORY section — 放在 if/else 之外，无论是否有活跃 session 均显示
-                historySectionView
-            }
-            .onAppear {
-                if !didInitHeight {
-                    externalSessionsHeight = geo.size.height * 0.25
-                    didInitHeight = true
+
+                    // 外部会话 section
+                    if viewModel.hasExternalSessions {
+                        Divider()
+                        externalSessionsSectionView
+                    }
+
+                    // History section
+                    historySectionView
                 }
             }
         }
         .frame(width: 180)
         .background(Color(.windowBackgroundColor))
-    }
-
-    /// 可拖拽的分界线
-    private func externalSessionsDivider(totalHeight: CGFloat) -> some View {
-        Rectangle()
-            .fill(Color(.separatorColor))
-            .frame(height: 1)
-            .overlay(
-                // 拖拽热区（不可见但可交互）
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(height: 8)
-                    .contentShape(Rectangle())
-                    .onHover { hovering in
-                        if hovering {
-                            NSCursor.resizeUpDown.push()
-                        } else {
-                            NSCursor.pop()
-                        }
-                    }
-                    .gesture(
-                        DragGesture(minimumDistance: 1)
-                            .onChanged { value in
-                                let maxH = totalHeight * maxExternalHeightRatio
-                                let newHeight = externalSessionsHeight - value.translation.height
-                                externalSessionsHeight = min(max(newHeight, minExternalHeight), maxH)
-                            }
-                    )
-            )
     }
 
     private var externalSessionsSectionView: some View {
@@ -117,41 +75,36 @@ struct AgentMonitorPanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(viewModel.externalSessions) { session in
-                        ExternalSessionRow(
-                            session: session,
-                            isSelected: selectedExternalSession?.id == session.id
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            if selectedExternalSession?.id == session.id {
-                                selectedExternalSession = nil
-                            } else {
-                                selectedExternalSession = session
-                            }
-                        }
-                        .popover(
-                            isPresented: Binding(
-                                get: { selectedExternalSession?.id == session.id },
-                                set: { if !$0 { selectedExternalSession = nil } }
-                            ),
-                            arrowEdge: .trailing
-                        ) {
-                            ExternalSessionDetailView(session: session)
-                        }
-                        Divider()
+
+            ForEach(viewModel.externalSessions) { session in
+                ExternalSessionRow(
+                    session: session,
+                    isSelected: selectedExternalSession?.id == session.id
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if selectedExternalSession?.id == session.id {
+                        selectedExternalSession = nil
+                    } else {
+                        selectedExternalSession = session
                     }
                 }
+                .popover(
+                    isPresented: Binding(
+                        get: { selectedExternalSession?.id == session.id },
+                        set: { if !$0 { selectedExternalSession = nil } }
+                    ),
+                    arrowEdge: .trailing
+                ) {
+                    ExternalSessionDetailView(session: session)
+                }
+                Divider()
             }
         }
     }
 
     private var historySectionView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 折叠/展开 header
-
             Button(action: { viewModel.toggleHistory() }) {
                 HStack(spacing: 4) {
                     Image(systemName: viewModel.historyExpanded ? "chevron.down" : "chevron.right")
