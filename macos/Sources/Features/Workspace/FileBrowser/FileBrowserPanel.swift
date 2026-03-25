@@ -19,12 +19,6 @@ struct FileBrowserPanel: View {
     var body: some View {
         panelContent
             .background(Color(nsColor: .windowBackgroundColor))
-            .overlay {
-                if viewModel.showShortcutHelp {
-                    ShortcutHelpView(onDismiss: { viewModel.showShortcutHelp = false })
-                        .transition(.opacity)
-                }
-            }
             .focusable()
             .focused($isFocused)
             .backport.onKeyPress(".") { handleDotKey(modifiers: $0) }
@@ -314,6 +308,18 @@ struct FileBrowserPanel: View {
                 TextField("Filter", text: $viewModel.filterText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
+                Button {
+                    viewModel.showShortcutHelp.toggle()
+                } label: {
+                    Image(systemName: "questionmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Keyboard Shortcuts (?)")
+                .popover(isPresented: $viewModel.showShortcutHelp, arrowEdge: .trailing) {
+                    ShortcutHelpView()
+                }
                 Button {
                     viewModel.isVisible = false
                 } label: {

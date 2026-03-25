@@ -2,7 +2,7 @@
 import SwiftUI
 
 struct ShortcutHelpView: View {
-    var onDismiss: () -> Void
+    @Environment(\.dismiss) private var dismiss
 
     private struct ShortcutItem: Identifiable {
         let id = UUID()
@@ -37,71 +37,58 @@ struct ShortcutHelpView: View {
             ShortcutItem(keys: "⌘A", description: "Select All"),
         ]),
         ShortcutSection(title: "Help", items: [
-            ShortcutItem(keys: "?", description: "Show/Hide This Panel"),
+            ShortcutItem(keys: "?", description: "Show/Hide Shortcuts"),
+            ShortcutItem(keys: "Esc", description: "Close This Panel"),
         ]),
     ]
 
     var body: some View {
-        ZStack {
-            // 点击背景关闭
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture { onDismiss() }
-
-            // 面板
-            VStack(alignment: .leading, spacing: 0) {
-                // 标题栏
-                HStack {
-                    Text("Keyboard Shortcuts")
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer()
-                    Button(action: onDismiss) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            // 标题栏
+            Text("Keyboard Shortcuts")
+                .font(.system(size: 13, weight: .semibold))
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
                 .padding(.bottom, 10)
 
-                Divider()
+            Divider()
 
-                // 快捷键列表
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(sections) { section in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(section.title)
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                    .padding(.horizontal, 16)
+            // 快捷键列表
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(sections) { section in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(section.title)
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 16)
 
-                                ForEach(section.items) { item in
-                                    HStack(spacing: 0) {
-                                        Text(item.keys)
-                                            .font(.system(size: 11, design: .monospaced))
-                                            .foregroundColor(.primary)
-                                            .frame(width: 80, alignment: .leading)
-                                        Text(item.description)
-                                            .font(.system(size: 11))
-                                            .foregroundColor(.secondary)
-                                        Spacer()
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 2)
+                            ForEach(section.items) { item in
+                                HStack(spacing: 0) {
+                                    Text(item.keys)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.primary)
+                                        .frame(width: 80, alignment: .leading)
+                                    Text(item.description)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                    Spacer()
                                 }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 2)
                             }
                         }
                     }
-                    .padding(.vertical, 12)
                 }
+                .padding(.vertical, 12)
             }
-            .frame(width: 280)
-            .background(.ultraThinMaterial)
-            .cornerRadius(12)
-            .shadow(color: .black.opacity(0.25), radius: 20, x: 0, y: 8)
         }
+        .frame(width: 280)
+        // Esc 关闭
+        .background(
+            Button("") { dismiss() }
+                .keyboardShortcut(.escape, modifiers: [])
+                .hidden()
+        )
     }
 }
