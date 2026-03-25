@@ -35,6 +35,8 @@ final class CtrlToolHandler: Sendable {
         case "focus_pane": return try await callFocusPane(arguments: arguments)
         case "send_text":  return try await callSendText(arguments: arguments)
         case "split_pane": return try await callSplitPane(arguments: arguments)
+        case "set_pane_annotation": return try await callSetPaneAnnotation(arguments: arguments)
+        case "get_pane_annotation": return try await callGetPaneAnnotation(arguments: arguments)
         default:
             throw RPCError(code: -32601, message: "Unknown tool: \(name)")
         }
@@ -109,6 +111,7 @@ final class CtrlToolHandler: Sendable {
                 "isActive": p.isActive
             ]
             if let title = p.title { d["title"] = title }
+            if let annotation = p.annotation { d["annotation"] = annotation }
             return d
         }
         guard let data = try? JSONSerialization.data(withJSONObject: arr),
@@ -208,6 +211,49 @@ final class CtrlToolHandler: Sendable {
             }
         }
         return #"{"newPaneId":"\#(newPaneId.uuidString)"}"#
+    }
+
+    // MARK: - set_pane_annotation
+
+    private func callSetPaneAnnotation(arguments: [String: Any]) async throws -> String {
+        guard let paneIdStr = arguments["paneId"] as? String,
+              let paneId = UUID(uuidString: paneIdStr) else {
+            throw RPCError(code: -32602, message: "set_pane_annotation: missing or invalid paneId")
+        }
+
+        let annotation = arguments["annotation"] as? String
+
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            Task { @MainActor in
+                if let text = annotation, !text.isEmpty {
+                    PaneSelectorViewModel.shared.annotations[paneId] = text
+                } else {
+                    PaneSelectorViewModel.shared.annotations.removeValue(forKey: paneId)
+                }
+                cont.resume()
+            }
+        }
+        return #"{"ok":true}"#
+    }
+
+    // MARK: - get_pane_annotation
+
+    private func callGetPaneAnnotation(arguments: [String: Any]) async throws -> String {
+        guard let paneIdStr = arguments["paneId"] as? String,
+              let paneId = UUID(uuidString: paneIdStr) else {
+            throw RPCError(code: -32602, message: "get_pane_annotation: missing or invalid paneId")
+        }
+
+        let annotation: String? = await MainActor.run {
+            PaneSelectorViewModel.shared.annotations[paneId]
+        }
+
+        let obj: [String: Any] = ["annotation": annotation as Any]
+        guard let data = try? JSONSerialization.data(withJSONObject: obj),
+              let str = String(data: data, encoding: .utf8) else {
+            throw RPCError(code: -32603, message: "get_pane_annotation: serialization failed")
+        }
+        return str
     }
 
     // MARK: - Helpers
