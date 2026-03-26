@@ -531,6 +531,28 @@ final class CtrlServer {
                         "paneId": ["type": "string", "description": "UUID of the target pane (optional; defaults to focused pane for target=pane, key window for target=window)"]
                     ]
                 ]
+            ],
+            [
+                "name": "click_window",
+                "description": "Simulate a left mouse click at (x, y) in the window content view (y from top)",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "x": ["type": "number", "description": "X coordinate in window content view"],
+                        "y": ["type": "number", "description": "Y coordinate in window content view (0 = top)"]
+                    ],
+                    "required": ["x", "y"]
+                ]
+            ],
+            [
+                "name": "test_fullscreen_diff",
+                "description": "Open Git panel, set a test diff to fullscreen mode, and take a screenshot to verify the layout fix",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workspaceId": ["type": "string", "description": "Optional workspace UUID; defaults to first workspace"]
+                    ]
+                ]
             ]
         ]
         sendRPCResult(connection, id: id, result: ["tools": tools], context: context)
