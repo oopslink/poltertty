@@ -43,6 +43,7 @@ struct GitCommitsSection: View {
                         commit: commit,
                         isExpanded: vm.expandedCommits.contains(commit.id),
                         files: vm.commitFiles[commit.id],
+                        selectedFileId: vm.selectedCommitFileId,
                         onExpand: {
                             Task { await vm.expandCommit(commit) }
                         },
