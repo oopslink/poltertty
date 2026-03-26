@@ -20,20 +20,13 @@ struct UnifiedPanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SharedPanelNavBar(
-                fileBrowserVM: fileBrowserVM,
-                gitPanelVM: gitPanelVM,
-                worktreeMonitor: worktreeMonitor
-            )
-            Divider()
-
-            // Tab 切换栏（全屏预览时隐藏）
+            // Tab bar (hidden during fullscreen preview)
             if !fileBrowserVM.isPreviewFullscreen {
                 PanelTabBar(activePanelTab: $activePanelTab, gitPanelVM: gitPanelVM, fileBrowserVM: fileBrowserVM)
                 Divider()
             }
 
-            // 内容区
+            // Content
             switch activePanelTab {
             case .files:
                 FileBrowserPanel(
@@ -48,110 +41,16 @@ struct UnifiedPanelView: View {
                     }
                 )
             case .git:
-                GitPanelView(vm: gitPanelVM, onSwitchToFilesTab: {
-                    activePanelTab = .files
-                })
+                GitPanelView(
+                    vm: gitPanelVM,
+                    fileBrowserVM: fileBrowserVM,
+                    worktreeMonitor: worktreeMonitor,
+                    onSwitchToFilesTab: {
+                        activePanelTab = .files
+                    }
+                )
             }
         }
-    }
-}
-
-// MARK: - Shared Panel Nav Bar
-
-private struct SharedPanelNavBar: View {
-    @ObservedObject var fileBrowserVM: FileBrowserViewModel
-    @ObservedObject var gitPanelVM: GitPanelViewModel
-    var worktreeMonitor: GitWorktreeMonitor?
-
-    var body: some View {
-        let effectivePath = fileBrowserVM.effectiveRootDir
-        let worktrees = worktreeMonitor?.worktrees ?? []
-        let currentWT = worktrees.first {
-            URL(fileURLWithPath: $0.path).standardized.path
-                == URL(fileURLWithPath: effectivePath).standardized.path
-        }
-        let branchLabel = gitPanelVM.branch
-            ?? currentDisplayLabel(for: currentWT, fallback: effectivePath)
-
-        HStack(spacing: 4) {
-            // 返回主仓库按钮（仅在 worktree 内显示）
-            if fileBrowserVM.overrideRootDir != nil {
-                Button {
-                    fileBrowserVM.switchRoot(to: nil)
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 9, weight: .semibold))
-                        Text("Main")
-                            .font(.system(size: 11))
-                    }
-                    .foregroundColor(.accentColor)
-                }
-                .buttonStyle(.plain)
-                .help("Go to main repo root")
-
-                Text("·")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer()
-
-            if worktrees.isEmpty {
-                // 无 worktree 信息时只显示分支名（不可点击）
-                HStack(spacing: 3) {
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.system(size: 10))
-                    Text(branchLabel)
-                        .font(.system(size: 11))
-                        .lineLimit(1)
-                }
-                .foregroundColor(.secondary)
-            } else {
-                Menu {
-                    ForEach(worktrees) { wt in
-                        let isActive = URL(fileURLWithPath: wt.path).standardized.path
-                            == URL(fileURLWithPath: effectivePath).standardized.path
-                        Button {
-                            if wt.isMain {
-                                fileBrowserVM.switchRoot(to: nil)
-                            } else {
-                                fileBrowserVM.switchRoot(to: wt.path)
-                            }
-                        } label: {
-                            Label {
-                                Text(wt.isMain ? "Main" : (wt.branch ?? wt.path))
-                            } icon: {
-                                if isActive { Image(systemName: "checkmark") }
-                            }
-                        }
-                        .disabled(isActive)
-                    }
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "arrow.triangle.branch")
-                            .font(.system(size: 10))
-                        Text(branchLabel)
-                            .font(.system(size: 11))
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .semibold))
-                    }
-                    .foregroundColor(.secondary)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("Switch worktree")
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-    }
-
-    private func currentDisplayLabel(for wt: GitWorktree?, fallback: String) -> String {
-        guard let wt else { return URL(fileURLWithPath: fallback).lastPathComponent }
-        if wt.isMain { return "Main" }
-        return wt.branch ?? wt.path
     }
 }
 
