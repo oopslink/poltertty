@@ -24,16 +24,21 @@ struct DiffView: View {
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ScrollView([.horizontal, .vertical]) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(diff.patches) { patch in
-                                patchView(patch)
+                    GeometryReader { geo in
+                        ScrollView([.horizontal, .vertical]) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(diff.patches) { patch in
+                                    patchView(patch)
+                                }
                             }
+                            .padding(.vertical, 4)
+                            .frame(
+                                minWidth: geo.size.width,
+                                minHeight: geo.size.height,
+                                alignment: .topLeading
+                            )
                         }
-                        .padding(.vertical, 4)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             } else {
                 Text("Select a file to view diff")
