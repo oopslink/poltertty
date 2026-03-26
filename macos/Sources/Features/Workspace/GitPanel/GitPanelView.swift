@@ -195,9 +195,13 @@ struct GitPanelView: View {
 
             Spacer()
 
-            // 最大化 / 还原按钮
+            // Maximize / Restore button
             if vm.selectedDiff != nil {
-                Button(action: { vm.isDiffFullscreen.toggle() }) {
+                Button(action: {
+                    let newValue = !vm.isDiffFullscreen
+                    vm.isDiffFullscreen = newValue
+                    fileBrowserVM.isPreviewFullscreen = newValue
+                }) {
                     Image(systemName: vm.isDiffFullscreen
                           ? "arrow.down.right.and.arrow.up.left"
                           : "arrow.up.left.and.arrow.down.right")
@@ -207,10 +211,13 @@ struct GitPanelView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(vm.isDiffFullscreen ? "还原布局 (Esc)" : "最大化 Diff 面板")
+                .help(vm.isDiffFullscreen ? "Restore Layout (Esc)" : "Maximize Diff Panel")
 
-                // 关闭按钮
-                Button(action: { vm.closeDiff() }) {
+                // Close button
+                Button(action: {
+                    vm.closeDiff()
+                    fileBrowserVM.isPreviewFullscreen = false
+                }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.secondary)
@@ -218,19 +225,22 @@ struct GitPanelView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("关闭 Diff")
+                .help("Close Diff")
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .overlay(
-            // Esc 键还原全屏
+            // Esc key to restore fullscreen
             Group {
                 if vm.isDiffFullscreen {
-                    Button("") { vm.isDiffFullscreen = false }
-                        .keyboardShortcut(.escape, modifiers: [])
-                        .opacity(0)
-                        .frame(width: 0, height: 0)
+                    Button("") {
+                        vm.isDiffFullscreen = false
+                        fileBrowserVM.isPreviewFullscreen = false
+                    }
+                    .keyboardShortcut(.escape, modifiers: [])
+                    .opacity(0)
+                    .frame(width: 0, height: 0)
                 }
             }
         )
