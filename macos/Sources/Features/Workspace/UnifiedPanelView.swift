@@ -29,7 +29,7 @@ struct UnifiedPanelView: View {
 
             // Tab 切换栏（全屏预览时隐藏）
             if !fileBrowserVM.isPreviewFullscreen {
-                PanelTabBar(activePanelTab: $activePanelTab, gitPanelVM: gitPanelVM)
+                PanelTabBar(activePanelTab: $activePanelTab, gitPanelVM: gitPanelVM, fileBrowserVM: fileBrowserVM)
                 Divider()
             }
 
@@ -48,7 +48,9 @@ struct UnifiedPanelView: View {
                     }
                 )
             case .git:
-                GitPanelView(vm: gitPanelVM)
+                GitPanelView(vm: gitPanelVM, onSwitchToFilesTab: {
+                    activePanelTab = .files
+                })
             }
         }
     }
@@ -158,6 +160,7 @@ private struct SharedPanelNavBar: View {
 private struct PanelTabBar: View {
     @Binding var activePanelTab: PanelTab
     @ObservedObject var gitPanelVM: GitPanelViewModel
+    @ObservedObject var fileBrowserVM: FileBrowserViewModel
 
     var body: some View {
         HStack(spacing: 0) {
@@ -165,6 +168,33 @@ private struct PanelTabBar: View {
             tabButton(icon: "arrow.triangle.branch", tab: .git,
                       badge: gitPanelVM.changedCount > 0 ? gitPanelVM.changedCount : nil)
             Spacer()
+
+            // Help button
+            Button {
+                fileBrowserVM.showShortcutHelp.toggle()
+            } label: {
+                Image(systemName: "questionmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help("Keyboard Shortcuts (?)")
+            .popover(isPresented: $fileBrowserVM.showShortcutHelp, arrowEdge: .trailing) {
+                ShortcutHelpView()
+            }
+
+            // Close panel button
+            Button {
+                fileBrowserVM.isVisible = false
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help("Close Panel")
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3)

@@ -3,8 +3,25 @@ import SwiftUI
 
 struct GitPanelView: View {
     @ObservedObject var vm: GitPanelViewModel
+    var onSwitchToFilesTab: (() -> Void)?
+
+    @FocusState private var isFocused: Bool
 
     var body: some View {
+        gitPanelContent
+            .focusable()
+            .focused($isFocused)
+            .backport.onKeyPress("f") { handleFKey(modifiers: $0) }
+    }
+
+    private func handleFKey(modifiers: EventModifiers) -> BackportKeyPressResult {
+        guard isFocused, !modifiers.contains(.command) else { return .ignored }
+        onSwitchToFilesTab?()
+        return .handled
+    }
+
+    @ViewBuilder
+    private var gitPanelContent: some View {
         if !vm.isGitRepo {
             VStack(spacing: 0) {
                 Spacer()

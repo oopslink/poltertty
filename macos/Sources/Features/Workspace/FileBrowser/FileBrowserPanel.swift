@@ -322,36 +322,6 @@ struct FileBrowserPanel: View {
                 if !viewModel.availableExtensions.isEmpty || !viewModel.gitStatuses.isEmpty {
                     filterButtonGroup
                 }
-                Button {
-                    viewModel.showShortcutHelp.toggle()
-                } label: {
-                    Image(systemName: "questionmark")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Keyboard Shortcuts (?)")
-                .popover(isPresented: $viewModel.showShortcutHelp, arrowEdge: .trailing) {
-                    ShortcutHelpView()
-                }
-                Button {
-                    NotificationCenter.default.post(name: .toggleGitPanel, object: nil)
-                } label: {
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Git Panel (⌘⇧G)")
-                Button {
-                    viewModel.isVisible = false
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Close File Browser")
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
