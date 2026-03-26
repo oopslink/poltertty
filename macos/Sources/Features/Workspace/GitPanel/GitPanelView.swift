@@ -49,33 +49,34 @@ struct GitPanelView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             HSplitView {
-                // Left: Changes + Commits
-                VStack(spacing: 0) {
-                    // Worktree selector toolbar
-                    worktreeToolbar
-                    Divider()
+                // Left: Changes + Commits（最大化时隐藏）
+                if !vm.isDiffFullscreen {
+                    VStack(spacing: 0) {
+                        // Worktree selector toolbar
+                        worktreeToolbar
+                        Divider()
 
-                    // Error
-                    if let err = vm.error {
-                        Text(err)
-                            .font(.system(size: 10))
-                            .foregroundColor(.red)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                    }
+                        // Error
+                        if let err = vm.error {
+                            Text(err)
+                                .font(.system(size: 10))
+                                .foregroundColor(.red)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                        }
 
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            GitChangesSection(vm: vm)
-                            GitCommitsSection(vm: vm)
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                GitChangesSection(vm: vm)
+                                GitCommitsSection(vm: vm)
+                            }
                         }
                     }
+                    .frame(minWidth: 200, maxWidth: 320)
                 }
-                .frame(minWidth: 200, maxWidth: 320)
 
-                // Right: Diff
-                DiffView(diff: vm.selectedDiff, title: diffTitle)
-                    .frame(minWidth: 300)
+                // Right: Diff 浮窗面板
+                diffPanel
             }
         }
     }
@@ -152,8 +153,82 @@ struct GitPanelView: View {
         return wt.branch ?? wt.path
     }
 
-    private var diffTitle: String? {
-        guard let diff = vm.selectedDiff else { return nil }
-        return diff.path
+    // MARK: - Diff 浮窗面板
+
+    private var diffPanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header：标题 + 最大化 + 关闭
+            diffPanelHeader
+            Divider()
+            // Diff 内容
+            DiffView(diff: vm.selectedDiff, title: nil)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.controlBackgroundColor))
+        .frame(minWidth: 300)
+    }
+
+    private var diffPanelHeader: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+
+            if let diff = vm.selectedDiff {
+                Text(URL(fileURLWithPath: diff.path).lastPathComponent)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                Text(diff.path)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+            } else {
+                Text("Diff")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            // 最大化 / 还原按钮
+            if vm.selectedDiff != nil {
+                Button(action: { vm.isDiffFullscreen.toggle() }) {
+                    Image(systemName: vm.isDiffFullscreen
+                          ? "arrow.down.right.and.arrow.up.left"
+                          : "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(vm.isDiffFullscreen ? "还原布局 (Esc)" : "最大化 Diff 面板")
+
+                // 关闭按钮
+                Button(action: { vm.closeDiff() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("关闭 Diff")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .overlay(
+            // Esc 键还原全屏
+            Group {
+                if vm.isDiffFullscreen {
+                    Button("") { vm.isDiffFullscreen = false }
+                        .keyboardShortcut(.escape, modifiers: [])
+                        .opacity(0)
+                        .frame(width: 0, height: 0)
+                }
+            }
+        )
     }
 }

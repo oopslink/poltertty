@@ -81,10 +81,6 @@ struct FileBrowserPanel: View {
             // Left: File tree (always visible)
             VStack(spacing: 0) {
                 filterBar
-                if !viewModel.gitStatuses.isEmpty {
-                    FilterChipsView(viewModel: viewModel)
-                    Divider()
-                }
                 if !viewModel.breadcrumbSegments.isEmpty {
                     BreadcrumbView(segments: viewModel.breadcrumbSegments) { segment in
                         viewModel.focusDirectory(segment.url)
@@ -320,7 +316,7 @@ struct FileBrowserPanel: View {
                 TextField("Filter", text: $viewModel.filterText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
-                if !viewModel.availableExtensions.isEmpty || !viewModel.gitStatuses.isEmpty {
+                if !viewModel.availableExtensions.isEmpty || viewModel.gitRepo != nil {
                     filterButtonGroup
                 }
             }
@@ -346,7 +342,7 @@ struct FileBrowserPanel: View {
 
     // MARK: - Filter Button Group
 
-    /// 过滤器按钮组：文件类型下拉菜单（左）+ 未提交文件快速过滤（右）
+    /// 过滤器按钮组：文件类型下拉菜单（左）+ Git 状态下拉菜单（右）
     private var filterButtonGroup: some View {
         HStack(spacing: 0) {
             // 文件类型下拉菜单
@@ -384,34 +380,99 @@ struct FileBrowserPanel: View {
                 .help("Filter by File Type")
             }
 
-            // 分隔线
-            if !viewModel.availableExtensions.isEmpty && !viewModel.gitStatuses.isEmpty {
+            // 分隔线（当两个 Menu 都存在时）
+            if !viewModel.availableExtensions.isEmpty && viewModel.gitRepo != nil {
                 Rectangle()
                     .fill(Color.primary.opacity(0.15))
                     .frame(width: 1, height: 12)
                     .padding(.horizontal, 2)
             }
 
-            // 未提交文件过滤按钮
-            if !viewModel.gitStatuses.isEmpty {
-                Button {
-                    viewModel.toggleUncommittedFilter()
-                } label: {
-                    Image(systemName: viewModel.isUncommittedFilterActive
-                          ? "exclamationmark.circle.fill"
-                          : "exclamationmark.circle")
-                        .font(.system(size: 11))
-                        .foregroundColor(viewModel.isUncommittedFilterActive ? .orange : .secondary)
-                        .frame(width: 20, height: 20)
-                }
-                .buttonStyle(.plain)
-                .help("Show Uncommitted Files Only (g)")
+            // Git 状态过滤下拉菜单（总是可见，当 gitRepo 存在时）
+            if viewModel.gitRepo != nil {
+                gitStatusFilterMenu
             }
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 2)
         .background(Color.primary.opacity(0.06))
         .cornerRadius(5)
+    }
+
+    private static let gitStatusFilterItems: [(delta: GitDelta, label: String)] = [
+        (.modified,  "Modified"),
+        (.untracked, "Untracked"),
+        (.added,     "Added"),
+        (.deleted,   "Deleted"),
+        (.renamed,   "Renamed"),
+    ]
+
+    /// Git 状态过滤 Menu（参考扩展名过滤设计，多选 + checkmark）
+    private var gitStatusFilterMenu: some View {
+        let hasActive = !viewModel.activeGitStatuses.isEmpty
+        return Menu {
+            // 快速全选"未提交"
+            Button {
+                viewModel.toggleUncommittedFilter()
+            } label: {
+                Label {
+                    Text("Show Uncommitted (G)")
+                } icon: {
+                    if viewModel.isUncommittedFilterActive {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+
+            Divider()
+
+            // 逐状态选项
+            ForEach(Self.gitStatusFilterItems, id: \.delta.symbol) { item in
+                let count = viewModel.gitStatuses.values.filter { $0 == item.delta }.count
+                Button {
+                    viewModel.toggleGitStatusFilter(item.delta)
+                } label: {
+                    Label {
+                        if count > 0 {
+                            Text("\(item.label)  ×\(count)")
+                        } else {
+                            Text(item.label)
+                                .foregroundColor(.secondary)
+                        }
+                    } icon: {
+                        if viewModel.activeGitStatuses.contains(item.delta) {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+                .disabled(count == 0)
+            }
+
+            if hasActive {
+                Divider()
+                Button("Clear Git Filters") {
+                    viewModel.activeGitStatuses = []
+                }
+            }
+        } label: {
+            Image(systemName: hasActive
+                  ? "arrow.triangle.branch"
+                  : "arrow.triangle.branch")
+                .font(.system(size: 11))
+                .foregroundColor(hasActive ? .accentColor : .secondary)
+                .frame(width: 20, height: 20)
+                .overlay(
+                    // 有活跃过滤时显示小圆点
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 5, height: 5)
+                        .offset(x: 6, y: -6)
+                        .opacity(hasActive ? 1 : 0)
+                )
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Filter by Git Status")
     }
 
 

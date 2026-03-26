@@ -19,6 +19,8 @@ class GitPanelViewModel: ObservableObject {
 
     // Diff 显示
     @Published var selectedDiff: GitFileDiff?
+    @Published var isDiffFullscreen: Bool = false
+    @Published var selectedCommitFileId: String?   // 当前选中的 commit 文件 ID，用于高亮
 
     @Published var isLoading = false
     @Published var error: String?
@@ -122,11 +124,18 @@ class GitPanelViewModel: ObservableObject {
 
     func selectCommitFile(_ file: GitCommitFile, oid: String) async {
         guard let repo = repo else { return }
+        selectedCommitFileId = file.id
         do {
             selectedDiff = try await repo.fileDiff(oid: oid, path: file.path)
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    func closeDiff() {
+        selectedDiff = nil
+        isDiffFullscreen = false
+        selectedCommitFileId = nil
     }
 
     func selectWorkingFile(_ change: GitChange) async {

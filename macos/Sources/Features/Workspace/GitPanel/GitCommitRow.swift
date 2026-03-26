@@ -5,6 +5,7 @@ struct GitCommitRow: View {
     let commit: GitCommit
     let isExpanded: Bool
     let files: [GitCommitFile]?
+    var selectedFileId: String? = nil
     let onExpand: () -> Void
     let onSelectFile: (GitCommitFile) -> Void
 
@@ -49,25 +50,37 @@ struct GitCommitRow: View {
             if isExpanded, let files = files {
                 VStack(spacing: 0) {
                     ForEach(files) { file in
+                        let isSelected = selectedFileId == file.id
                         let fileHovered = hoveredFileId == file.id
 
-                        HStack(spacing: 4) {
-                            Spacer().frame(width: 18)
-                            Text(file.delta.symbol)
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundColor(Color(hex: file.delta.colorHex) ?? .secondary)
-                                .frame(width: 14)
-                            Text(URL(fileURLWithPath: file.path).lastPathComponent)
-                                .font(.system(size: 11))
-                                .lineLimit(1)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 8))
-                                .foregroundColor(.secondary.opacity(fileHovered ? 0.8 : 0.4))
+                        HStack(spacing: 0) {
+                            // 选中指示条（左侧 accent 色竖条）
+                            Rectangle()
+                                .fill(isSelected ? Color.accentColor : Color.clear)
+                                .frame(width: 2)
+                            HStack(spacing: 4) {
+                                Text(file.delta.symbol)
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundColor(Color(hex: file.delta.colorHex) ?? .secondary)
+                                    .frame(width: 14)
+                                Text(URL(fileURLWithPath: file.path).lastPathComponent)
+                                    .font(.system(size: 11))
+                                    .fontWeight(isSelected ? .medium : .regular)
+                                    .lineLimit(1)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 8))
+                                    .foregroundColor(.secondary.opacity(fileHovered || isSelected ? 0.8 : 0.4))
+                            }
+                            .padding(.leading, 20)
+                            .padding(.trailing, 8)
                         }
-                        .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(fileHovered ? Color.primary.opacity(0.05) : Color.clear)
+                        .background(
+                            isSelected
+                                ? Color.accentColor.opacity(0.12)
+                                : (fileHovered ? Color.primary.opacity(0.05) : Color.clear)
+                        )
                         .contentShape(Rectangle())
                         .cornerRadius(3)
                         .onHover { hovering in
