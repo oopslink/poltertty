@@ -217,16 +217,28 @@ final class FileBrowserViewModel: ObservableObject {
         return result
     }
 
+    /// 检查目录下是否有匹配当前 git 状态过滤条件的文件
+    private func directoryHasMatchingGitStatus(url: URL) -> Bool {
+        let prefix = url.path + "/"
+        return gitStatuses.contains { path, delta in
+            path.hasPrefix(prefix) && activeGitStatuses.contains(delta)
+        }
+    }
+
     private func filterTree(nodes: [FileNode], query: String) -> [FileNode] {
         var result: [FileNode] = []
         for node in nodes {
             if node.isDirectory {
-                let filteredChildren: [FileNode]
+                let childNodes: [FileNode]
                 if let children = node.children {
-                    filteredChildren = filterTree(nodes: children, query: query)
+                    childNodes = children
+                } else if !activeGitStatuses.isEmpty && directoryHasMatchingGitStatus(url: node.url) {
+                    // 目录未展开但包含匹配 git 状态的文件 — 临时加载子节点用于过滤
+                    childNodes = loadChildren(at: node.url, expandedUrls: [])
                 } else {
-                    filteredChildren = []
+                    childNodes = []
                 }
+                let filteredChildren = filterTree(nodes: childNodes, query: query)
                 if !filteredChildren.isEmpty {
                     var copy = node
                     copy.children = filteredChildren
