@@ -37,6 +37,7 @@ final class CtrlToolHandler: Sendable {
         case "split_pane": return try await callSplitPane(arguments: arguments)
         case "set_pane_annotation": return try await callSetPaneAnnotation(arguments: arguments)
         case "get_pane_annotation": return try await callGetPaneAnnotation(arguments: arguments)
+        case "screenshot": return try await callScreenshot(arguments: arguments)
         default:
             throw RPCError(code: -32601, message: "Unknown tool: \(name)")
         }
@@ -254,6 +255,99 @@ final class CtrlToolHandler: Sendable {
             throw RPCError(code: -32603, message: "get_pane_annotation: serialization failed")
         }
         return str
+    }
+
+    // MARK: - screenshot
+
+    /// 截屏目录
+    private static let screenshotDir: String = {
+        let dir = NSTemporaryDirectory() + "poltertty/screenshots"
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    private func callScreenshot(arguments: [String: Any]) async throws -> String {
+        let target = (arguments["target"] as? String) ?? "pane"
+        guard target == "pane" || target == "window" else {
+            throw RPCError(code: -32602, message: "screenshot: invalid target (pane|window)")
+        }
+
+        let paneId: UUID? = {
+            guard let str = arguments["paneId"] as? String else { return nil }
+            return UUID(uuidString: str)
+        }()
+
+        if arguments["paneId"] != nil && paneId == nil {
+            throw RPCError(code: -32602, message: "screenshot: invalid paneId")
+        }
+
+        let image: NSImage = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                if target == "pane" {
+                    // 截取单个 pane
+                    let surface: Ghostty.SurfaceView?
+                    if let paneId {
+                        surface = Self.tcContaining(paneId: paneId)?.findSurface(id: paneId)
+                    } else {
+                        let tw = (NSApp.keyWindow as? TerminalWindow)
+                            ?? NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
+                        surface = tw?.terminalController?.focusedSurface
+                    }
+                    guard let surface else {
+                        cont.resume(throwing: RPCError(code: -32603, message: "screenshot: pane not found"))
+                        return
+                    }
+                    guard let img = surface.asImage else {
+                        cont.resume(throwing: RPCError(code: -32603, message: "screenshot: capture failed"))
+                        return
+                    }
+                    cont.resume(returning: img)
+                } else {
+                    // 截取整个窗口
+                    let window: NSWindow?
+                    if let paneId {
+                        window = Self.tcContaining(paneId: paneId)?.window
+                    } else {
+                        window = (NSApp.keyWindow as? TerminalWindow)
+                            ?? NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
+                    }
+                    guard let window else {
+                        cont.resume(throwing: RPCError(code: -32603, message: "screenshot: window not found"))
+                        return
+                    }
+                    let windowId = CGWindowID(window.windowNumber)
+                    guard let cgImage = CGWindowListCreateImage(
+                        .null,
+                        .optionIncludingWindow,
+                        windowId,
+                        [.boundsIgnoreFraming]
+                    ) else {
+                        cont.resume(throwing: RPCError(code: -32603, message: "screenshot: capture failed"))
+                        return
+                    }
+                    let img = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                    cont.resume(returning: img)
+                }
+            }
+        }
+
+        // NSImage → PNG Data → 写文件
+        guard let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            throw RPCError(code: -32603, message: "screenshot: failed to encode PNG")
+        }
+
+        let filename = UUID().uuidString + ".png"
+        let path = Self.screenshotDir + "/" + filename
+        do {
+            try pngData.write(to: URL(fileURLWithPath: path))
+        } catch {
+            throw RPCError(code: -32603, message: "screenshot: failed to save screenshot")
+        }
+
+        Self.logger.info("screenshot saved: \(path)")
+        return #"{"path":"\#(path)"}"#
     }
 
     // MARK: - Helpers
