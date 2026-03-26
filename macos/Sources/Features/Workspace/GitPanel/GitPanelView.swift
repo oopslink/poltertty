@@ -51,33 +51,35 @@ struct GitPanelView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if vm.isDiffFullscreen {
+            // 全屏模式：直接显示 diff 面板，不使用 HSplitView
+            // 避免 NSSplitView 保留旧分割位置导致布局错误
+            diffPanel
         } else {
             HSplitView {
-                // Left: Changes + Commits（最大化时隐藏）
-                if !vm.isDiffFullscreen {
-                    VStack(spacing: 0) {
-                        // Worktree selector toolbar
-                        worktreeToolbar
-                        Divider()
+                // Left: Changes + Commits
+                VStack(spacing: 0) {
+                    // Worktree selector toolbar
+                    worktreeToolbar
+                    Divider()
 
-                        // Error
-                        if let err = vm.error {
-                            Text(err)
-                                .font(.system(size: 10))
-                                .foregroundColor(.red)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                        }
+                    // Error
+                    if let err = vm.error {
+                        Text(err)
+                            .font(.system(size: 10))
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                    }
 
-                        ScrollView {
-                            VStack(spacing: 0) {
-                                GitChangesSection(vm: vm)
-                                GitCommitsSection(vm: vm)
-                            }
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            GitChangesSection(vm: vm)
+                            GitCommitsSection(vm: vm)
                         }
                     }
-                    .frame(minWidth: 200, maxWidth: 320)
                 }
+                .frame(minWidth: 200, maxWidth: 320)
 
                 // Right: Diff 浮窗面板
                 diffPanel
