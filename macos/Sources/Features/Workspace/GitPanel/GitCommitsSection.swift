@@ -6,14 +6,31 @@ struct GitCommitsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 标题
-            Text("COMMITS (\(vm.commits.count))")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .separatorColor).opacity(0.3))
+            // Section header
+            HStack(spacing: 4) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 9))
+                    .foregroundColor(.secondary)
+
+                Text("COMMITS")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.secondary)
+
+                if !vm.commits.isEmpty {
+                    Text("\(vm.commits.count)")
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.7))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.primary.opacity(0.06))
+                        .cornerRadius(3)
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color(nsColor: .separatorColor).opacity(0.2))
 
             if vm.commits.isEmpty && !vm.isLoading {
                 Text("No commits")
@@ -33,7 +50,6 @@ struct GitCommitsSection: View {
                             Task { await vm.selectCommitFile(file, oid: commit.id) }
                         }
                     )
-                    Divider().padding(.leading, 8)
                 }
             }
         }
