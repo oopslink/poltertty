@@ -22,6 +22,10 @@ struct FileBrowserPanel: View {
             .background(Color(nsColor: .windowBackgroundColor))
             .focusable()
             .focused($isFocused)
+            .onAppear {
+                // 面板出现（含 Tab 切换）时自动获取焦点，确保快捷键立即可用
+                DispatchQueue.main.async { isFocused = true }
+            }
             .backport.onKeyPress(".") { handleDotKey(modifiers: $0) }
             .backport.onKeyPress("o") { handleOKey(modifiers: $0) }
             .backport.onKeyPress("t") { handleTKey(modifiers: $0) }
@@ -658,7 +662,8 @@ struct FileBrowserPanel: View {
                         viewModel.toggleExpand(nodeId: entry.node.id)
                     }
                 }
-                isFocused = true
+                // 延迟设焦，确保 AppKit 原生点击事件处理完后再夺回焦点
+                DispatchQueue.main.async { isFocused = true }
             },
             onDoubleClick: {
                 if !entry.node.isDirectory {

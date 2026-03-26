@@ -13,6 +13,10 @@ struct GitPanelView: View {
         gitPanelContent
             .focusable()
             .focused($isFocused)
+            .onAppear {
+                // 面板出现（含 Tab 切换）时自动获取焦点，确保快捷键立即可用
+                DispatchQueue.main.async { isFocused = true }
+            }
             .backport.onKeyPress("f") { handleFKey(modifiers: $0) }
     }
 
