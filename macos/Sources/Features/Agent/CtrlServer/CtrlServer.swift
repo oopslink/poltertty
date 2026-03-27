@@ -289,7 +289,7 @@ final class CtrlServer {
         }
     }
 
-    // MARK: - SSE 长连接（GET /mcp）
+    // MARK: - SSE 长连接（GET /v1/mcp）
 
     private func handleSSE(connection: NWConnection, context: RequestContext) {
         let header = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n"
@@ -301,7 +301,7 @@ final class CtrlServer {
                 id: UUID(),
                 timestamp: context.startTime,
                 method: context.method,
-                path: "/mcp (SSE)",
+                path: "/v1/mcp (SSE)",
                 toolName: nil,
                 requestBody: nil,
                 responseBody: nil,
@@ -611,13 +611,13 @@ final class CtrlServer {
         sendJSON(connection, status: 200, body: String(data: data, encoding: .utf8) ?? "{}", context: context)
     }
 
-    /// 发送无 body 的 HTTP 响应（用于 notifications/ 的 202 Accepted）
+    /// 发送无 body 的 HTTP 响应（用于 hook 事件的 202 Accepted 和 DELETE 的 204 No Content）
     private func sendEmpty(_ connection: NWConnection, status: Int, context: RequestContext? = nil) {
         let statusText: String
         switch status {
         case 202: statusText = "Accepted"
         case 204: statusText = "No Content"
-        default:  statusText = "No Content"
+        default:  statusText = "OK"
         }
         let header = "HTTP/1.1 \(status) \(statusText)\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
         let data = header.data(using: .utf8)!

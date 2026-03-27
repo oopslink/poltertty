@@ -20,7 +20,7 @@ final class CtrlAPIMonitorViewModel: ObservableObject {
     var filteredRecords: [CtrlAPIRecord] {
         records.filter { record in
             if let wsId = selectedWorkspaceId {
-                // workspaceId 为 nil 的记录（/mcp、/health 等）始终通过
+                // workspaceId 为 nil 的记录（/v1/mcp、/v1/health 等）始终通过
                 if let recWs = record.workspaceId, recWs != wsId { return false }
             }
             if let sfId = selectedSurfaceId {
