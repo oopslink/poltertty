@@ -19,7 +19,7 @@ class GitPanelViewModel: ObservableObject {
 
     // Diff 显示
     @Published var selectedDiff: GitFileDiff?
-    @Published var isDiffFullscreen: Bool = false
+    @Published var isDiffMaximized: Bool = false
     @Published var selectedCommitFileId: String?   // 当前选中的 commit 文件 ID，用于高亮
 
     @Published var isLoading = false
@@ -134,7 +134,7 @@ class GitPanelViewModel: ObservableObject {
 
     func closeDiff() {
         selectedDiff = nil
-        isDiffFullscreen = false
+        isDiffMaximized = false
         selectedCommitFileId = nil
     }
 
