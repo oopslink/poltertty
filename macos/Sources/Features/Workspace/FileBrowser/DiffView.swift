@@ -5,6 +5,8 @@ struct DiffView: View {
     let diff: GitFileDiff?
     let title: String?
 
+    private let maxVisibleLines = 200
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let t = title {
@@ -28,7 +30,7 @@ struct DiffView: View {
                         ScrollView([.horizontal, .vertical]) {
                             VStack(alignment: .leading, spacing: 0) {
                                 ForEach(diff.patches) { patch in
-                                    patchView(patch)
+                                    PatchRowView(patch: patch, maxVisibleLines: maxVisibleLines)
                                 }
                             }
                             .padding(.vertical, 4)
@@ -49,20 +51,47 @@ struct DiffView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
+}
 
-    @ViewBuilder
-    private func patchView(_ patch: GitPatch) -> some View {
-        // Hunk header
-        Text(patch.header)
-            .font(.system(size: 11, design: .monospaced))
-            .foregroundColor(Color(hex: "#60a5fa") ?? .blue)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background((Color(hex: "#60a5fa") ?? .blue).opacity(0.06))
+// MARK: - PatchRowView
 
-        ForEach(patch.lines) { line in
-            diffLineView(line)
+private struct PatchRowView: View {
+    let patch: GitPatch
+    let maxVisibleLines: Int
+
+    @State private var isExpanded = false
+
+    var body: some View {
+        let lines = patch.lines
+        let truncated = !isExpanded && lines.count > maxVisibleLines
+        let visibleLines = truncated ? Array(lines.prefix(maxVisibleLines)) : lines
+
+        VStack(alignment: .leading, spacing: 0) {
+            // Hunk header
+            Text(patch.header)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(Color(hex: "#60a5fa") ?? .blue)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background((Color(hex: "#60a5fa") ?? .blue).opacity(0.06))
+
+            ForEach(visibleLines) { line in
+                diffLineView(line)
+            }
+
+            if truncated {
+                Button(action: { isExpanded = true }) {
+                    Text("展开剩余 \(lines.count - maxVisibleLines) 行…")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .background(Color(nsColor: .controlBackgroundColor))
+            }
         }
     }
 

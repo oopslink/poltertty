@@ -29,13 +29,31 @@ struct SyntaxHighlightView: NSViewRepresentable {
         coord.lastText = text
         coord.lastLanguage = language
 
-        let attributed = coord.highlighter?.highlight(text, language: language)
-            ?? plainAttributedString(text)
+        // 取消上一次未完成的高亮任务，避免旧结果覆盖新内容
+        coord.currentHighlightID += 1
+        let taskID = coord.currentHighlightID
+        let capturedText = text
+        let capturedLanguage = language
+        let highlighter = coord.highlighter
+        let fallback = plainAttributedString(capturedText)
 
-        DispatchQueue.main.async {
-            container.textView.textStorage?.setAttributedString(attributed)
-            container.textView.needsDisplay = true
-            container.gutterView.needsDisplay = true
+        // 先显示纯文本，避免空白等待
+        container.textView.textStorage?.setAttributedString(fallback)
+        container.textView.needsDisplay = true
+        container.gutterView.needsDisplay = true
+
+        // 在后台 serial queue 上执行 JSContext 高亮（JSContext 绑定到该 queue）
+        SyntaxHighlighter.highlightQueue.async {
+            let attributed = highlighter?.highlight(capturedText, language: capturedLanguage)
+                ?? fallback
+
+            DispatchQueue.main.async {
+                // 丢弃已被新任务取代的结果
+                guard coord.currentHighlightID == taskID else { return }
+                container.textView.textStorage?.setAttributedString(attributed)
+                container.textView.needsDisplay = true
+                container.gutterView.needsDisplay = true
+            }
         }
     }
 
@@ -51,6 +69,8 @@ struct SyntaxHighlightView: NSViewRepresentable {
         var highlighter: SyntaxHighlighter?
         var lastText: String?
         var lastLanguage: String?
+        /// 单调递增，用于丢弃已过期的后台高亮结果
+        var currentHighlightID: Int = 0
     }
 }
 
@@ -140,6 +160,15 @@ final class SyntaxContainerView: NSView {
 // MARK: - SyntaxHighlighter (JSContext + highlight.js)
 
 final class SyntaxHighlighter {
+    /// 所有 JSContext 操作必须在此 queue 上执行（JSContext 非线程安全）
+    static let highlightQueue = DispatchQueue(label: "com.poltertty.syntax-highlight", qos: .userInitiated)
+    /// 高亮结果缓存，key 为 "语言:代码"，避免重复执行 JS
+    private static let cache: NSCache<NSString, NSAttributedString> = {
+        let c = NSCache<NSString, NSAttributedString>()
+        c.countLimit = 50
+        return c
+    }()
+
     private let context: JSContext?
     private let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
 
@@ -160,6 +189,12 @@ final class SyntaxHighlighter {
     /// Returns highlighted NSAttributedString, or nil on failure.
     func highlight(_ code: String, language: String?) -> NSAttributedString? {
         guard let ctx = context else { return nil }
+
+        // 缓存命中时直接返回，避免重复执行 JS
+        let cacheKey = "\(language ?? "auto"):\(code)" as NSString
+        if let cached = SyntaxHighlighter.cache.object(forKey: cacheKey) {
+            return cached
+        }
 
         let escaped = code
             .replacingOccurrences(of: "\\", with: "\\\\")
@@ -184,7 +219,10 @@ final class SyntaxHighlighter {
 
         guard let html else { return nil }
 
-        return parseHighlightHTML(html)
+        let highlighted = parseHighlightHTML(html)
+        // 写入缓存供下次命中
+        SyntaxHighlighter.cache.setObject(highlighted, forKey: cacheKey)
+        return highlighted
     }
 
     // MARK: - HTML span parser
