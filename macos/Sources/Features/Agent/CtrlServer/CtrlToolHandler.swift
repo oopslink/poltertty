@@ -275,7 +275,9 @@ final class CtrlToolHandler: Sendable {
             PaneSelectorViewModel.shared.annotations[paneId]
         }
 
-        let obj: [String: Any] = ["annotation": annotation as Any]
+        // 无注释时省略 annotation 字段（规范：不返回 null 值字段）
+        var obj: [String: Any] = [:]
+        if let annotation { obj["annotation"] = annotation }
         guard let data = try? JSONSerialization.data(withJSONObject: obj),
               let str = String(data: data, encoding: .utf8) else {
             throw RPCError(code: -32603, message: "get_pane_annotation: serialization failed")
