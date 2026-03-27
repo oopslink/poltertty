@@ -135,35 +135,33 @@ struct GitChangesSection: View {
 
             Spacer()
 
-            if true {
-                if isStaged {
-                    Button(action: { Task { await vm.unstage(change) } }) {
-                        Image(systemName: "minus.circle")
-                            .font(.system(size: 11))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.secondary)
-                    .help("Unstage")
-                    .accessibilityLabel("Unstage \(URL(fileURLWithPath: change.path).lastPathComponent)")
-                } else {
-                    Button(action: { Task { await vm.stage(change) } }) {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 11))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.secondary)
-                    .help("Stage")
-                    .accessibilityLabel("Stage \(URL(fileURLWithPath: change.path).lastPathComponent)")
-
-                    Button(action: { discardConfirm = change }) {
-                        Image(systemName: "xmark.circle")
-                            .font(.system(size: 11))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.secondary)
-                    .help("Discard Changes")
-                    .accessibilityLabel("Discard changes to \(URL(fileURLWithPath: change.path).lastPathComponent)")
+            if isStaged {
+                Button(action: { Task { await vm.unstage(change) } }) {
+                    Image(systemName: "minus.circle")
+                        .font(.system(size: 11))
                 }
+                .buttonStyle(.plain)
+                .foregroundColor(isHovered ? .secondary : .secondary.opacity(0.3))
+                .help("Unstage — 从下次提交中移除")
+                .accessibilityLabel("Unstage \(URL(fileURLWithPath: change.path).lastPathComponent)")
+            } else {
+                Button(action: { Task { await vm.stage(change) } }) {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(isHovered ? Color.green.opacity(0.85) : .secondary.opacity(0.3))
+                .help("Stage — 添加到下次提交")
+                .accessibilityLabel("Stage \(URL(fileURLWithPath: change.path).lastPathComponent)")
+
+                Button(action: { discardConfirm = change }) {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(isHovered ? Color.orange.opacity(0.85) : .secondary.opacity(0.3))
+                .help("Discard Changes — 不可撤销")
+                .accessibilityLabel("Discard changes to \(URL(fileURLWithPath: change.path).lastPathComponent)")
             }
         }
         .padding(.horizontal, 8)
