@@ -2551,7 +2551,7 @@ extension TerminalController {
         let activeTabId = tabBarViewModel.activeTabId
         var result: [PaneInfo] = []
 
-        for tab in tabBarViewModel.tabs {
+        for (tabIdx, tab) in tabBarViewModel.tabs.enumerated() {
             let tree: SplitTree<Ghostty.SurfaceView>
             if tab.id == activeTabId {
                 tree = surfaceTree          // 活跃 tab：用 live surfaceTree
@@ -2559,13 +2559,15 @@ extension TerminalController {
                 guard let t = tabSurfaceTrees[tab.id] else { continue }
                 tree = t
             }
-            for surface in tree {
+            for (paneIdx, surface) in tree.enumerated() {
                 let isActive = surface.id == focusedSurface?.id && tab.id == activeTabId
                 result.append(PaneInfo(
                     id: surface.id,
                     tabId: tab.id,
                     workspaceId: wsId,
                     isActive: isActive,
+                    tabIndex: tabIdx,
+                    paneIndex: paneIdx,
                     title: tabBarViewModel.tabs.first(where: { $0.id == tab.id })?.title,
                     annotation: PaneSelectorViewModel.shared.annotations[surface.id]
                 ))
