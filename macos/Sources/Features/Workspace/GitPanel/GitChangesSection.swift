@@ -121,6 +121,7 @@ struct GitChangesSection: View {
     @ViewBuilder
     private func changeRow(_ change: GitChange, isStaged: Bool) -> some View {
         let isHovered = hoveredChangeId == change.id
+        let fileName = URL(fileURLWithPath: change.path).lastPathComponent
 
         HStack(spacing: 4) {
             Text(change.delta.symbol)
@@ -128,7 +129,7 @@ struct GitChangesSection: View {
                 .foregroundColor(Color(hex: change.delta.colorHex) ?? .secondary)
                 .frame(width: 14)
 
-            Text(URL(fileURLWithPath: change.path).lastPathComponent)
+            Text(fileName)
                 .font(.system(size: 11))
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -139,29 +140,29 @@ struct GitChangesSection: View {
                 Button(action: { Task { await vm.unstage(change) } }) {
                     Image(systemName: "minus.circle")
                         .font(.system(size: 11))
+                        .foregroundColor(isHovered ? .secondary : .secondary.opacity(0.3))
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(isHovered ? .secondary : .secondary.opacity(0.3))
                 .help("Unstage — 从下次提交中移除")
-                .accessibilityLabel("Unstage \(URL(fileURLWithPath: change.path).lastPathComponent)")
+                .accessibilityLabel("Unstage \(fileName)")
             } else {
                 Button(action: { Task { await vm.stage(change) } }) {
                     Image(systemName: "plus.circle")
                         .font(.system(size: 11))
+                        .foregroundColor(isHovered ? Color.green.opacity(0.85) : .secondary.opacity(0.3))
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(isHovered ? Color.green.opacity(0.85) : .secondary.opacity(0.3))
                 .help("Stage — 添加到下次提交")
-                .accessibilityLabel("Stage \(URL(fileURLWithPath: change.path).lastPathComponent)")
+                .accessibilityLabel("Stage \(fileName)")
 
                 Button(action: { discardConfirm = change }) {
                     Image(systemName: "arrow.uturn.backward")
                         .font(.system(size: 11))
+                        .foregroundColor(isHovered ? Color.orange.opacity(0.85) : .secondary.opacity(0.3))
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(isHovered ? Color.orange.opacity(0.85) : .secondary.opacity(0.3))
                 .help("Discard Changes — 不可撤销")
-                .accessibilityLabel("Discard changes to \(URL(fileURLWithPath: change.path).lastPathComponent)")
+                .accessibilityLabel("Discard changes to \(fileName)")
             }
         }
         .padding(.horizontal, 8)
@@ -170,7 +171,7 @@ struct GitChangesSection: View {
         .contentShape(Rectangle())
         .cornerRadius(3)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(change.delta.symbol) \(URL(fileURLWithPath: change.path).lastPathComponent)")
+        .accessibilityLabel("\(change.delta.symbol) \(fileName)")
         .onHover { hovering in
             hoveredChangeId = hovering ? change.id : nil
         }
