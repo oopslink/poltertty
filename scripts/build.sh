@@ -28,7 +28,7 @@ if [[ "$MODE" == "dev" ]]; then
 
     # 运行 zig build 确保依赖存在
     echo "==> zig build (ensuring dependencies)"
-    if ! zig build -Doptimize=Debug; then
+    if ! zig build -Doptimize=Debug -Dxcframework-target=native; then
         echo "ERROR: zig build failed. Fix zig errors before building."
         exit 1
     fi
