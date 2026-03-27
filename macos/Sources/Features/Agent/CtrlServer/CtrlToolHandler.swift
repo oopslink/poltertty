@@ -203,6 +203,7 @@ final class CtrlToolHandler: Sendable {
               let direction = Self.parseDirection(dirStr) else {
             throw RPCError(code: -32602, message: "split_pane: missing or invalid direction (left|right|up|down)")
         }
+        let command = arguments["command"] as? String
 
         let newPaneId: UUID = try await withCheckedThrowingContinuation { cont in
             Task { @MainActor in
@@ -222,6 +223,17 @@ final class CtrlToolHandler: Sendable {
                 cont.resume(returning: newView.id)
             }
         }
+
+        // 若指定了初始命令，等 100ms 让 PTY 初始化后写入
+        if let command, !command.isEmpty {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            await MainActor.run {
+                if let tc = Self.tcContaining(paneId: newPaneId) {
+                    tc.writeToSurface(text: command + "\n", surfaceId: newPaneId)
+                }
+            }
+        }
+
         return #"{"newPaneId":"\#(newPaneId.uuidString)"}"#
     }
 

@@ -487,7 +487,8 @@ final class CtrlServer {
                     "type": "object",
                     "properties": [
                         "paneId": ["type": "string", "description": "UUID of the pane to split"],
-                        "direction": ["type": "string", "enum": ["left", "right", "up", "down"], "description": "Split direction"]
+                        "direction": ["type": "string", "enum": ["left", "right", "up", "down"], "description": "Split direction"],
+                        "command": ["type": "string", "description": "Optional shell command to execute in the new pane after splitting (newline appended automatically)"]
                     ],
                     "required": ["paneId", "direction"]
                 ]
