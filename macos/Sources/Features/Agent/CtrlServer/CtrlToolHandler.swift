@@ -51,8 +51,14 @@ final class CtrlToolHandler: Sendable {
     private func callPing() async throws -> String {
         let workspaces: [[String: Any]] = await MainActor.run {
             WorkspaceManager.shared.allWorkspaceIds().map { id in
+                let ws = WorkspaceManager.shared.workspace(for: id)
                 let isActive = WorkspaceManager.shared.windowForWorkspace(id)?.isKeyWindow == true
-                return ["id": id.uuidString, "isActive": isActive]
+                var d: [String: Any] = ["id": id.uuidString, "isActive": isActive]
+                if let ws {
+                    d["name"] = ws.name
+                    d["rootDirectory"] = ws.rootDirExpanded
+                }
+                return d
             }
         }
         let obj: [String: Any] = [

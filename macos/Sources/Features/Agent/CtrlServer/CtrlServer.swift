@@ -434,7 +434,7 @@ final class CtrlServer {
         var tools: [[String: Any]] = [
             [
                 "name": "get_instance_info",
-                "description": "Get Poltertty instance info including version, port, and all workspace IDs",
+                "description": "Get Poltertty instance info including version, port, and all workspace IDs with names and root directories",
                 "inputSchema": ["type": "object", "properties": [String: Any]()]
             ],
             [
