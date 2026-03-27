@@ -66,30 +66,32 @@ private struct PatchRowView: View {
         let truncated = !isExpanded && lines.count > maxVisibleLines
         let visibleLines = truncated ? Array(lines.prefix(maxVisibleLines)) : lines
 
-        // Hunk header
-        Text(patch.header)
-            .font(.system(size: 11, design: .monospaced))
-            .foregroundColor(Color(hex: "#60a5fa") ?? .blue)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background((Color(hex: "#60a5fa") ?? .blue).opacity(0.06))
+        VStack(alignment: .leading, spacing: 0) {
+            // Hunk header
+            Text(patch.header)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(Color(hex: "#60a5fa") ?? .blue)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background((Color(hex: "#60a5fa") ?? .blue).opacity(0.06))
 
-        ForEach(visibleLines) { line in
-            diffLineView(line)
-        }
-
-        if truncated {
-            Button(action: { isExpanded = true }) {
-                Text("展开剩余 \(lines.count - maxVisibleLines) 行…")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            ForEach(visibleLines) { line in
+                diffLineView(line)
             }
-            .buttonStyle(.plain)
-            .background(Color(nsColor: .controlBackgroundColor))
+
+            if truncated {
+                Button(action: { isExpanded = true }) {
+                    Text("展开剩余 \(lines.count - maxVisibleLines) 行…")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .background(Color(nsColor: .controlBackgroundColor))
+            }
         }
     }
 
