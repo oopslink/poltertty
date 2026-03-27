@@ -339,7 +339,8 @@ struct FilePreviewView: View {
         guard !Task.isCancelled else { return }
 
         // 超大图片文件（>50MB）直接提示，避免内存溢出
-        let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+        let fileSizeKey = URLResourceKey.fileSizeKey
+        let fileSize = (try? url.resourceValues(forKeys: [fileSizeKey]).fileSize) ?? 0
         if fileSize > 50_000_000 {
             await MainActor.run {
                 content = .notSupported("Image file too large for preview (max 50MB)")
@@ -349,8 +350,13 @@ struct FilePreviewView: View {
 
         guard !Task.isCancelled else { return }
 
-        // NSImage(byReferencing:) 延迟加载——AppKit 在渲染时才读取数据
-        let nsImage = NSImage(byReferencing: url)
+        // 在后台线程完成实际图片加载（NSImage(contentsOf:) 是同步加载）
+        guard let nsImage = NSImage(contentsOf: url) else {
+            await MainActor.run {
+                content = .error("Failed to load image")
+            }
+            return
+        }
 
         guard !Task.isCancelled else { return }
         await MainActor.run {
