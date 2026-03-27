@@ -22,7 +22,12 @@ struct UnifiedPanelView: View {
         VStack(spacing: 0) {
             // Tab bar (hidden during fullscreen preview)
             if !fileBrowserVM.isPreviewFullscreen {
-                PanelTabBar(activePanelTab: $activePanelTab, gitPanelVM: gitPanelVM, fileBrowserVM: fileBrowserVM)
+                PanelTabBar(
+                    activePanelTab: $activePanelTab,
+                    gitPanelVM: gitPanelVM,
+                    fileBrowserVM: fileBrowserVM,
+                    worktreeMonitor: worktreeMonitor
+                )
                 Divider()
             }
 
@@ -32,7 +37,6 @@ struct UnifiedPanelView: View {
                 FileBrowserPanel(
                     viewModel: fileBrowserVM,
                     onOpenInTerminal: onOpenInTerminal,
-                    worktreeMonitor: worktreeMonitor,
                     onSwitchToGitTab: {
                         if fileBrowserVM.isPreviewFullscreen {
                             fileBrowserVM.togglePreviewFullscreen()
@@ -44,7 +48,6 @@ struct UnifiedPanelView: View {
                 GitPanelView(
                     vm: gitPanelVM,
                     fileBrowserVM: fileBrowserVM,
-                    worktreeMonitor: worktreeMonitor,
                     onSwitchToFilesTab: {
                         activePanelTab = .files
                     }
@@ -60,12 +63,23 @@ private struct PanelTabBar: View {
     @Binding var activePanelTab: PanelTab
     @ObservedObject var gitPanelVM: GitPanelViewModel
     @ObservedObject var fileBrowserVM: FileBrowserViewModel
+    var worktreeMonitor: GitWorktreeMonitor? = nil
 
     var body: some View {
         HStack(spacing: 0) {
             tabButton(icon: "folder",                tab: .files, badge: nil)
             tabButton(icon: "arrow.triangle.branch", tab: .git,
                       badge: gitPanelVM.changedCount > 0 ? gitPanelVM.changedCount : nil)
+
+            // 共享 Worktree Selector
+            if let monitor = worktreeMonitor, !monitor.worktrees.isEmpty {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.12))
+                    .frame(width: 1, height: 14)
+                    .padding(.horizontal, 4)
+                worktreeSelector(monitor: monitor)
+            }
+
             Spacer()
 
             // Help button
@@ -144,5 +158,67 @@ private struct PanelTabBar: View {
         }
         .buttonStyle(.plain)
         .help(tab == .files ? "Files — 文件浏览器 (F)" : "Git — 版本控制 (G)")
+    }
+
+    @ViewBuilder
+    private func worktreeSelector(monitor: GitWorktreeMonitor) -> some View {
+        let effectivePath = fileBrowserVM.effectiveRootDir
+        let worktrees = monitor.worktrees
+        let currentWT = worktrees.first {
+            URL(fileURLWithPath: $0.path).standardized.path
+                == URL(fileURLWithPath: effectivePath).standardized.path
+        }
+        let branchLabel = gitPanelVM.branch
+            ?? currentWT.map { wt -> String in
+                if wt.isMain { return "Main" }
+                return wt.branch ?? URL(fileURLWithPath: wt.path).lastPathComponent
+            }
+            ?? URL(fileURLWithPath: effectivePath).lastPathComponent
+
+        if worktrees.count > 1 {
+            Menu {
+                ForEach(worktrees) { wt in
+                    let isActive = URL(fileURLWithPath: wt.path).standardized.path
+                        == URL(fileURLWithPath: effectivePath).standardized.path
+                    Button {
+                        if wt.isMain {
+                            fileBrowserVM.switchRoot(to: nil)
+                        } else {
+                            fileBrowserVM.switchRoot(to: wt.path)
+                        }
+                    } label: {
+                        Label {
+                            Text(wt.isMain ? "Main" : (wt.branch ?? wt.path))
+                        } icon: {
+                            if isActive { Image(systemName: "checkmark") }
+                        }
+                    }
+                    .disabled(isActive)
+                }
+            } label: {
+                HStack(spacing: 2) {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.system(size: 10))
+                    Text(branchLabel)
+                        .font(.system(size: 11))
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 7, weight: .semibold))
+                }
+                .foregroundColor(.secondary)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help("Switch Worktree")
+        } else {
+            HStack(spacing: 2) {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.system(size: 10))
+                Text(branchLabel)
+                    .font(.system(size: 11))
+                    .lineLimit(1)
+            }
+            .foregroundColor(.secondary)
+        }
     }
 }

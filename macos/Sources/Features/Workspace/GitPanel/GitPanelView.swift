@@ -4,7 +4,6 @@ import SwiftUI
 struct GitPanelView: View {
     @ObservedObject var vm: GitPanelViewModel
     @ObservedObject var fileBrowserVM: FileBrowserViewModel
-    var worktreeMonitor: GitWorktreeMonitor?
     var onSwitchToFilesTab: (() -> Void)?
 
     @FocusState private var isFocused: Bool
@@ -55,10 +54,6 @@ struct GitPanelView: View {
             HSplitView {
                 // Left: Changes + Commits
                 VStack(spacing: 0) {
-                    // Worktree selector toolbar
-                    worktreeToolbar
-                    Divider()
-
                     // Error
                     if let err = vm.error {
                         Text(err)
@@ -81,78 +76,6 @@ struct GitPanelView: View {
                 diffPanel
             }
         }
-    }
-
-    // MARK: - Worktree Toolbar
-
-    private var worktreeToolbar: some View {
-        let effectivePath = fileBrowserVM.effectiveRootDir
-        let worktrees = worktreeMonitor?.worktrees ?? []
-        let currentWT = worktrees.first {
-            URL(fileURLWithPath: $0.path).standardized.path
-                == URL(fileURLWithPath: effectivePath).standardized.path
-        }
-        let branchLabel = vm.branch
-            ?? worktreeDisplayLabel(for: currentWT, fallback: effectivePath)
-
-        return HStack(spacing: 6) {
-            // Worktree selector (leftmost)
-            if worktrees.isEmpty {
-                HStack(spacing: 3) {
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.system(size: 10))
-                    Text(branchLabel)
-                        .font(.system(size: 11))
-                        .lineLimit(1)
-                }
-                .foregroundColor(.secondary)
-            } else {
-                Menu {
-                    ForEach(worktrees) { wt in
-                        let isActive = URL(fileURLWithPath: wt.path).standardized.path
-                            == URL(fileURLWithPath: effectivePath).standardized.path
-                        Button {
-                            if wt.isMain {
-                                fileBrowserVM.switchRoot(to: nil)
-                            } else {
-                                fileBrowserVM.switchRoot(to: wt.path)
-                            }
-                        } label: {
-                            Label {
-                                Text(wt.isMain ? "Main" : (wt.branch ?? wt.path))
-                            } icon: {
-                                if isActive { Image(systemName: "checkmark") }
-                            }
-                        }
-                        .disabled(isActive)
-                    }
-                } label: {
-                    HStack(spacing: 3) {
-                        Image(systemName: "arrow.triangle.branch")
-                            .font(.system(size: 10))
-                        Text(branchLabel)
-                            .font(.system(size: 11))
-                            .lineLimit(1)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .semibold))
-                    }
-                    .foregroundColor(.secondary)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("Switch worktree")
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-    }
-
-    private func worktreeDisplayLabel(for wt: GitWorktree?, fallback: String) -> String {
-        guard let wt else { return URL(fileURLWithPath: fallback).lastPathComponent }
-        if wt.isMain { return "Main" }
-        return wt.branch ?? wt.path
     }
 
     // MARK: - Diff 浮窗面板
