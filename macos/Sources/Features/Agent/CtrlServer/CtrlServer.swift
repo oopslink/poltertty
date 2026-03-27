@@ -434,7 +434,7 @@ final class CtrlServer {
         var tools: [[String: Any]] = [
             [
                 "name": "get_instance_info",
-                "description": "Get Poltertty instance info including version, port, and all workspace IDs",
+                "description": "Get Poltertty instance info including version, port, and all workspace IDs with names and root directories",
                 "inputSchema": ["type": "object", "properties": [String: Any]()]
             ],
             [
@@ -487,7 +487,8 @@ final class CtrlServer {
                     "type": "object",
                     "properties": [
                         "paneId": ["type": "string", "description": "UUID of the pane to split"],
-                        "direction": ["type": "string", "enum": ["left", "right", "up", "down"], "description": "Split direction"]
+                        "direction": ["type": "string", "enum": ["left", "right", "up", "down"], "description": "Split direction"],
+                        "command": ["type": "string", "description": "Optional shell command to execute in the new pane after splitting (newline appended automatically)"]
                     ],
                     "required": ["paneId", "direction"]
                 ]
@@ -523,6 +524,40 @@ final class CtrlServer {
                     "properties": [
                         "target": ["type": "string", "enum": ["pane", "window"], "description": "Capture target: 'pane' for a single terminal pane, 'window' for the entire window (default: pane)"],
                         "paneId": ["type": "string", "description": "UUID of the target pane (optional; defaults to focused pane for target=pane, key window for target=window)"]
+                    ]
+                ]
+            ],
+            [
+                "name": "list_worktrees",
+                "description": "List all git worktrees for the given directory (defaults to the active workspace root)",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "directory": ["type": "string", "description": "Absolute path to the git repository (optional; defaults to active workspace root)"]
+                    ]
+                ]
+            ],
+            [
+                "name": "create_worktree",
+                "description": "Create a new git worktree at the specified path, optionally creating a new branch",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "directory": ["type": "string", "description": "Absolute path to the git repository"],
+                        "path": ["type": "string", "description": "Path for the new worktree (absolute, or relative to 'directory')"],
+                        "branch": ["type": "string", "description": "New branch name to create (optional; omit to checkout existing branch named after the path)"],
+                        "baseBranch": ["type": "string", "description": "Branch or commit to base the new branch on (optional; defaults to HEAD)"]
+                    ],
+                    "required": ["directory", "path"]
+                ]
+            ],
+            [
+                "name": "get_git_status",
+                "description": "Get git status for the given directory: branch name, staged/unstaged/untracked files",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "directory": ["type": "string", "description": "Absolute path to the git repository (optional; defaults to active workspace root)"]
                     ]
                 ]
             ]

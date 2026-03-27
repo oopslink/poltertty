@@ -38,6 +38,9 @@ final class CtrlToolHandler: Sendable {
         case "set_pane_annotation": return try await callSetPaneAnnotation(arguments: arguments)
         case "get_pane_annotation": return try await callGetPaneAnnotation(arguments: arguments)
         case "capture_screenshot":  return try await callScreenshot(arguments: arguments)
+        case "list_worktrees":      return try await callListWorktrees(arguments: arguments)
+        case "create_worktree":     return try await callCreateWorktree(arguments: arguments)
+        case "get_git_status":      return try await callGetGitStatus(arguments: arguments)
         case "click_window":          return try await callClickWindow(arguments: arguments)
         case "test_fullscreen_diff":  return try await callTestFullscreenDiff(arguments: arguments)
         case "git_panel_state":       return try await callGitPanelState(arguments: arguments)
@@ -51,8 +54,14 @@ final class CtrlToolHandler: Sendable {
     private func callPing() async throws -> String {
         let workspaces: [[String: Any]] = await MainActor.run {
             WorkspaceManager.shared.allWorkspaceIds().map { id in
+                let ws = WorkspaceManager.shared.workspace(for: id)
                 let isActive = WorkspaceManager.shared.windowForWorkspace(id)?.isKeyWindow == true
-                return ["id": id.uuidString, "isActive": isActive]
+                var d: [String: Any] = ["id": id.uuidString, "isActive": isActive]
+                if let ws {
+                    d["name"] = ws.name
+                    d["rootDirectory"] = ws.rootDirExpanded
+                }
+                return d
             }
         }
         let obj: [String: Any] = [
@@ -112,7 +121,9 @@ final class CtrlToolHandler: Sendable {
                 "id": p.id.uuidString,
                 "tabId": p.tabId.uuidString,
                 "workspaceId": p.workspaceId.uuidString,
-                "isActive": p.isActive
+                "isActive": p.isActive,
+                "tabIndex": p.tabIndex,
+                "paneIndex": p.paneIndex
             ]
             if let title = p.title { d["title"] = title }
             if let annotation = p.annotation { d["annotation"] = annotation }
@@ -195,6 +206,7 @@ final class CtrlToolHandler: Sendable {
               let direction = Self.parseDirection(dirStr) else {
             throw RPCError(code: -32602, message: "split_pane: missing or invalid direction (left|right|up|down)")
         }
+        let command = arguments["command"] as? String
 
         let newPaneId: UUID = try await withCheckedThrowingContinuation { cont in
             Task { @MainActor in
@@ -214,6 +226,17 @@ final class CtrlToolHandler: Sendable {
                 cont.resume(returning: newView.id)
             }
         }
+
+        // 若指定了初始命令，等 100ms 让 PTY 初始化后写入
+        if let command, !command.isEmpty {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            await MainActor.run {
+                if let tc = Self.tcContaining(paneId: newPaneId) {
+                    tc.writeToSurface(text: command + "\n", surfaceId: newPaneId)
+                }
+            }
+        }
+
         return #"{"newPaneId":"\#(newPaneId.uuidString)"}"#
     }
 
@@ -252,7 +275,9 @@ final class CtrlToolHandler: Sendable {
             PaneSelectorViewModel.shared.annotations[paneId]
         }
 
-        let obj: [String: Any] = ["annotation": annotation as Any]
+        // 无注释时省略 annotation 字段（规范：不返回 null 值字段）
+        var obj: [String: Any] = [:]
+        if let annotation { obj["annotation"] = annotation }
         guard let data = try? JSONSerialization.data(withJSONObject: obj),
               let str = String(data: data, encoding: .utf8) else {
             throw RPCError(code: -32603, message: "get_pane_annotation: serialization failed")
@@ -349,6 +374,161 @@ final class CtrlToolHandler: Sendable {
 
         Self.logger.info("screenshot saved: \(path)")
         return #"{"path":"\#(path)"}"#
+    }
+
+    // MARK: - list_worktrees
+
+    private func callListWorktrees(arguments: [String: Any]) async throws -> String {
+        let directory: String = await MainActor.run {
+            if let d = arguments["directory"] as? String, !d.isEmpty { return d }
+            let kw = NSApp.keyWindow as? TerminalWindow
+            if let wsId = kw.flatMap({ WorkspaceManager.shared.workspaceId(for: $0) }),
+               let ws = WorkspaceManager.shared.workspace(for: wsId) {
+                return ws.rootDirExpanded
+            }
+            if let firstId = WorkspaceManager.shared.allWorkspaceIds().first,
+               let ws = WorkspaceManager.shared.workspace(for: firstId) {
+                return ws.rootDirExpanded
+            }
+            return ""
+        }
+        guard !directory.isEmpty else {
+            throw RPCError(code: -32602, message: "list_worktrees: no directory specified and no active workspace")
+        }
+
+        let result = CtrlShellRunner.git(["-C", directory, "worktree", "list", "--porcelain"])
+        guard result.succeeded else {
+            throw RPCError(code: -32603, message: "list_worktrees: \(result.trimmedStderr)")
+        }
+
+        let worktrees = GitWorktreeParser.parse(porcelain: result.stdout, currentPath: directory)
+        let arr: [[String: Any]] = worktrees.map { wt in
+            var d: [String: Any] = [
+                "path": wt.path,
+                "isMain": wt.isMain,
+                "isCurrent": wt.isCurrent,
+                "exists": wt.exists
+            ]
+            if let branch = wt.branch { d["branch"] = branch }
+            return d
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: arr),
+              let str = String(data: data, encoding: .utf8) else {
+            throw RPCError(code: -32603, message: "list_worktrees: serialization failed")
+        }
+        return str
+    }
+
+    // MARK: - create_worktree
+
+    private func callCreateWorktree(arguments: [String: Any]) async throws -> String {
+        guard let directory = arguments["directory"] as? String, !directory.isEmpty else {
+            throw RPCError(code: -32602, message: "create_worktree: missing required parameter 'directory'")
+        }
+        guard let path = arguments["path"] as? String, !path.isEmpty else {
+            throw RPCError(code: -32602, message: "create_worktree: missing required parameter 'path'")
+        }
+
+        let branch = arguments["branch"] as? String
+        let baseBranch = arguments["baseBranch"] as? String
+
+        // 将相对路径解析为绝对路径
+        let resolvedPath = path.hasPrefix("/")
+            ? path
+            : URL(fileURLWithPath: directory).appendingPathComponent(path).path
+
+        // 构建 git worktree add 参数
+        var args = ["-C", directory, "worktree", "add"]
+        if let branch { args += ["-b", branch] }
+        args.append(resolvedPath)
+        if let baseBranch { args.append(baseBranch) }
+
+        let result = CtrlShellRunner.git(args)
+        guard result.succeeded else {
+            throw RPCError(code: -32603, message: "create_worktree: \(result.trimmedStderr)")
+        }
+
+        // 读取新 worktree 当前分支
+        let branchResult = CtrlShellRunner.git(["-C", resolvedPath, "branch", "--show-current"])
+        let currentBranch = branchResult.succeeded ? branchResult.trimmedStdout : branch
+
+        var obj: [String: Any] = ["path": resolvedPath]
+        if let b = currentBranch, !b.isEmpty { obj["branch"] = b }
+        guard let data = try? JSONSerialization.data(withJSONObject: obj),
+              let str = String(data: data, encoding: .utf8) else {
+            throw RPCError(code: -32603, message: "create_worktree: serialization failed")
+        }
+        return str
+    }
+
+    // MARK: - get_git_status
+
+    private func callGetGitStatus(arguments: [String: Any]) async throws -> String {
+        let directory: String = await MainActor.run {
+            if let d = arguments["directory"] as? String, !d.isEmpty { return d }
+            let kw = NSApp.keyWindow as? TerminalWindow
+            if let wsId = kw.flatMap({ WorkspaceManager.shared.workspaceId(for: $0) }),
+               let ws = WorkspaceManager.shared.workspace(for: wsId) {
+                return ws.rootDirExpanded
+            }
+            if let firstId = WorkspaceManager.shared.allWorkspaceIds().first,
+               let ws = WorkspaceManager.shared.workspace(for: firstId) {
+                return ws.rootDirExpanded
+            }
+            return ""
+        }
+        guard !directory.isEmpty else {
+            throw RPCError(code: -32602, message: "get_git_status: no directory specified and no active workspace")
+        }
+
+        // 检测是否为 git 仓库
+        let revParse = CtrlShellRunner.git(["-C", directory, "rev-parse", "--git-dir"])
+        guard revParse.succeeded else {
+            guard let data = try? JSONSerialization.data(withJSONObject: ["isGitRepo": false]),
+                  let str = String(data: data, encoding: .utf8) else {
+                throw RPCError(code: -32603, message: "get_git_status: serialization failed")
+            }
+            return str
+        }
+
+        // 当前分支
+        let branchResult = CtrlShellRunner.git(["-C", directory, "branch", "--show-current"])
+        let branch = branchResult.succeeded ? branchResult.trimmedStdout : nil
+
+        // 文件状态（--porcelain v1: "XY filename"）
+        let statusResult = CtrlShellRunner.git(["-C", directory, "status", "--porcelain"])
+        var staged: [String] = []
+        var unstaged: [String] = []
+        var untracked: [String] = []
+
+        if statusResult.succeeded {
+            for line in statusResult.stdout.components(separatedBy: "\n") {
+                guard line.count >= 3 else { continue }
+                let x = String(line.prefix(1))
+                let y = String(line.dropFirst(1).prefix(1))
+                let file = String(line.dropFirst(3))
+                if x == "?" && y == "?" {
+                    untracked.append(file)
+                } else {
+                    if x != " " && x != "?" { staged.append(file) }
+                    if y != " " && y != "?" { unstaged.append(file) }
+                }
+            }
+        }
+
+        var obj: [String: Any] = [
+            "isGitRepo": true,
+            "staged": staged,
+            "unstaged": unstaged,
+            "untracked": untracked
+        ]
+        if let branch, !branch.isEmpty { obj["branch"] = branch }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: obj),
+              let str = String(data: data, encoding: .utf8) else {
+            throw RPCError(code: -32603, message: "get_git_status: serialization failed")
+        }
+        return str
     }
 
     // MARK: - click_window
