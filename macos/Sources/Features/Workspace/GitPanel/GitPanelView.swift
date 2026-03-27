@@ -51,10 +51,6 @@ struct GitPanelView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if vm.isDiffFullscreen {
-            // 全屏模式：直接显示 diff 面板，不使用 HSplitView
-            // 避免 NSSplitView 保留旧分割位置导致布局错误
-            diffPanel
         } else {
             HSplitView {
                 // Left: Changes + Commits
@@ -200,11 +196,11 @@ struct GitPanelView: View {
             // Maximize / Restore button
             if vm.selectedDiff != nil {
                 Button(action: {
-                    let newValue = !vm.isDiffFullscreen
-                    vm.isDiffFullscreen = newValue
+                    let newValue = !vm.isDiffMaximized
+                    vm.isDiffMaximized = newValue
                     fileBrowserVM.isPreviewFullscreen = newValue
                 }) {
-                    Image(systemName: vm.isDiffFullscreen
+                    Image(systemName: vm.isDiffMaximized
                           ? "arrow.down.right.and.arrow.up.left"
                           : "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 12))
@@ -213,7 +209,7 @@ struct GitPanelView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(vm.isDiffFullscreen ? "Restore Layout (Esc)" : "Maximize Diff Panel")
+                .help(vm.isDiffMaximized ? "Restore Layout (Esc)" : "Maximize Diff Panel")
 
                 // Close button
                 Button(action: {
@@ -235,9 +231,9 @@ struct GitPanelView: View {
         .overlay(
             // Esc key to restore fullscreen
             Group {
-                if vm.isDiffFullscreen {
+                if vm.isDiffMaximized {
                     Button("") {
-                        vm.isDiffFullscreen = false
+                        vm.isDiffMaximized = false
                         fileBrowserVM.isPreviewFullscreen = false
                     }
                     .keyboardShortcut(.escape, modifiers: [])

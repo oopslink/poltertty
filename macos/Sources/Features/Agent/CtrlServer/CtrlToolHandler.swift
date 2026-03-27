@@ -417,11 +417,11 @@ final class CtrlToolHandler: Sendable {
                 if let id = wsId {
                     let vm = WorkspaceManager.shared.gitPanelViewModel(for: id)
                     let fbvm = WorkspaceManager.shared.fileBrowserViewModel(for: id)
-                    gitState = "{\"isGitRepo\":\(vm.isGitRepo),\"isDiffFullscreen\":\(vm.isDiffFullscreen),\"hasDiff\":\(vm.selectedDiff != nil),\"changedCount\":\(vm.changedCount),\"isVisible\":\(fbvm.isVisible)}"
+                    gitState = "{\"isGitRepo\":\(vm.isGitRepo),\"isDiffMaximized\":\(vm.isDiffMaximized),\"hasDiff\":\(vm.selectedDiff != nil),\"changedCount\":\(vm.changedCount),\"isVisible\":\(fbvm.isVisible)}"
                 } else if let firstId = allIds.first {
                     let vm = WorkspaceManager.shared.gitPanelViewModel(for: firstId)
                     let fbvm = WorkspaceManager.shared.fileBrowserViewModel(for: firstId)
-                    gitState = "{\"isGitRepo\":\(vm.isGitRepo),\"isDiffFullscreen\":\(vm.isDiffFullscreen),\"hasDiff\":\(vm.selectedDiff != nil),\"changedCount\":\(vm.changedCount),\"isVisible\":\(fbvm.isVisible),\"fromAllIds\":true}"
+                    gitState = "{\"isGitRepo\":\(vm.isGitRepo),\"isDiffMaximized\":\(vm.isDiffMaximized),\"hasDiff\":\(vm.selectedDiff != nil),\"changedCount\":\(vm.changedCount),\"isVisible\":\(fbvm.isVisible),\"fromAllIds\":true}"
                 }
                 cont.resume(returning: "{\"wsId\":\"\(wsIdStr)\",\"allIds\":\"\(allIdsStr)\",\"isTermWin\":\(isTerminal),\"winCount\":\(windowCount),\"termWinCount\":\(termWindowCount),\"state\":\(gitState)}")
             }
@@ -475,7 +475,7 @@ final class CtrlToolHandler: Sendable {
                     let diff = GitFileDiff(path: "TestFile.swift", oldPath: nil, delta: .modified, patches: [patch])
                     gitPanelVM.isGitRepo = true
                     gitPanelVM.selectedDiff = diff
-                    gitPanelVM.isDiffFullscreen = true
+                    gitPanelVM.isDiffMaximized = true
                     fileBrowserVM.isPreviewFullscreen = true
 
                     // 等待布局更新后截图（更长时间确保 SwiftUI 渲染完成）
