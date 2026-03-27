@@ -498,15 +498,25 @@ struct FileBrowserPanel: View {
     // MARK: - Empty State
 
     private var emptyStateView: some View {
-        VStack {
+        VStack(spacing: 0) {
             Spacer()
             Image(systemName: "folder")
                 .font(.system(size: 24))
-                .foregroundColor(Color.secondary.opacity(0.5))
+                .foregroundColor(Color.secondary.opacity(0.4))
             Text(viewModel.effectiveRootDir.isEmpty ? "No directory set" : "Directory not found")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
-                .padding(.top, 4)
+                .padding(.top, 8)
+            Text(
+                viewModel.effectiveRootDir.isEmpty
+                    ? "在工作区设置中配置根目录后即可浏览文件。"
+                    : "配置的目录在磁盘上不存在，请检查工作区设置。"
+            )
+            .font(.system(size: 11))
+            .foregroundColor(.secondary.opacity(0.7))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
             Spacer()
         }
         .frame(maxWidth: .infinity)

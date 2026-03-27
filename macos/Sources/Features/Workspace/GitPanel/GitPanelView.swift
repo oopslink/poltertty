@@ -32,7 +32,7 @@ struct GitPanelView: View {
                 Spacer()
                 Image(systemName: "arrow.triangle.branch")
                     .font(.system(size: 32))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.secondary.opacity(0.5))
                 Text("Not a git repository")
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
@@ -47,6 +47,12 @@ struct GitPanelView: View {
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
                 }
+                Text("在终端中运行 `git init` 初始化仓库，\n或打开一个已有 git 仓库的目录。")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
