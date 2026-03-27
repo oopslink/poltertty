@@ -101,13 +101,13 @@ final class CtrlServer {
             if let data { buf.append(data) }
 
             guard buf.count < 1_048_576 else {
-                self.sendJSON(connection, status: 413, body: #"{"error":"too large"}"#)
+                self.sendJSON(connection, status: 413, body: #"{"error":{"code":"PAYLOAD_TOO_LARGE","message":"Request body exceeds 1MB limit"}}"#)
                 return
             }
 
             guard let headerEnd = buf.range(of: Self.headerSeparator) else {
                 if isComplete || error != nil {
-                    self.sendJSON(connection, status: 400, body: #"{"error":"incomplete"}"#)
+                    self.sendJSON(connection, status: 400, body: #"{"error":{"code":"INCOMPLETE_REQUEST","message":"Incomplete HTTP request"}}"#)
                 } else {
                     self.accumulateRequest(connection: connection, buffer: buf)
                 }
@@ -147,28 +147,22 @@ final class CtrlServer {
             workspaceId: nil, surfaceId: nil
         )
 
-        // --- health ---
-        if method == "GET" && rawPath.contains("/health") {
-            sendJSON(connection, status: 200, body: "{}", context: baseCtx); return
+        switch (method, rawPath) {
+        case ("GET", "/v1/health"):
+            sendJSON(connection, status: 200, body: "{}", context: baseCtx)
+        case ("POST", "/v1/sessions"):
+            handlePrepareSession(bodyData: bodyData, connection: connection, context: baseCtx)
+        case ("POST", "/v1/hooks/events"):
+            handleHook(bodyData: bodyData, connection: connection, context: baseCtx)
+        case ("GET", "/v1/mcp"):
+            handleSSE(connection: connection, context: baseCtx)
+        case ("DELETE", "/v1/mcp"):
+            sendEmpty(connection, status: 204, context: baseCtx)
+        case ("POST", "/v1/mcp"):
+            handleMCP(bodyData: bodyData, connection: connection, context: baseCtx)
+        default:
+            sendJSON(connection, status: 404, body: #"{"error":{"code":"NOT_FOUND","message":"Unknown endpoint: \#(method) \#(rawPath)"}}"#, context: baseCtx)
         }
-        // --- hook routes（prepare-session 必须在 /hook 之前匹配） ---
-        if method == "POST" && rawPath.contains("/hooks/prepare-session") {
-            handlePrepareSession(bodyData: bodyData, connection: connection, context: baseCtx); return
-        }
-        if method == "POST" && rawPath.contains("/hook") {
-            handleHook(bodyData: bodyData, connection: connection, context: baseCtx); return
-        }
-        // --- MCP routes ---
-        if method == "GET" && rawPath.contains("/mcp") {
-            handleSSE(connection: connection, context: baseCtx); return
-        }
-        if method == "DELETE" && rawPath.contains("/mcp") {
-            sendJSON(connection, status: 200, body: "{}", context: baseCtx); return
-        }
-        if method == "POST" && rawPath.contains("/mcp") {
-            handleMCP(bodyData: bodyData, connection: connection, context: baseCtx); return
-        }
-        sendJSON(connection, status: 404, body: #"{"error":"not found"}"#, context: baseCtx)
     }
 
     // MARK: - Hook handlers
@@ -176,7 +170,7 @@ final class CtrlServer {
     private func handlePrepareSession(bodyData: Data, connection: NWConnection, context: RequestContext) {
         guard let req = try? decoder.decode(PrepareRequest.self, from: bodyData) else {
             Self.logger.warning("CtrlServer: failed to decode prepare-session request")
-            sendJSON(connection, status: 400, body: #"{"error":"invalid json"}"#, context: context)
+            sendJSON(connection, status: 400, body: #"{"error":{"code":"INVALID_JSON","message":"Failed to decode request body"}}"#, context: context)
             return
         }
 
@@ -247,7 +241,7 @@ final class CtrlServer {
         guard var payload = try? decoder.decode(HookPayload.self, from: bodyData) else {
             let bodyPreview = String(data: bodyData.prefix(500), encoding: .utf8) ?? "(binary)"
             Self.logger.warning("CtrlServer: failed to decode hook payload (\(bodyData.count) bytes): \(bodyPreview)")
-            sendJSON(connection, status: 400, body: #"{"error":"invalid json"}"#, context: context)
+            sendJSON(connection, status: 400, body: #"{"error":{"code":"INVALID_JSON","message":"Failed to decode hook payload"}}"#, context: context)
             return
         }
         // 注入 tool_input 原始 JSON（用于 Trace 显示参数）
@@ -259,7 +253,7 @@ final class CtrlServer {
         }
         Self.logger.info("CtrlServer: event=\(payload.hookEventName.rawValue) sid=\(payload.sessionId ?? "nil") tool=\(payload.toolName ?? "-") toolUseId=\(payload.toolUseId ?? "-")")
         // 先发响应（不含 workspaceId），记录由下方 @MainActor Task 完成
-        sendJSON(connection, status: 200, body: "{}")
+        sendEmpty(connection, status: 202, context: context)
         Task { await EventBus.shared.emit(.hook(payload)) }
         Task { @MainActor in
             self.sessionManager.processHookEvent(payload)
@@ -284,8 +278,8 @@ final class CtrlServer {
                 path: context.path,
                 toolName: nil,
                 requestBody: truncReq,
-                responseBody: "{}",
-                statusCode: 200,
+                responseBody: nil,
+                statusCode: 202,
                 durationMs: Date().timeIntervalSince(context.startTime) * 1000,
                 error: nil,
                 workspaceId: wsId,
@@ -608,6 +602,7 @@ final class CtrlServer {
         let statusText: String
         switch status {
         case 202: statusText = "Accepted"
+        case 204: statusText = "No Content"
         default:  statusText = "No Content"
         }
         let header = "HTTP/1.1 \(status) \(statusText)\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
