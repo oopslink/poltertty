@@ -18,7 +18,7 @@ struct GitCommitsSection: View {
 
                 if !vm.commits.isEmpty {
                     Text("\(vm.commits.count)")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundColor(.secondary.opacity(0.7))
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)

@@ -517,17 +517,6 @@ final class CtrlServer {
                 ]
             ],
             [
-                "name": "capture_screenshot",
-                "description": "Take a screenshot of a pane or the entire window; saves as PNG and returns the file path",
-                "inputSchema": [
-                    "type": "object",
-                    "properties": [
-                        "target": ["type": "string", "enum": ["pane", "window"], "description": "Capture target: 'pane' for a single terminal pane, 'window' for the entire window (default: pane)"],
-                        "paneId": ["type": "string", "description": "UUID of the target pane (optional; defaults to focused pane for target=pane, key window for target=window)"]
-                    ]
-                ]
-            ],
-            [
                 "name": "list_worktrees",
                 "description": "List all git worktrees for the given directory (defaults to the active workspace root)",
                 "inputSchema": [

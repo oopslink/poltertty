@@ -5,7 +5,6 @@ import AppKit
 struct FileBrowserPanel: View {
     @ObservedObject var viewModel: FileBrowserViewModel
     var onOpenInTerminal: ((URL) -> Void)?
-    var worktreeMonitor: GitWorktreeMonitor? = nil
     var onSwitchToGitTab: (() -> Void)?
 
     @State private var renameText: String = ""
@@ -85,13 +84,13 @@ struct FileBrowserPanel: View {
             // Left: File tree (always visible)
             VStack(spacing: 0) {
                 filterBar
+                Divider()
                 if !viewModel.breadcrumbSegments.isEmpty {
                     BreadcrumbView(segments: viewModel.breadcrumbSegments) { segment in
                         viewModel.focusDirectory(segment.url)
                     }
                     Divider()
                 }
-                Divider()
                 if viewModel.rootDir.isEmpty || !FileManager.default.fileExists(atPath: viewModel.rootDir) {
                     emptyStateView
                 } else {
@@ -313,7 +312,6 @@ struct FileBrowserPanel: View {
     private var filterBar: some View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
-                worktreeSelector
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
@@ -480,89 +478,18 @@ struct FileBrowserPanel: View {
     }
 
 
-    // MARK: - Worktree Selector
-
-    @ViewBuilder
-    private var worktreeSelector: some View {
-        let effectivePath = viewModel.effectiveRootDir
-        let worktrees = worktreeMonitor?.worktrees ?? []
-        let currentWT = worktrees.first {
-            URL(fileURLWithPath: $0.path).standardized.path
-                == URL(fileURLWithPath: effectivePath).standardized.path
-        }
-        let branchLabel = currentWT.map { wt -> String in
-            if wt.isMain { return "Main" }
-            return wt.branch ?? wt.path
-        } ?? URL(fileURLWithPath: effectivePath).lastPathComponent
-
-        if worktrees.count > 1 {
-            Menu {
-                ForEach(worktrees) { wt in
-                    let isActive = URL(fileURLWithPath: wt.path).standardized.path
-                        == URL(fileURLWithPath: effectivePath).standardized.path
-                    Button {
-                        if wt.isMain {
-                            viewModel.switchRoot(to: nil)
-                        } else {
-                            viewModel.switchRoot(to: wt.path)
-                        }
-                    } label: {
-                        Label {
-                            Text(wt.isMain ? "Main" : (wt.branch ?? wt.path))
-                        } icon: {
-                            if isActive { Image(systemName: "checkmark") }
-                        }
-                    }
-                    .disabled(isActive)
-                }
-            } label: {
-                HStack(spacing: 2) {
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.system(size: 10))
-                    Text(branchLabel)
-                        .font(.system(size: 11))
-                        .lineLimit(1)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 7, weight: .semibold))
-                }
-                .foregroundColor(.secondary)
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .help("Switch worktree")
-
-            Rectangle()
-                .fill(Color.primary.opacity(0.15))
-                .frame(width: 1, height: 12)
-        } else if !worktrees.isEmpty {
-            HStack(spacing: 2) {
-                Image(systemName: "arrow.triangle.branch")
-                    .font(.system(size: 10))
-                Text(branchLabel)
-                    .font(.system(size: 11))
-                    .lineLimit(1)
-            }
-            .foregroundColor(.secondary)
-
-            Rectangle()
-                .fill(Color.primary.opacity(0.15))
-                .frame(width: 1, height: 12)
-        }
-    }
-
     // MARK: - Root Path Status Bar
 
     private var rootPathStatusBar: some View {
         HStack(spacing: 4) {
             Image(systemName: "folder")
                 .font(.system(size: 9))
-                .foregroundColor(.secondary.opacity(0.6))
             Text(viewModel.effectiveRootDir)
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary.opacity(0.6))
                 .lineLimit(1)
                 .truncationMode(.head)
         }
+        .foregroundColor(.secondary.opacity(0.8))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -571,15 +498,25 @@ struct FileBrowserPanel: View {
     // MARK: - Empty State
 
     private var emptyStateView: some View {
-        VStack {
+        VStack(spacing: 0) {
             Spacer()
             Image(systemName: "folder")
                 .font(.system(size: 24))
-                .foregroundColor(Color.secondary.opacity(0.5))
+                .foregroundColor(Color.secondary.opacity(0.4))
             Text(viewModel.effectiveRootDir.isEmpty ? "No directory set" : "Directory not found")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
-                .padding(.top, 4)
+                .padding(.top, 8)
+            Text(
+                viewModel.effectiveRootDir.isEmpty
+                    ? "Configure a root directory in workspace settings."
+                    : "The configured path could not be found on disk."
+            )
+            .font(.system(size: 11))
+            .foregroundColor(.secondary.opacity(0.7))
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
             Spacer()
         }
         .frame(maxWidth: .infinity)

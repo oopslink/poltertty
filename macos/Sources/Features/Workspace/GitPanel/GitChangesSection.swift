@@ -91,7 +91,7 @@ struct GitChangesSection: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: isExpanded.wrappedValue ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(.system(size: 9, weight: .semibold))
                     .foregroundColor(.secondary)
                     .frame(width: 10)
 
@@ -100,7 +100,7 @@ struct GitChangesSection: View {
                     .foregroundColor(.secondary)
 
                 Text("\(count)")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundColor(accentColor.opacity(0.9))
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
@@ -121,6 +121,7 @@ struct GitChangesSection: View {
     @ViewBuilder
     private func changeRow(_ change: GitChange, isStaged: Bool) -> some View {
         let isHovered = hoveredChangeId == change.id
+        let fileName = URL(fileURLWithPath: change.path).lastPathComponent
 
         HStack(spacing: 4) {
             Text(change.delta.symbol)
@@ -128,42 +129,40 @@ struct GitChangesSection: View {
                 .foregroundColor(Color(hex: change.delta.colorHex) ?? .secondary)
                 .frame(width: 14)
 
-            Text(URL(fileURLWithPath: change.path).lastPathComponent)
+            Text(fileName)
                 .font(.system(size: 11))
                 .lineLimit(1)
                 .truncationMode(.middle)
 
             Spacer()
 
-            if true {
-                if isStaged {
-                    Button(action: { Task { await vm.unstage(change) } }) {
-                        Image(systemName: "minus.circle")
-                            .font(.system(size: 11))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.secondary)
-                    .help("Unstage")
-                    .accessibilityLabel("Unstage \(URL(fileURLWithPath: change.path).lastPathComponent)")
-                } else {
-                    Button(action: { Task { await vm.stage(change) } }) {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 11))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.secondary)
-                    .help("Stage")
-                    .accessibilityLabel("Stage \(URL(fileURLWithPath: change.path).lastPathComponent)")
-
-                    Button(action: { discardConfirm = change }) {
-                        Image(systemName: "xmark.circle")
-                            .font(.system(size: 11))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(.secondary)
-                    .help("Discard Changes")
-                    .accessibilityLabel("Discard changes to \(URL(fileURLWithPath: change.path).lastPathComponent)")
+            if isStaged {
+                Button(action: { Task { await vm.unstage(change) } }) {
+                    Image(systemName: "minus.circle")
+                        .font(.system(size: 11))
+                        .foregroundColor(isHovered ? .secondary : .secondary.opacity(0.3))
                 }
+                .buttonStyle(.plain)
+                .help("Unstage — Remove from next commit")
+                .accessibilityLabel("Unstage \(fileName)")
+            } else {
+                Button(action: { Task { await vm.stage(change) } }) {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 11))
+                        .foregroundColor(isHovered ? Color.green.opacity(0.85) : .secondary.opacity(0.3))
+                }
+                .buttonStyle(.plain)
+                .help("Stage — Add to next commit")
+                .accessibilityLabel("Stage \(fileName)")
+
+                Button(action: { discardConfirm = change }) {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.system(size: 11))
+                        .foregroundColor(isHovered ? Color.orange.opacity(0.85) : .secondary.opacity(0.3))
+                }
+                .buttonStyle(.plain)
+                .help("Discard Changes — Irreversible")
+                .accessibilityLabel("Discard changes to \(fileName)")
             }
         }
         .padding(.horizontal, 8)
@@ -172,7 +171,7 @@ struct GitChangesSection: View {
         .contentShape(Rectangle())
         .cornerRadius(3)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(change.delta.symbol) \(URL(fileURLWithPath: change.path).lastPathComponent)")
+        .accessibilityLabel("\(change.delta.symbol) \(fileName)")
         .onHover { hovering in
             hoveredChangeId = hovering ? change.id : nil
         }

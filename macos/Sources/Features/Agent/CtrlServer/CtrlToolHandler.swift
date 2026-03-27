@@ -37,7 +37,6 @@ final class CtrlToolHandler: Sendable {
         case "split_pane":       return try await callSplitPane(arguments: arguments)
         case "set_pane_annotation": return try await callSetPaneAnnotation(arguments: arguments)
         case "get_pane_annotation": return try await callGetPaneAnnotation(arguments: arguments)
-        case "capture_screenshot":  return try await callScreenshot(arguments: arguments)
         case "list_worktrees":      return try await callListWorktrees(arguments: arguments)
         case "create_worktree":     return try await callCreateWorktree(arguments: arguments)
         case "get_git_status":      return try await callGetGitStatus(arguments: arguments)
@@ -285,96 +284,11 @@ final class CtrlToolHandler: Sendable {
         return str
     }
 
-    // MARK: - screenshot
-
-    /// 截屏目录
     private static let screenshotDir: String = {
         let dir = NSTemporaryDirectory() + "poltertty/screenshots"
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         return dir
     }()
-
-    private func callScreenshot(arguments: [String: Any]) async throws -> String {
-        let target = (arguments["target"] as? String) ?? "pane"
-        guard target == "pane" || target == "window" else {
-            throw RPCError(code: -32602, message: "screenshot: invalid target (pane|window)")
-        }
-
-        let paneId: UUID? = {
-            guard let str = arguments["paneId"] as? String else { return nil }
-            return UUID(uuidString: str)
-        }()
-
-        if arguments["paneId"] != nil && paneId == nil {
-            throw RPCError(code: -32602, message: "screenshot: invalid paneId")
-        }
-
-        let image: NSImage = try await withCheckedThrowingContinuation { cont in
-            Task { @MainActor in
-                if target == "pane" {
-                    // 截取单个 pane
-                    let surface: Ghostty.SurfaceView?
-                    if let paneId {
-                        surface = Self.tcContaining(paneId: paneId)?.findSurface(id: paneId)
-                    } else {
-                        let tw = (NSApp.keyWindow as? TerminalWindow)
-                            ?? NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
-                        surface = tw?.terminalController?.focusedSurface
-                    }
-                    guard let surface else {
-                        cont.resume(throwing: RPCError(code: -32603, message: "screenshot: pane not found"))
-                        return
-                    }
-                    guard let img = surface.asImage else {
-                        cont.resume(throwing: RPCError(code: -32603, message: "screenshot: capture failed"))
-                        return
-                    }
-                    cont.resume(returning: img)
-                } else {
-                    // 截取整个窗口（使用 bitmapImageRepForCachingDisplay 避免 CGWindowListCreateImage 权限问题）
-                    let window: NSWindow?
-                    if let paneId {
-                        window = Self.tcContaining(paneId: paneId)?.window
-                    } else {
-                        window = (NSApp.keyWindow as? TerminalWindow)
-                            ?? NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
-                    }
-                    guard let window, let contentView = window.contentView else {
-                        cont.resume(throwing: RPCError(code: -32603, message: "screenshot: window not found"))
-                        return
-                    }
-                    // 使用 NSView 直接渲染（不需要 Screen Recording 权限，适用于 macOS 14+）
-                    let bounds = contentView.bounds
-                    guard let bitmap = contentView.bitmapImageRepForCachingDisplay(in: bounds) else {
-                        cont.resume(throwing: RPCError(code: -32603, message: "screenshot: bitmapImageRep failed"))
-                        return
-                    }
-                    contentView.cacheDisplay(in: bounds, to: bitmap)
-                    let img = NSImage(size: bounds.size)
-                    img.addRepresentation(bitmap)
-                    cont.resume(returning: img)
-                }
-            }
-        }
-
-        // NSImage → PNG Data → 写文件
-        guard let tiff = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            throw RPCError(code: -32603, message: "screenshot: failed to encode PNG")
-        }
-
-        let filename = UUID().uuidString + ".png"
-        let path = Self.screenshotDir + "/" + filename
-        do {
-            try pngData.write(to: URL(fileURLWithPath: path))
-        } catch {
-            throw RPCError(code: -32603, message: "screenshot: failed to save screenshot")
-        }
-
-        Self.logger.info("screenshot saved: \(path)")
-        return #"{"path":"\#(path)"}"#
-    }
 
     // MARK: - list_worktrees
 
