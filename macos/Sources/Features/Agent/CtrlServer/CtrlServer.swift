@@ -431,15 +431,15 @@ final class CtrlServer {
     }
 
     private func handleToolsList(connection: NWConnection, id: Any?, context: RequestContext) {
-        let tools: [[String: Any]] = [
+        var tools: [[String: Any]] = [
             [
-                "name": "ping",
-                "description": "Ping the Poltertty instance; returns version, port, and all workspace IDs",
+                "name": "get_instance_info",
+                "description": "Get Poltertty instance info including version, port, and all workspace IDs",
                 "inputSchema": ["type": "object", "properties": [String: Any]()]
             ],
             [
-                "name": "new_tab",
-                "description": "Open a new tab; returns the new pane ID",
+                "name": "create_tab",
+                "description": "Create a new tab in the specified or default workspace; returns the new pane ID",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -516,7 +516,7 @@ final class CtrlServer {
                 ]
             ],
             [
-                "name": "screenshot",
+                "name": "capture_screenshot",
                 "description": "Take a screenshot of a pane or the entire window; saves as PNG and returns the file path",
                 "inputSchema": [
                     "type": "object",
@@ -525,10 +525,13 @@ final class CtrlServer {
                         "paneId": ["type": "string", "description": "UUID of the target pane (optional; defaults to focused pane for target=pane, key window for target=window)"]
                     ]
                 ]
-            ],
+            ]
+        ]
+        #if DEBUG
+        tools.append(contentsOf: [
             [
                 "name": "click_window",
-                "description": "Simulate a left mouse click at (x, y) in the window content view (y from top)",
+                "description": "[DEBUG] Simulate a left mouse click at (x, y) in the window content view (y from top)",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -540,15 +543,26 @@ final class CtrlServer {
             ],
             [
                 "name": "test_fullscreen_diff",
-                "description": "Open Git panel, set a test diff to fullscreen mode, and take a screenshot to verify the layout fix",
+                "description": "[DEBUG] Open Git panel, set a test diff to fullscreen mode, and take a screenshot",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
-                        "workspaceId": ["type": "string", "description": "Optional workspace UUID; defaults to first workspace"]
+                        "workspaceId": ["type": "string", "description": "Optional workspace UUID"]
+                    ]
+                ]
+            ],
+            [
+                "name": "git_panel_state",
+                "description": "[DEBUG] Get internal Git panel state for debugging",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workspaceId": ["type": "string", "description": "Optional workspace UUID"]
                     ]
                 ]
             ]
-        ]
+        ])
+        #endif
         sendRPCResult(connection, id: id, result: ["tools": tools], context: context)
     }
 
