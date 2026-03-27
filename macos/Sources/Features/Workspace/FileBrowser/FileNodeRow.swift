@@ -81,7 +81,7 @@ struct FileNodeRow: View {
             // Git status badge
             if let status = gitDelta {
                 Text(status.symbol)
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundColor(Color(hex: status.colorHex) ?? .secondary)
                     .padding(.trailing, 2)
             }

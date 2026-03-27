@@ -17,7 +17,7 @@ struct GitCommitRow: View {
             // Commit header
             HStack(spacing: 5) {
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(.system(size: 8, weight: .medium))
+                    .font(.system(size: 9, weight: .medium))
                     .foregroundColor(.secondary)
                     .frame(width: 10)
 
@@ -69,7 +69,7 @@ struct GitCommitRow: View {
                                     .lineLimit(1)
                                 Spacer()
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 8))
+                                    .font(.system(size: 9))
                                     .foregroundColor(.secondary.opacity(fileHovered || isSelected ? 0.8 : 0.4))
                             }
                             .padding(.leading, 20)

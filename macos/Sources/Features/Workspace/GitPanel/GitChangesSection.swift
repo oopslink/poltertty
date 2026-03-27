@@ -100,7 +100,7 @@ struct GitChangesSection: View {
                     .foregroundColor(.secondary)
 
                 Text("\(count)")
-                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundColor(accentColor.opacity(0.9))
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
