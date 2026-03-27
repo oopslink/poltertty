@@ -43,11 +43,12 @@ struct GitPanelView: View {
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(.secondary.opacity(0.7))
                         .lineLimit(2)
+                        .truncationMode(.middle)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
                 }
-                Text("在终端中运行 `git init` 初始化仓库，\n或打开一个已有 git 仓库的目录。")
+                Text("Run `git init` in the terminal to initialize a repository,\nor open a directory that already contains one.")
                     .font(.system(size: 11))
                     .foregroundColor(.secondary.opacity(0.7))
                     .multilineTextAlignment(.center)

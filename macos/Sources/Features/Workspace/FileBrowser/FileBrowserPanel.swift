@@ -509,14 +509,14 @@ struct FileBrowserPanel: View {
                 .padding(.top, 8)
             Text(
                 viewModel.effectiveRootDir.isEmpty
-                    ? "在工作区设置中配置根目录后即可浏览文件。"
-                    : "配置的目录在磁盘上不存在，请检查工作区设置。"
+                    ? "Configure a root directory in workspace settings."
+                    : "The configured path could not be found on disk."
             )
             .font(.system(size: 11))
             .foregroundColor(.secondary.opacity(0.7))
             .multilineTextAlignment(.center)
             .padding(.horizontal, 16)
-            .padding(.top, 4)
+            .padding(.top, 8)
             Spacer()
         }
         .frame(maxWidth: .infinity)
