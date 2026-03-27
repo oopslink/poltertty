@@ -107,7 +107,11 @@ private struct PanelTabBar: View {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: icon)
                     .font(.system(size: 14))
-                    .foregroundColor(activePanelTab == tab ? .primary : .secondary)
+                    .foregroundColor(
+                        activePanelTab == tab
+                            ? Color(nsColor: .controlAccentColor)
+                            : .secondary
+                    )
                     .frame(width: 28, height: 28)
                     .background(
                         activePanelTab == tab
@@ -115,10 +119,20 @@ private struct PanelTabBar: View {
                             : Color.clear
                     )
                     .cornerRadius(5)
+                    .overlay(
+                        Rectangle()
+                            .fill(
+                                activePanelTab == tab
+                                    ? Color(nsColor: .controlAccentColor)
+                                    : Color.clear
+                            )
+                            .frame(height: 2),
+                        alignment: .bottom
+                    )
 
                 if let count = badge {
                     Text(count > 99 ? "99+" : "\(count)")
-                        .font(.system(size: 8, weight: .bold))
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 3)
                         .padding(.vertical, 1)
@@ -129,5 +143,6 @@ private struct PanelTabBar: View {
             }
         }
         .buttonStyle(.plain)
+        .help(tab == .files ? "Files — 文件浏览器 (F)" : "Git — 版本控制 (G)")
     }
 }
