@@ -556,13 +556,12 @@ struct FileBrowserPanel: View {
         HStack(spacing: 4) {
             Image(systemName: "folder")
                 .font(.system(size: 9))
-                .foregroundColor(.secondary.opacity(0.8))
             Text(viewModel.effectiveRootDir)
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary.opacity(0.8))
                 .lineLimit(1)
                 .truncationMode(.head)
         }
+        .foregroundColor(.secondary.opacity(0.8))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
