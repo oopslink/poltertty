@@ -112,7 +112,9 @@ final class CtrlToolHandler: Sendable {
                 "id": p.id.uuidString,
                 "tabId": p.tabId.uuidString,
                 "workspaceId": p.workspaceId.uuidString,
-                "isActive": p.isActive
+                "isActive": p.isActive,
+                "tabIndex": p.tabIndex,
+                "paneIndex": p.paneIndex
             ]
             if let title = p.title { d["title"] = title }
             if let annotation = p.annotation { d["annotation"] = annotation }
