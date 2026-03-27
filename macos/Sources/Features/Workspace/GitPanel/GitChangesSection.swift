@@ -143,7 +143,7 @@ struct GitChangesSection: View {
                         .foregroundColor(isHovered ? .secondary : .secondary.opacity(0.3))
                 }
                 .buttonStyle(.plain)
-                .help("Unstage — 从下次提交中移除")
+                .help("Unstage — Remove from next commit")
                 .accessibilityLabel("Unstage \(fileName)")
             } else {
                 Button(action: { Task { await vm.stage(change) } }) {
@@ -152,7 +152,7 @@ struct GitChangesSection: View {
                         .foregroundColor(isHovered ? Color.green.opacity(0.85) : .secondary.opacity(0.3))
                 }
                 .buttonStyle(.plain)
-                .help("Stage — 添加到下次提交")
+                .help("Stage — Add to next commit")
                 .accessibilityLabel("Stage \(fileName)")
 
                 Button(action: { discardConfirm = change }) {
@@ -161,7 +161,7 @@ struct GitChangesSection: View {
                         .foregroundColor(isHovered ? Color.orange.opacity(0.85) : .secondary.opacity(0.3))
                 }
                 .buttonStyle(.plain)
-                .help("Discard Changes — 不可撤销")
+                .help("Discard Changes — Irreversible")
                 .accessibilityLabel("Discard changes to \(fileName)")
             }
         }

@@ -157,7 +157,7 @@ private struct PanelTabBar: View {
             }
         }
         .buttonStyle(.plain)
-        .help(tab == .files ? "Files — 文件浏览器 (F)" : "Git — 版本控制 (G)")
+        .help(tab == .files ? "Files — File Browser (F)" : "Git — Version Control (G)")
     }
 
     @ViewBuilder
@@ -180,7 +180,6 @@ private struct PanelTabBar: View {
         }()
 
         if worktrees.count > 1 {
-            // 单 worktree：无切换选项，仅展示当前分支
             Menu {
                 ForEach(worktrees) { wt in
                     let isActive = wt.path == currentWTPath
