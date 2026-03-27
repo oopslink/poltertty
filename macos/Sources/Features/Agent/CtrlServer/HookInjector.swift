@@ -20,7 +20,7 @@ final class HookInjector {
 
     static func inject(cwd: String, port: UInt16) {
         let path = settingsPath(cwd: cwd)
-        let url = "http://localhost:\(port)/hook?\(markerQuery)"
+        let url = "http://localhost:\(port)/v1/hooks/events?\(markerQuery)"
         modifySettings(at: path) { settings in
             var hooks = settings["hooks"] as? [String: Any] ?? [:]
             // Claude Code hooks schema: 每个事件数组元素需要 hooks 数组包装
@@ -72,10 +72,9 @@ final class HookInjector {
     /// 精确匹配 poltertty hook URL（路径必须是 /hook，防止误删用户的 localhost hook）
     private static func isPolterttyHookUrl(_ url: String) -> Bool {
         guard url.hasPrefix("http://localhost:") else { return false }
-        // 解析路径部分，必须精确等于 /hook（不含其他路径段）
-        guard let components = URLComponents(string: url),
-              components.path == "/hook" else { return false }
-        return true
+        guard let components = URLComponents(string: url) else { return false }
+        // 匹配新路径和旧路径，确保升级时能清理旧 hook
+        return components.path == "/v1/hooks/events" || components.path == "/hook"
     }
 
     private static func settingsPath(cwd: String) -> String {
