@@ -336,28 +336,25 @@ struct FilePreviewView: View {
     }
 
     private func loadImage() async {
-        do {
-            guard !Task.isCancelled else { return }
-            let data = try Data(contentsOf: url)
+        guard !Task.isCancelled else { return }
 
-            guard !Task.isCancelled else { return }
-            guard let nsImage = NSImage(data: data) else {
-                guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    content = .error("Failed to load image")
-                }
-                return
+        // 超大图片文件（>50MB）直接提示，避免内存溢出
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+        if fileSize > 50_000_000 {
+            await MainActor.run {
+                content = .notSupported("Image file too large for preview (max 50MB)")
             }
+            return
+        }
 
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                content = .image(nsImage)
-            }
-        } catch {
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                content = .error("Failed to load image: \(error.localizedDescription)")
-            }
+        guard !Task.isCancelled else { return }
+
+        // NSImage(byReferencing:) 延迟加载——AppKit 在渲染时才读取数据
+        let nsImage = NSImage(byReferencing: url)
+
+        guard !Task.isCancelled else { return }
+        await MainActor.run {
+            content = .image(nsImage)
         }
     }
 
