@@ -75,7 +75,7 @@ final class SettingsMerger {
             settings["mcpServers"] = [
                 "poltertty": [
                     "type": "http",
-                    "url": "http://localhost:\(ctrlPort)/mcp"
+                    "url": "http://localhost:\(ctrlPort)/v1/mcp"
                 ]
             ]
         }
