@@ -39,7 +39,7 @@ enum PrepareSessionCommand {
             exit(1)
         }
 
-        let url = URL(string: "http://localhost:\(port)/hooks/prepare-session")!
+        let url = URL(string: "http://localhost:\(port)/v1/sessions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

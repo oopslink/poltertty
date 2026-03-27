@@ -6,8 +6,8 @@ struct CtrlAPIRecord: Identifiable, Sendable {
     let id: UUID
     let timestamp: Date
     let method: String         // "POST", "GET", "DELETE"
-    let path: String           // "/mcp", "/hook", "/hooks/prepare-session", "/health"
-    let toolName: String?      // tools/call 时的工具名（ping/new_tab 等），其余为 nil
+    let path: String           // "/v1/mcp", "/v1/hooks/events", "/v1/sessions", "/v1/health"
+    let toolName: String?      // tools/call 时的工具名（get_instance_info/create_tab 等），其余为 nil
     let requestBody: String?   // 截断至 4096 字节
     let responseBody: String?  // 截断至 4096 字节
     let statusCode: Int

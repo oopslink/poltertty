@@ -101,13 +101,13 @@ final class CtrlServer {
             if let data { buf.append(data) }
 
             guard buf.count < 1_048_576 else {
-                self.sendJSON(connection, status: 413, body: #"{"error":"too large"}"#)
+                self.sendJSON(connection, status: 413, body: #"{"error":{"code":"PAYLOAD_TOO_LARGE","message":"Request body exceeds 1MB limit"}}"#)
                 return
             }
 
             guard let headerEnd = buf.range(of: Self.headerSeparator) else {
                 if isComplete || error != nil {
-                    self.sendJSON(connection, status: 400, body: #"{"error":"incomplete"}"#)
+                    self.sendJSON(connection, status: 400, body: #"{"error":{"code":"INCOMPLETE_REQUEST","message":"Incomplete HTTP request"}}"#)
                 } else {
                     self.accumulateRequest(connection: connection, buffer: buf)
                 }
@@ -147,28 +147,22 @@ final class CtrlServer {
             workspaceId: nil, surfaceId: nil
         )
 
-        // --- health ---
-        if method == "GET" && rawPath.contains("/health") {
-            sendJSON(connection, status: 200, body: "{}", context: baseCtx); return
+        switch (method, rawPath) {
+        case ("GET", "/v1/health"):
+            sendJSON(connection, status: 200, body: "{}", context: baseCtx)
+        case ("POST", "/v1/sessions"):
+            handlePrepareSession(bodyData: bodyData, connection: connection, context: baseCtx)
+        case ("POST", "/v1/hooks/events"):
+            handleHook(bodyData: bodyData, connection: connection, context: baseCtx)
+        case ("GET", "/v1/mcp"):
+            handleSSE(connection: connection, context: baseCtx)
+        case ("DELETE", "/v1/mcp"):
+            sendEmpty(connection, status: 204, context: baseCtx)
+        case ("POST", "/v1/mcp"):
+            handleMCP(bodyData: bodyData, connection: connection, context: baseCtx)
+        default:
+            sendJSON(connection, status: 404, body: #"{"error":{"code":"NOT_FOUND","message":"Unknown endpoint: \#(method) \#(rawPath)"}}"#, context: baseCtx)
         }
-        // --- hook routes（prepare-session 必须在 /hook 之前匹配） ---
-        if method == "POST" && rawPath.contains("/hooks/prepare-session") {
-            handlePrepareSession(bodyData: bodyData, connection: connection, context: baseCtx); return
-        }
-        if method == "POST" && rawPath.contains("/hook") {
-            handleHook(bodyData: bodyData, connection: connection, context: baseCtx); return
-        }
-        // --- MCP routes ---
-        if method == "GET" && rawPath.contains("/mcp") {
-            handleSSE(connection: connection, context: baseCtx); return
-        }
-        if method == "DELETE" && rawPath.contains("/mcp") {
-            sendJSON(connection, status: 200, body: "{}", context: baseCtx); return
-        }
-        if method == "POST" && rawPath.contains("/mcp") {
-            handleMCP(bodyData: bodyData, connection: connection, context: baseCtx); return
-        }
-        sendJSON(connection, status: 404, body: #"{"error":"not found"}"#, context: baseCtx)
     }
 
     // MARK: - Hook handlers
@@ -176,7 +170,7 @@ final class CtrlServer {
     private func handlePrepareSession(bodyData: Data, connection: NWConnection, context: RequestContext) {
         guard let req = try? decoder.decode(PrepareRequest.self, from: bodyData) else {
             Self.logger.warning("CtrlServer: failed to decode prepare-session request")
-            sendJSON(connection, status: 400, body: #"{"error":"invalid json"}"#, context: context)
+            sendJSON(connection, status: 400, body: #"{"error":{"code":"INVALID_JSON","message":"Failed to decode request body"}}"#, context: context)
             return
         }
 
@@ -247,7 +241,7 @@ final class CtrlServer {
         guard var payload = try? decoder.decode(HookPayload.self, from: bodyData) else {
             let bodyPreview = String(data: bodyData.prefix(500), encoding: .utf8) ?? "(binary)"
             Self.logger.warning("CtrlServer: failed to decode hook payload (\(bodyData.count) bytes): \(bodyPreview)")
-            sendJSON(connection, status: 400, body: #"{"error":"invalid json"}"#, context: context)
+            sendJSON(connection, status: 400, body: #"{"error":{"code":"INVALID_JSON","message":"Failed to decode hook payload"}}"#, context: context)
             return
         }
         // 注入 tool_input 原始 JSON（用于 Trace 显示参数）
@@ -259,7 +253,7 @@ final class CtrlServer {
         }
         Self.logger.info("CtrlServer: event=\(payload.hookEventName.rawValue) sid=\(payload.sessionId ?? "nil") tool=\(payload.toolName ?? "-") toolUseId=\(payload.toolUseId ?? "-")")
         // 先发响应（不含 workspaceId），记录由下方 @MainActor Task 完成
-        sendJSON(connection, status: 200, body: "{}")
+        sendEmpty(connection, status: 202, context: context)
         Task { await EventBus.shared.emit(.hook(payload)) }
         Task { @MainActor in
             self.sessionManager.processHookEvent(payload)
@@ -284,8 +278,8 @@ final class CtrlServer {
                 path: context.path,
                 toolName: nil,
                 requestBody: truncReq,
-                responseBody: "{}",
-                statusCode: 200,
+                responseBody: nil,
+                statusCode: 202,
                 durationMs: Date().timeIntervalSince(context.startTime) * 1000,
                 error: nil,
                 workspaceId: wsId,
@@ -295,7 +289,7 @@ final class CtrlServer {
         }
     }
 
-    // MARK: - SSE 长连接（GET /mcp）
+    // MARK: - SSE 长连接（GET /v1/mcp）
 
     private func handleSSE(connection: NWConnection, context: RequestContext) {
         let header = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n"
@@ -307,7 +301,7 @@ final class CtrlServer {
                 id: UUID(),
                 timestamp: context.startTime,
                 method: context.method,
-                path: "/mcp (SSE)",
+                path: "/v1/mcp (SSE)",
                 toolName: nil,
                 requestBody: nil,
                 responseBody: nil,
@@ -437,15 +431,15 @@ final class CtrlServer {
     }
 
     private func handleToolsList(connection: NWConnection, id: Any?, context: RequestContext) {
-        let tools: [[String: Any]] = [
+        var tools: [[String: Any]] = [
             [
-                "name": "ping",
-                "description": "Ping the Poltertty instance; returns version, port, and all workspace IDs",
+                "name": "get_instance_info",
+                "description": "Get Poltertty instance info including version, port, and all workspace IDs",
                 "inputSchema": ["type": "object", "properties": [String: Any]()]
             ],
             [
-                "name": "new_tab",
-                "description": "Open a new tab; returns the new pane ID",
+                "name": "create_tab",
+                "description": "Create a new tab in the specified or default workspace; returns the new pane ID",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -522,7 +516,7 @@ final class CtrlServer {
                 ]
             ],
             [
-                "name": "screenshot",
+                "name": "capture_screenshot",
                 "description": "Take a screenshot of a pane or the entire window; saves as PNG and returns the file path",
                 "inputSchema": [
                     "type": "object",
@@ -531,10 +525,13 @@ final class CtrlServer {
                         "paneId": ["type": "string", "description": "UUID of the target pane (optional; defaults to focused pane for target=pane, key window for target=window)"]
                     ]
                 ]
-            ],
+            ]
+        ]
+        #if DEBUG
+        tools.append(contentsOf: [
             [
                 "name": "click_window",
-                "description": "Simulate a left mouse click at (x, y) in the window content view (y from top)",
+                "description": "[DEBUG] Simulate a left mouse click at (x, y) in the window content view (y from top)",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
@@ -546,15 +543,26 @@ final class CtrlServer {
             ],
             [
                 "name": "test_fullscreen_diff",
-                "description": "Open Git panel, set a test diff to fullscreen mode, and take a screenshot to verify the layout fix",
+                "description": "[DEBUG] Open Git panel, set a test diff to fullscreen mode, and take a screenshot",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
-                        "workspaceId": ["type": "string", "description": "Optional workspace UUID; defaults to first workspace"]
+                        "workspaceId": ["type": "string", "description": "Optional workspace UUID"]
+                    ]
+                ]
+            ],
+            [
+                "name": "git_panel_state",
+                "description": "[DEBUG] Get internal Git panel state for debugging",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workspaceId": ["type": "string", "description": "Optional workspace UUID"]
                     ]
                 ]
             ]
-        ]
+        ])
+        #endif
         sendRPCResult(connection, id: id, result: ["tools": tools], context: context)
     }
 
@@ -603,12 +611,13 @@ final class CtrlServer {
         sendJSON(connection, status: 200, body: String(data: data, encoding: .utf8) ?? "{}", context: context)
     }
 
-    /// 发送无 body 的 HTTP 响应（用于 notifications/ 的 202 Accepted）
+    /// 发送无 body 的 HTTP 响应（用于 hook 事件的 202 Accepted 和 DELETE 的 204 No Content）
     private func sendEmpty(_ connection: NWConnection, status: Int, context: RequestContext? = nil) {
         let statusText: String
         switch status {
         case 202: statusText = "Accepted"
-        default:  statusText = "No Content"
+        case 204: statusText = "No Content"
+        default:  statusText = "OK"
         }
         let header = "HTTP/1.1 \(status) \(statusText)\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
         let data = header.data(using: .utf8)!

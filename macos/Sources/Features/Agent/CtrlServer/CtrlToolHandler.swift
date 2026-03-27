@@ -29,15 +29,15 @@ final class CtrlToolHandler: Sendable {
 
     func callTool(name: String, arguments: [String: Any]) async throws -> String {
         switch name {
-        case "ping":       return try await callPing()
-        case "new_tab":    return try await callNewTab(arguments: arguments)
-        case "list_panes": return try await callListPanes(arguments: arguments)
-        case "focus_pane": return try await callFocusPane(arguments: arguments)
-        case "send_text":  return try await callSendText(arguments: arguments)
-        case "split_pane": return try await callSplitPane(arguments: arguments)
+        case "get_instance_info": return try await callPing()
+        case "create_tab":       return try await callNewTab(arguments: arguments)
+        case "list_panes":       return try await callListPanes(arguments: arguments)
+        case "focus_pane":       return try await callFocusPane(arguments: arguments)
+        case "send_text":        return try await callSendText(arguments: arguments)
+        case "split_pane":       return try await callSplitPane(arguments: arguments)
         case "set_pane_annotation": return try await callSetPaneAnnotation(arguments: arguments)
         case "get_pane_annotation": return try await callGetPaneAnnotation(arguments: arguments)
-        case "screenshot":    return try await callScreenshot(arguments: arguments)
+        case "capture_screenshot":  return try await callScreenshot(arguments: arguments)
         case "click_window":          return try await callClickWindow(arguments: arguments)
         case "test_fullscreen_diff":  return try await callTestFullscreenDiff(arguments: arguments)
         case "git_panel_state":       return try await callGitPanelState(arguments: arguments)
