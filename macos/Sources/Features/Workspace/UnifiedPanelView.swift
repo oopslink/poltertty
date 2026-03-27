@@ -162,24 +162,28 @@ private struct PanelTabBar: View {
 
     @ViewBuilder
     private func worktreeSelector(monitor: GitWorktreeMonitor) -> some View {
-        let effectivePath = fileBrowserVM.effectiveRootDir
+        // 在开头统一标准化路径，避免后续重复创建 URL 对象
+        let effectivePath = URL(fileURLWithPath: fileBrowserVM.effectiveRootDir).standardized.path
         let worktrees = monitor.worktrees
-        let currentWT = worktrees.first {
-            URL(fileURLWithPath: $0.path).standardized.path
-                == URL(fileURLWithPath: effectivePath).standardized.path
-        }
-        let branchLabel = gitPanelVM.branch
-            ?? currentWT.map { wt -> String in
-                if wt.isMain { return "Main" }
-                return wt.branch ?? URL(fileURLWithPath: wt.path).lastPathComponent
+        let currentWTPath = worktrees.first {
+            URL(fileURLWithPath: $0.path).standardized.path == effectivePath
+        }?.path
+
+        let branchLabel: String = {
+            if let branch = gitPanelVM.branch { return branch }
+            guard let path = currentWTPath,
+                  let wt = worktrees.first(where: { $0.path == path }) else {
+                return URL(fileURLWithPath: fileBrowserVM.effectiveRootDir).lastPathComponent
             }
-            ?? URL(fileURLWithPath: effectivePath).lastPathComponent
+            if wt.isMain { return "Main" }
+            return wt.branch ?? URL(fileURLWithPath: wt.path).lastPathComponent
+        }()
 
         if worktrees.count > 1 {
+            // 单 worktree：无切换选项，仅展示当前分支
             Menu {
                 ForEach(worktrees) { wt in
-                    let isActive = URL(fileURLWithPath: wt.path).standardized.path
-                        == URL(fileURLWithPath: effectivePath).standardized.path
+                    let isActive = wt.path == currentWTPath
                     Button {
                         if wt.isMain {
                             fileBrowserVM.switchRoot(to: nil)
@@ -188,7 +192,7 @@ private struct PanelTabBar: View {
                         }
                     } label: {
                         Label {
-                            Text(wt.isMain ? "Main" : (wt.branch ?? wt.path))
+                            Text(wt.isMain ? "Main" : (wt.branch ?? URL(fileURLWithPath: wt.path).lastPathComponent))
                         } icon: {
                             if isActive { Image(systemName: "checkmark") }
                         }
@@ -211,6 +215,7 @@ private struct PanelTabBar: View {
             .fixedSize()
             .help("Switch Worktree")
         } else {
+            // 单 worktree：无切换选项，仅展示当前分支
             HStack(spacing: 2) {
                 Image(systemName: "arrow.triangle.branch")
                     .font(.system(size: 10))
