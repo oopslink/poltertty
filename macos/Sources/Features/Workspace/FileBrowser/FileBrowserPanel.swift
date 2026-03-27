@@ -85,13 +85,13 @@ struct FileBrowserPanel: View {
             // Left: File tree (always visible)
             VStack(spacing: 0) {
                 filterBar
+                Divider()
                 if !viewModel.breadcrumbSegments.isEmpty {
                     BreadcrumbView(segments: viewModel.breadcrumbSegments) { segment in
                         viewModel.focusDirectory(segment.url)
                     }
                     Divider()
                 }
-                Divider()
                 if viewModel.rootDir.isEmpty || !FileManager.default.fileExists(atPath: viewModel.rootDir) {
                     emptyStateView
                 } else {
@@ -556,10 +556,10 @@ struct FileBrowserPanel: View {
         HStack(spacing: 4) {
             Image(systemName: "folder")
                 .font(.system(size: 9))
-                .foregroundColor(.secondary.opacity(0.6))
+                .foregroundColor(.secondary.opacity(0.8))
             Text(viewModel.effectiveRootDir)
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary.opacity(0.6))
+                .foregroundColor(.secondary.opacity(0.8))
                 .lineLimit(1)
                 .truncationMode(.head)
         }
