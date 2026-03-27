@@ -162,8 +162,12 @@ final class SyntaxContainerView: NSView {
 final class SyntaxHighlighter {
     /// 所有 JSContext 操作必须在此 queue 上执行（JSContext 非线程安全）
     static let highlightQueue = DispatchQueue(label: "com.poltertty.syntax-highlight", qos: .userInitiated)
-    /// 高亮结果缓存，key 为 "代码哈希:语言"，避免重复执行 JS
-    private static let cache = NSCache<NSString, NSAttributedString>()
+    /// 高亮结果缓存，key 为 "语言:代码"，避免重复执行 JS
+    private static let cache: NSCache<NSString, NSAttributedString> = {
+        let c = NSCache<NSString, NSAttributedString>()
+        c.countLimit = 50
+        return c
+    }()
 
     private let context: JSContext?
     private let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
@@ -187,7 +191,7 @@ final class SyntaxHighlighter {
         guard let ctx = context else { return nil }
 
         // 缓存命中时直接返回，避免重复执行 JS
-        let cacheKey = "\(code.hashValue):\(language ?? "auto")" as NSString
+        let cacheKey = "\(language ?? "auto"):\(code)" as NSString
         if let cached = SyntaxHighlighter.cache.object(forKey: cacheKey) {
             return cached
         }
