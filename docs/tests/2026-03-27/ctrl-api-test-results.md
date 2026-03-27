@@ -178,7 +178,7 @@ name / rootDirectory 字段存在  ✅
 
 **T07-1 list_worktrees（显式 directory）**
 ```
-directory: /Users/aaronlin/works/codes/oss/poltertty
+directory: <repo-root>
 返回 4 个 worktree：
   main (isMain=true, exists=true)
   feat/ctrl-api-gaps (exists=true)

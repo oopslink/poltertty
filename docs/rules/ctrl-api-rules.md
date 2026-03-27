@@ -169,12 +169,22 @@ throw RPCError(code: -32602, message: "<toolName>: missing or invalid <paramName
 
 ---
 
-## 6. 工具新增 Checklist
+## 6. 文档规范
+
+- 规则文档统一放在 `docs/rules/` 目录
+- 测试计划和测试结果按日期放在 `docs/tests/YYYY-MM-DD/` 目录
+  - `ctrl-api-test-plan.md` — 测试计划
+  - `ctrl-api-test-results.md` — 测试执行结果
+- 文档中**禁止写入本机绝对路径**（如 `/Users/xxx/...`），统一用 `<repo-root>` 占位或使用相对路径
+
+---
+
+## 7. 工具新增 Checklist
 
 新增工具时需同步更新以下四个位置，缺一不可：
 
 - [ ] `CtrlToolHandler.callTool()` — 添加 `case "tool_name":` 分支
 - [ ] `CtrlToolHandler` — 实现 `private func callToolName()` 方法
 - [ ] `CtrlServer.handleToolsList()` — 添加工具 schema（name / description / inputSchema）
-- [ ] `docs/ctrl-api-rules.md` — 如有新约定，更新本文档
-- [ ] `docs/ctrl-api-test-plan.md` — 添加对应测试用例（可选但推荐）
+- [ ] `docs/rules/ctrl-api-rules.md` — 如有新约定，更新本文档
+- [ ] `docs/tests/<YYYY-MM-DD>/ctrl-api-test-plan.md` — 添加对应测试用例（可选但推荐）
