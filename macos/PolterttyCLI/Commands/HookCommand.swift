@@ -34,7 +34,7 @@ enum HookCommand {
 
         let jsonData = stdinData
 
-        let url = URL(string: "http://localhost:\(meta.port)/hook")!
+        let url = URL(string: "http://localhost:\(meta.port)/v1/hooks/events")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

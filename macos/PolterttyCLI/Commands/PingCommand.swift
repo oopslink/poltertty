@@ -12,7 +12,7 @@ enum PingCommand {
         let timeoutMs = Double(extractArg("--timeout", from: args) ?? "750") ?? 750
         let timeoutSec = timeoutMs / 1000.0
 
-        let url = URL(string: "http://localhost:\(port)/health")!
+        let url = URL(string: "http://localhost:\(port)/v1/health")!
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
 
