@@ -9,16 +9,14 @@ struct AgentSessionGroup: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // ── Session 标题行（可点击 → Overview）──────────
             sessionRow
-            // ── Subagent 列表 ────────────────────────────────
             if !session.subagents.isEmpty {
                 ForEach(sortedSubagents) { sub in
                     subagentRow(sub)
                 }
             }
         }
-        .opacity(session.state.isActive ? 1.0 : 0.55)
+        .opacity(session.state.isActive ? 1.0 : 0.6)
         .onReceive(timer) { t in if session.state.isActive { tick = t } }
     }
 
@@ -27,17 +25,19 @@ struct AgentSessionGroup: View {
     private var sessionRow: some View {
         let item = DrawerItem.sessionOverview(session)
         let isSelected = viewModel.selectedItems.contains(item)
-        return HStack(spacing: 5) {
+        return HStack(spacing: 6) {
             if session.state.isActive {
                 AgentStateDot(state: session.state)
             } else {
-                Circle().fill(Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
+                Circle()
+                    .fill(Color.secondary.opacity(0.3))
+                    .frame(width: 6, height: 6)
             }
             AgentInlineIcon(agent: session.definition, size: 11)
             VStack(alignment: .leading, spacing: 1) {
                 Text(session.definition.name)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(isSelected ? (Color(hex: "#90bfff") ?? .blue) : (session.state.isActive ? .primary : .secondary))
+                    .foregroundStyle(isSelected ? AgentColors.selectedBlue : (session.state.isActive ? .primary : .secondary))
                     .lineLimit(1)
                 if let model = session.model {
                     Text(shortModelName(model))
@@ -48,26 +48,16 @@ struct AgentSessionGroup: View {
             }
             Spacer()
             if activeCount > 0 {
-                HStack(spacing: 3) {
-                    Circle()
-                        .fill(Color(hex: "#4caf50") ?? .green)
-                        .frame(width: 5, height: 5)
-                    Text("\(activeCount)")
-                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(Color(hex: "#4caf50") ?? .green)
-                }
-                .padding(.horizontal, 5).padding(.vertical, 1)
-                .background(Color(hex: "#1a2e1a") ?? Color(.separatorColor))
-                .clipShape(Capsule())
+                activeCountBadge
             } else {
                 sessionStateBadge
             }
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(isSelected ? (Color(hex: "#1a2535") ?? Color.accentColor.opacity(0.2)) : Color.clear)
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(isSelected ? AgentColors.selectionBgStrong : Color.clear)
         .overlay(alignment: .leading) {
             Rectangle()
-                .fill(Color.accentColor)
+                .fill(AgentColors.selectionIndicator)
                 .frame(width: 2)
                 .opacity(isSelected ? 1.0 : 0.0)
         }
@@ -75,34 +65,46 @@ struct AgentSessionGroup: View {
         .onTapGesture { viewModel.select(item) }
     }
 
+    private var activeCountBadge: some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(AgentColors.success)
+                .frame(width: 5, height: 5)
+            Text("\(activeCount)")
+                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .foregroundStyle(AgentColors.success)
+        }
+        .padding(.horizontal, 5).padding(.vertical, 2)
+        .background(AgentColors.successBadgeBg)
+        .clipShape(Capsule())
+    }
+
     // MARK: - Subagent row
 
     private func subagentRow(_ sub: SubagentInfo) -> some View {
         let isSelected = viewModel.selectedSubagentId == sub.id
-        return HStack(spacing: 4) {
+        return HStack(spacing: 5) {
             AgentStateDot(state: sub.state)
             Text(sub.name)
-                .font(.system(size: 9))
-                .foregroundStyle(isSelected ? (Color(hex: "#90bfff") ?? .blue) : .secondary)
+                .font(.system(size: 10))
+                .foregroundStyle(isSelected ? AgentColors.selectedBlue : .secondary)
                 .lineLimit(1).truncationMode(.tail)
             Spacer()
-            // F2: 工具气泡
             if sub.state.isActive,
                let activeTool = sub.toolCalls.last(where: { !$0.isDone }) {
-                Text(String(activeTool.toolName.prefix(12)))
+                Text(String(activeTool.toolName.prefix(14)))
                     .font(.system(size: 8))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AgentColors.active)
                     .lineLimit(1)
             }
             Text(elapsedLabel(sub))
                 .font(.system(size: 8, design: .monospaced))
-                .foregroundStyle(isSelected ? (Color(hex: "#4a6a99") ?? Color(.tertiaryLabelColor)) : Color(.tertiaryLabelColor))
+                .foregroundStyle(.tertiary)
         }
-        .padding(.leading, 20).padding(.trailing, 10).padding(.vertical, 3)
-        .background(isSelected ? (Color(hex: "#152040") ?? Color.accentColor.opacity(0.15)) : Color.clear)
+        .padding(.leading, 22).padding(.trailing, 10).padding(.vertical, 4)
+        .background(isSelected ? AgentColors.selectionBg : Color.clear)
         .contentShape(Rectangle())
         .onTapGesture {
-            // 打开统一视图，预选此 subagent
             viewModel.selectSubagentInSidebar(sub, in: session)
         }
     }
@@ -113,41 +115,26 @@ struct AgentSessionGroup: View {
     private var sessionStateBadge: some View {
         switch session.state {
         case .working:
-            HStack(spacing: 3) {
-                Circle()
-                    .fill(Color(hex: "#ff9800") ?? .orange)
-                    .frame(width: 5, height: 5)
-                Text("working")
-                    .font(.system(size: 8))
-            }
-            .padding(.horizontal, 5).padding(.vertical, 1)
-            .background(Color(hex: "#1a2535") ?? Color(.separatorColor))
-            .foregroundStyle(Color(hex: "#90bfff") ?? .blue)
-            .clipShape(Capsule())
+            stateBadge(
+                dot: AgentColors.active,
+                label: "working",
+                bg: AgentColors.activeBadgeBg,
+                fg: AgentColors.active
+            )
         case .idle:
-            HStack(spacing: 3) {
-                Circle()
-                    .fill(Color.yellow)
-                    .frame(width: 5, height: 5)
-                Text("idle")
-                    .font(.system(size: 8))
-            }
-            .padding(.horizontal, 5).padding(.vertical, 1)
-            .background(Color(.separatorColor).opacity(0.4))
-            .foregroundStyle(.secondary)
-            .clipShape(Capsule())
+            stateBadge(
+                dot: AgentColors.idle,
+                label: "idle",
+                bg: AgentColors.idleBadgeBg,
+                fg: .secondary
+            )
         case .launching:
-            HStack(spacing: 3) {
-                Circle()
-                    .fill(Color.blue)
-                    .frame(width: 5, height: 5)
-                Text("launching")
-                    .font(.system(size: 8))
-            }
-            .padding(.horizontal, 5).padding(.vertical, 1)
-            .background(Color(hex: "#1a2535") ?? Color(.separatorColor))
-            .foregroundStyle(Color(hex: "#90bfff") ?? .blue)
-            .clipShape(Capsule())
+            stateBadge(
+                dot: AgentColors.launching,
+                label: "launching",
+                bg: AgentColors.launchingBadgeBg,
+                fg: AgentColors.launching
+            )
         case .done:
             HStack(spacing: 3) {
                 Image(systemName: "checkmark")
@@ -155,9 +142,9 @@ struct AgentSessionGroup: View {
                 Text("done")
                     .font(.system(size: 8))
             }
-            .padding(.horizontal, 5).padding(.vertical, 1)
-            .background((Color(hex: "#1a2e1a") ?? Color(.separatorColor)).opacity(0.8))
-            .foregroundStyle((Color(hex: "#4caf50") ?? .green).opacity(0.7))
+            .padding(.horizontal, 5).padding(.vertical, 2)
+            .background(AgentColors.successBadgeBg)
+            .foregroundStyle(AgentColors.success)
             .clipShape(Capsule())
         case .error:
             HStack(spacing: 3) {
@@ -166,11 +153,22 @@ struct AgentSessionGroup: View {
                 Text("error")
                     .font(.system(size: 8))
             }
-            .padding(.horizontal, 5).padding(.vertical, 1)
-            .background(Color(hex: "#2e1a1a") ?? Color(.separatorColor))
-            .foregroundStyle(Color(hex: "#f44336") ?? .red)
+            .padding(.horizontal, 5).padding(.vertical, 2)
+            .background(AgentColors.errorBadgeBg)
+            .foregroundStyle(AgentColors.error)
             .clipShape(Capsule())
         }
+    }
+
+    private func stateBadge(dot: Color, label: String, bg: Color, fg: Color) -> some View {
+        HStack(spacing: 3) {
+            Circle().fill(dot).frame(width: 5, height: 5)
+            Text(label).font(.system(size: 8))
+        }
+        .padding(.horizontal, 5).padding(.vertical, 2)
+        .background(bg)
+        .foregroundStyle(fg)
+        .clipShape(Capsule())
     }
 
     // MARK: - Helpers
@@ -183,7 +181,6 @@ struct AgentSessionGroup: View {
         session.subagents.values.filter { $0.state.isActive }.count
     }
 
-    /// 将完整模型名缩短为可读标签，如 "claude-sonnet-4-6" → "sonnet-4-6"
     private func shortModelName(_ model: String) -> String {
         model.hasPrefix("claude-") ? String(model.dropFirst(7)) : model
     }

@@ -12,14 +12,12 @@ struct AgentDrawer: View {
                     drawerHeader
                     Divider()
                     if let session = viewModel.unifiedSession {
-                        // 统一两列视图：左 overview + 右 subagent detail
                         SessionDetailView(session: session, viewModel: viewModel)
                     } else {
-                        // 对比模式：多面板并排
                         HStack(spacing: 0) {
                             ForEach(viewModel.selectedItems) { item in
                                 AgentDrawerPanel(item: item, onClose: { viewModel.closePanel(item) }, viewModel: viewModel)
-                                .id(item.id)
+                                    .id(item.id)
                                 if item != viewModel.selectedItems.last {
                                     Divider()
                                 }
@@ -32,10 +30,15 @@ struct AgentDrawer: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.selectedItems.count)
             }
             .transition(.move(edge: .trailing).combined(with: .opacity))
+            // Esc 关闭 Drawer（ui-ux-rules.md：弹出层必须支持 Esc 关闭）
+            .backport.onKeyPress(.escape) { _ in
+                viewModel.closeDrawer()
+                return .handled
+            }
         }
     }
 
-    // MARK: - Global header
+    // MARK: - Global Header
 
     private var drawerHeader: some View {
         HStack(spacing: 8) {
@@ -43,7 +46,9 @@ struct AgentDrawer: View {
                 if state.isActive {
                     AgentStateDot(state: state)
                 } else {
-                    Circle().fill(Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
+                    Circle()
+                        .fill(Color.secondary.opacity(0.3))
+                        .frame(width: 6, height: 6)
                 }
             }
             VStack(alignment: .leading, spacing: 1) {
@@ -64,7 +69,9 @@ struct AgentDrawer: View {
                     .background(Color(.separatorColor).opacity(0.3))
                     .clipShape(Circle())
             }
-            .buttonStyle(.plain).foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Close detail panel  ⎋")
         }
         .padding(.horizontal, 12).padding(.vertical, 7)
         .background(Color(.windowBackgroundColor))
@@ -72,11 +79,11 @@ struct AgentDrawer: View {
 
     private var headerTitle: String {
         guard viewModel.selectedItems.count == 1, let first = viewModel.selectedItems.first else {
-            return "Compare"
+            return "Compare (\(viewModel.selectedItems.count))"
         }
         switch first {
-        case .sessionOverview(let s):       return s.definition.name
-        case .subagentDetail(let s, _):     return s.definition.name
+        case .sessionOverview(let s):   return s.definition.name
+        case .subagentDetail(let s, _): return s.definition.name
         }
     }
 
@@ -85,8 +92,8 @@ struct AgentDrawer: View {
             return nil
         }
         switch first {
-        case .sessionOverview(let s):       return s.state
-        case .subagentDetail(_, let sub):   return sub.state
+        case .sessionOverview(let s):   return s.state
+        case .subagentDetail(_, let sub): return sub.state
         }
     }
 
