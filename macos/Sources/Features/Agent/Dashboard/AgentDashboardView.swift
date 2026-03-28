@@ -5,6 +5,8 @@ struct AgentDashboardView: View {
     @StateObject private var viewModel = AgentDashboardViewModel()
     @Environment(\.colorScheme) private var colorScheme
     @State private var hoveredRowId: UUID?
+    @State private var focusedSessionId: UUID?
+    @State private var keyMonitor: Any?
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { timeline in
@@ -25,6 +27,48 @@ struct AgentDashboardView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
         )
+        .onAppear { installKeyMonitor() }
+        .onDisappear { removeKeyMonitor() }
+    }
+
+    // MARK: - Keyboard Navigation
+
+    private func installKeyMonitor() {
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard AgentDashboardWindowController.shared.window?.isKeyWindow == true else {
+                return event
+            }
+            let sessions = viewModel.activeSessions
+            guard !sessions.isEmpty else { return event }
+            switch event.keyCode {
+            case 125: moveFocus(in: sessions, delta: 1);  return nil   // ↓
+            case 126: moveFocus(in: sessions, delta: -1); return nil   // ↑
+            case 36, 76:                                              // Return / numpad Enter
+                activateFocused(in: sessions)
+                return nil
+            default: return event
+            }
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+    }
+
+    private func moveFocus(in sessions: [AgentSession], delta: Int) {
+        if let id = focusedSessionId,
+           let idx = sessions.firstIndex(where: { $0.id == id }) {
+            focusedSessionId = sessions[max(0, min(sessions.count - 1, idx + delta))].id
+        } else {
+            focusedSessionId = delta > 0 ? sessions.first?.id : sessions.last?.id
+        }
+    }
+
+    private func activateFocused(in sessions: [AgentSession]) {
+        guard let id = focusedSessionId,
+              let session = sessions.first(where: { $0.id == id }) else { return }
+        PaneLocator.navigate(to: session.surfaceId)
+        AgentDashboardWindowController.shared.close()
     }
 
     // MARK: - Toolbar
@@ -41,12 +85,13 @@ struct AgentDashboardView: View {
 
             Spacer()
 
-            Toggle("Completed", isOn: $viewModel.showInactive)
+            Toggle("Show completed", isOn: $viewModel.showInactive)
                 .toggleStyle(.checkbox)
                 .controlSize(.small)
                 .font(.system(size: 11))
+                .accessibilityLabel("Show completed agents")
 
-            Picker("", selection: $viewModel.viewMode) {
+            Picker("View mode", selection: $viewModel.viewMode) {
                 ForEach(AgentDashboardViewModel.ViewMode.allCases, id: \.self) { mode in
                     Image(systemName: mode.icon).tag(mode)
                 }
@@ -54,6 +99,7 @@ struct AgentDashboardView: View {
             .pickerStyle(.segmented)
             .frame(width: 64)
             .controlSize(.small)
+            .labelsHidden()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
@@ -72,54 +118,54 @@ struct AgentDashboardView: View {
         }
         let totalTokens = sessions.reduce(0) { $0 + $1.tokenUsage.totalTokens }
         let totalCost = sessions.reduce(Decimal(0)) { $0 + $1.tokenUsage.cost }
+        let costDouble = NSDecimalNumber(decimal: totalCost).doubleValue
 
-        return HStack(spacing: 0) {
-            statCell(value: "\(sessions.count)", label: "ACTIVE",
-                     color: sessions.isEmpty ? .secondary : .primary)
-            statDivider
-            statCell(value: "\(workingCount)", label: "WORKING",
-                     color: workingCount > 0 ? .green : .secondary)
-            statDivider
-            statCell(value: "\(activeSubCount)", label: "SUBAGENTS",
-                     color: activeSubCount > 0 ? .blue : .secondary)
+        return HStack(spacing: 4) {
+            Text("\(sessions.count)")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundStyle(Color.primary)
+            Text("active")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text("·")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text("\(workingCount)")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundStyle(workingCount > 0 ? Color.green : Color.primary)
+            Text("working")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text("·")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text("\(activeSubCount)")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundStyle(activeSubCount > 0 ? Color(.controlAccentColor) : Color.primary)
+            Text("subagents")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text("·")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text(formatTokens(totalTokens))
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundStyle(Color.primary)
+            Text("tokens")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text("·")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text(String(format: "$%.2f", costDouble))
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundStyle(costDouble > 0 ? Color.orange : Color.primary)
             Spacer()
-            statDivider
-            statCell(value: formatTokens(totalTokens), label: "TOKENS",
-                     color: .secondary, monospaced: true)
-            statDivider
-            statCell(
-                value: String(format: "$%.2f", NSDecimalNumber(decimal: totalCost).doubleValue),
-                label: "COST",
-                color: totalCost > 0 ? .orange : .secondary,
-                monospaced: true
-            )
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 6)
+        .padding(.vertical, 5)
         .background(Color(nsColor: .controlBackgroundColor)
             .opacity(colorScheme == .dark ? 0.3 : 0.4))
-    }
-
-    private var statDivider: some View {
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(width: 1, height: 20)
-            .padding(.horizontal, 12)
-    }
-
-    private func statCell(value: String, label: String, color: Color,
-                          monospaced: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(value)
-                .font(monospaced
-                    ? .system(size: 13, weight: .semibold, design: .monospaced)
-                    : .system(size: 13, weight: .semibold))
-                .foregroundStyle(color)
-            Text(label)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(.tertiary)
-                .tracking(0.5)
-        }
     }
 
     // MARK: - Main Content
@@ -236,6 +282,7 @@ struct AgentDashboardView: View {
         let activeSubagents = session.subagents.values.filter { $0.state.isActive }.count
         let totalSubagents = session.subagents.count
         let isHovered = hoveredRowId == session.id
+        let isFocused = focusedSessionId == session.id
 
         return HStack(spacing: 0) {
             // Workspace accent bar
@@ -295,7 +342,7 @@ struct AgentDashboardView: View {
                         .font(.system(size: 10, design: .monospaced))
                     Text(viewModel.costString(for: session.tokenUsage))
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.orange.opacity(0.8))
+                        .foregroundStyle(.orange.opacity(0.85))
                 }
                 .frame(width: 104, alignment: .leading)
 
@@ -329,18 +376,33 @@ struct AgentDashboardView: View {
             .padding(.trailing, 10)
         }
         .background(
-            isHovered
-                ? Color(nsColor: .controlAccentColor).opacity(colorScheme == .dark ? 0.15 : 0.1)
-                : Color(nsColor: .controlBackgroundColor).opacity(colorScheme == .dark ? 0.35 : 0.5)
+            isFocused
+                ? Color(nsColor: .controlAccentColor).opacity(colorScheme == .dark ? 0.22 : 0.14)
+                : isHovered
+                    ? Color(nsColor: .controlAccentColor).opacity(colorScheme == .dark ? 0.15 : 0.1)
+                    : Color(nsColor: .controlBackgroundColor).opacity(colorScheme == .dark ? 0.35 : 0.5)
         )
         .clipShape(RoundedRectangle(cornerRadius: 5))
+        .overlay(
+            RoundedRectangle(cornerRadius: 5)
+                .stroke(Color(.controlAccentColor).opacity(0.55), lineWidth: 1)
+                .opacity(isFocused ? 1 : 0)
+        )
+        .animation(.easeOut(duration: 0.2), value: session.state)
+        .animation(.easeOut(duration: 0.12), value: isFocused)
         .contentShape(Rectangle())
         .onHover { hovering in hoveredRowId = hovering ? session.id : nil }
         .onTapGesture(count: 2) {
+            focusedSessionId = session.id
             PaneLocator.navigate(to: session.surfaceId)
             AgentDashboardWindowController.shared.close()
         }
-        .onTapGesture { PaneLocator.navigate(to: session.surfaceId) }
+        .onTapGesture {
+            focusedSessionId = session.id
+            PaneLocator.navigate(to: session.surfaceId)
+        }
+        .accessibilityAddTraits(isFocused ? .isSelected : [])
+        .help("Click to focus · Double-click to focus and close · ↑↓ to navigate")
     }
 
     // MARK: - Cards View
@@ -369,8 +431,6 @@ struct AgentDashboardView: View {
         let ctx = session.tokenUsage.contextUtilization
         let activeSubagents = session.subagents.values.filter { $0.state.isActive }.count
         let totalSubagents = session.subagents.count
-        let hasSpark = session.tokenUsage.history.count > 2
-
         return VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack(spacing: 6) {
@@ -403,6 +463,7 @@ struct AgentDashboardView: View {
                         .foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Navigate to agent pane")
             }
             .padding(.horizontal, 10)
             .padding(.top, 10)
@@ -444,13 +505,9 @@ struct AgentDashboardView: View {
                         .foregroundStyle(.secondary)
                     Text(viewModel.costString(for: session.tokenUsage))
                         .font(.system(size: 9, design: .monospaced))
-                        .foregroundStyle(.orange.opacity(0.9))
+                        .foregroundStyle(.orange.opacity(0.85))
                 }
 
-                if hasSpark {
-                    TokenSparkline(history: session.tokenUsage.history)
-                        .frame(width: 40)
-                }
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
 
@@ -487,10 +544,12 @@ struct AgentDashboardView: View {
                 .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
         )
         .contentShape(Rectangle())
+        .animation(.easeOut(duration: 0.2), value: session.state)
         .onTapGesture(count: 2) {
             PaneLocator.navigate(to: session.surfaceId)
             AgentDashboardWindowController.shared.close()
         }
+        .help("Click to focus · Double-click to focus and close")
     }
 
     // MARK: - Historical Section
@@ -597,13 +656,17 @@ private struct ContextUtilBar: View {
     let utilization: Float
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(Color.secondary.opacity(0.12))
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(Color.secondary.opacity(0.12))
+            GeometryReader { geo in
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(barColor)
-                    .frame(width: geo.size.width * CGFloat(max(0, min(1, utilization))))
+                    .frame(width: geo.size.width)
+                    .scaleEffect(
+                        x: CGFloat(max(0, min(1, utilization))),
+                        anchor: .leading
+                    )
                     .animation(.easeOut(duration: 0.4), value: utilization)
             }
         }
@@ -613,7 +676,7 @@ private struct ContextUtilBar: View {
     private var barColor: Color {
         if utilization > 0.85 { return .red }
         if utilization > 0.65 { return .orange }
-        return .green.opacity(0.75)
+        return Color(.systemGreen).opacity(0.75)
     }
 }
 

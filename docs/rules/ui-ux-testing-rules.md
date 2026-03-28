@@ -25,9 +25,13 @@ lsof -i -n -P | grep ghostty | grep LISTEN
 ### 确认 App 处于正确状态
 
 ```bash
-# 通过 Ctrl API 确认 workspace 已加载
-curl -s http://localhost:<PORT>/v1/health
-curl -s -X POST http://localhost:<PORT>/v1/mcp \
+PORT=57571  # 替换为实际端口
+
+# 健康检查
+curl -s http://localhost:$PORT/v1/health
+
+# 获取 instance 信息（含所有 workspace）
+curl -s -X POST http://localhost:$PORT/v1/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_instance_info","arguments":{}}}' \
   | python3 -c "import sys,json; print(json.dumps(json.loads(json.load(sys.stdin)['result']['content'][0]['text']), indent=2))"
@@ -35,7 +39,122 @@ curl -s -X POST http://localhost:<PORT>/v1/mcp \
 
 ---
 
-## 2. 截图
+## 2. Ctrl API 完整参考
+
+Ctrl API 通过 `POST /v1/mcp` 暴露 MCP tools。以下是所有可用工具。
+
+### 辅助函数
+
+```bash
+# 调用工具的通用函数
+ctrl() {
+  local PORT=$1; local TOOL=$2; local ARGS=${3:-'{}'}
+  curl -s -X POST http://localhost:$PORT/v1/mcp \
+    -H "Content-Type: application/json" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"$TOOL\",\"arguments\":$ARGS}}" \
+    | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('result',{}).get('content',[{}])[0].get('text','ERROR: '+str(d.get('error',''))))"
+}
+
+# 获取端口
+PORT=$(lsof -i -n -P 2>/dev/null | grep ghostty | grep LISTEN | awk '{print $9}' | sed 's/.*://' | head -1)
+```
+
+### Workspace 管理
+
+| Tool | 参数 | 说明 |
+|------|------|------|
+| `get_instance_info` | — | 返回版本、端口、所有 workspace |
+| `open_workspace` | `directory`(必填), `name`(可选) | 打开目录为新 workspace 窗口，返回 `workspaceId` 和第一个 `paneId` |
+
+```bash
+# 打开目录
+ctrl $PORT open_workspace '{"directory":"/path/to/project","name":"my-project"}'
+# → {"workspaceId":"...","paneId":"..."}
+```
+
+### Pane 操作
+
+| Tool | 参数 | 说明 |
+|------|------|------|
+| `list_panes` | `workspaceId`(可选) | 列出所有 pane，含 title、annotation |
+| `create_tab` | `workspaceId`(可选) | 创建新 tab，返回 `paneId` |
+| `split_pane` | `paneId`, `direction`(left/right/up/down), `command`(可选) | 分裂 pane |
+| `focus_pane` | `paneId` | 切换焦点到指定 pane |
+| `send_text` | `paneId`(可选), `text` | 向 pane 写入文本（不触发键事件，**无法发送 Enter**） |
+| `send_key` | `key`, `paneId`(可选) | 发送真实键盘事件（走完整键处理管线） |
+| `set_pane_annotation` | `paneId`, `annotation` | 设置 pane 备注标签 |
+| `get_pane_annotation` | `paneId` | 读取 pane 备注标签 |
+
+#### `send_key` 支持的 key 名称
+
+| key | 含义 |
+|-----|------|
+| `enter` / `return` | 回车（执行命令） |
+| `escape` / `esc` | Escape |
+| `tab` | Tab |
+| `backspace` | 退格 |
+| `up` / `down` / `left` / `right` | 方向键 |
+| `ctrl+c` | 中断（SIGINT） |
+| `ctrl+u` | 清除当前行 |
+| `ctrl+d` | EOF |
+| `ctrl+l` | 清屏 |
+| `ctrl+<任意字母>` | 对应 Ctrl 组合键 |
+
+> **关键经验**：`send_text` 的 `\n` 不触发 shell 执行命令。必须先 `send_text` 输入命令内容，再用 `send_key enter` 提交。
+
+```bash
+# 正确方式：启动 claude
+PANE="..."
+ctrl $PORT send_text "{\"paneId\":\"$PANE\",\"text\":\"claude\"}"
+ctrl $PORT send_key  "{\"paneId\":\"$PANE\",\"key\":\"enter\"}"
+
+# 中断运行中的命令
+ctrl $PORT send_key "{\"paneId\":\"$PANE\",\"key\":\"ctrl+c\"}"
+```
+
+### Agent Dashboard
+
+| Tool | 参数 | 说明 |
+|------|------|------|
+| `show_agent_dashboard` | — | 打开并置顶 Agent Dashboard 浮动窗口 |
+
+```bash
+ctrl $PORT show_agent_dashboard '{}'
+```
+
+### Git 工具
+
+| Tool | 参数 | 说明 |
+|------|------|------|
+| `get_git_status` | `directory`(可选) | 返回分支、staged/unstaged/untracked 文件 |
+| `list_worktrees` | `directory`(可选) | 列出 git worktrees |
+| `create_worktree` | `directory`, `path`, `branch`(可选), `baseBranch`(可选) | 创建新 worktree |
+
+### Debug 工具（仅 Debug build）
+
+| Tool | 参数 | 说明 |
+|------|------|------|
+| `click_window` | `x`, `y` | 模拟鼠标点击（窗口坐标，y 从上） |
+| `git_panel_state` | `workspaceId`(可选) | 读取 Git 面板内部状态 |
+| `test_fullscreen_diff` | `workspaceId`(可选) | 触发全屏 diff 测试截图 |
+
+### 扩充 Ctrl API 的规则
+
+当测试流程需要某个操作但 API 不支持时，**直接扩充**，不要绕路：
+
+1. 在 `CtrlToolHandler.swift` 添加 `case "tool_name": return try await callToolName(arguments:)`
+2. 在同文件添加 `// MARK: - tool_name` + 实现函数
+3. 在 `CtrlServer.swift` 的 `handleToolsList` 中注册 schema
+4. `make dev` 验证构建
+
+常见需要扩充的场景：
+- 需要模拟复杂键盘输入 → 扩展 `send_key` 支持更多 key 名称
+- 需要读取面板状态 → 添加对应 `get_xxx_state` tool
+- 需要触发菜单动作 → 添加对应 tool（避免 AppleScript 菜单路径变化）
+
+---
+
+## 3. 截图
 
 ### 规则
 
@@ -49,7 +168,7 @@ curl -s -X POST http://localhost:<PORT>/v1/mcp \
 ```bash
 # 1. 将 App 带到前台
 osascript -e 'tell application "System Events" to tell process "ghostty" to set frontmost to true'
-sleep 0.5   # 等待渲染稳定
+sleep 0.8   # 等待渲染稳定（0.5s 有时不够，用 0.8s 更安全）
 
 # 2. 截取全屏
 screencapture -x /tmp/poltertty_shot.png
@@ -83,10 +202,11 @@ region.save("/tmp/crop_region.png")
 > - 面板 tab bar：x=80~760, y=140~230
 > - 面板 changes 列表：x=80~700, y=230~1900
 > - 底部状态栏：x=0~3024, y=1900~1964
+> - Agent Dashboard 浮动窗口：约 x=700~1900, y=100~900（随窗口位置变化）
 
 ---
 
-## 3. 打开面板
+## 4. 打开面板
 
 ### 规则
 
@@ -108,47 +228,228 @@ tell application "System Events"
 end tell
 ```
 
-| 面板 | 菜单项名 | 快捷键（参考） |
-|------|---------|--------------|
-| 文件浏览器 | `Toggle File Browser` | Cmd+\ |
-| Git 面板 | `Toggle Git Tab` | Cmd+Shift+G |
-| 工作区侧边栏 | `Toggle Sidebar` | Cmd+B |
+| 面板 | 菜单 | 菜单项名 | 快捷键（参考） |
+|------|------|---------|--------------|
+| 文件浏览器 | Workspace | `Toggle File Browser` | Cmd+\ |
+| Git 面板 | Workspace | `Toggle Git Tab` | Cmd+Shift+G |
+| 工作区侧边栏 | Workspace | `Toggle Sidebar` | Cmd+B |
+| Agent Dashboard | Agent > Observability | — | 用 Ctrl API `show_agent_dashboard` |
+| Agent Monitor | Agent > Observability | — | 用菜单 `Agents In Workspace` |
 
-### Bash 内联写法
-
-```bash
-# 打开文件浏览器
-osascript << 'EOF'
-tell application "System Events"
-    tell process "ghostty"
-        set frontmost to true
-        delay 0.5
-        click menu item "Toggle File Browser" of menu "Workspace" of menu bar 1
-    end tell
-end tell
-EOF
-sleep 1 && screencapture -x /tmp/poltertty_filebrowser.png
-
-# 打开 Git 面板
-osascript << 'EOF'
-tell application "System Events"
-    tell process "ghostty"
-        set frontmost to true
-        delay 0.5
-        click menu item "Toggle Git Tab" of menu "Workspace" of menu bar 1
-    end tell
-end tell
-EOF
-sleep 1 && screencapture -x /tmp/poltertty_git.png
-```
+> **Agent Dashboard** 推荐通过 Ctrl API 打开，避免菜单路径变化：
+> ```bash
+> ctrl $PORT show_agent_dashboard '{}'
+> ```
 
 ---
 
-## 4. 验证检查清单
+## 5. Agent Dashboard 测试流程
+
+### 标准流程：启动多个 agents 验证 Dashboard
+
+```bash
+#!/bin/bash
+set -e
+
+# 0. 构建并启动
+make dev
+APP_PATH=$(find .build/DerivedData -name "Poltertty.app" -path "*/Debug/Poltertty.app" | head -1)
+open "$APP_PATH"
+sleep 5
+
+# 1. 获取端口
+PORT=$(lsof -i -n -P 2>/dev/null | grep ghostty | grep LISTEN | awk '{print $9}' | sed 's/.*://' | head -1)
+echo "Port: $PORT"
+
+# 2. 打开项目 workspace
+RESULT=$(curl -s -X POST http://localhost:$PORT/v1/mcp \
+  -H "Content-Type: application/json" \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"open_workspace\",\"arguments\":{\"directory\":\"$(pwd)\",\"name\":\"test\"}}}" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['result']['content'][0]['text'])")
+WS_ID=$(echo $RESULT | python3 -c "import sys,json; print(json.loads(input())['workspaceId'])")
+PANE1=$(echo $RESULT | python3 -c "import sys,json; print(json.loads(input())['paneId'])")
+echo "Workspace: $WS_ID, Pane1: $PANE1"
+
+# 3. 在第一个 pane 启动 claude（send_text + send_key enter）
+curl -s -X POST http://localhost:$PORT/v1/mcp \
+  -H "Content-Type: application/json" \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"send_text\",\"arguments\":{\"paneId\":\"$PANE1\",\"text\":\"claude\"}}}" > /dev/null
+sleep 0.3
+curl -s -X POST http://localhost:$PORT/v1/mcp \
+  -H "Content-Type: application/json" \
+  -d "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"send_key\",\"arguments\":{\"paneId\":\"$PANE1\",\"key\":\"enter\"}}}" > /dev/null
+
+# 4. 创建更多 tab 并启动 agents
+for i in 2 3; do
+  PANE=$(curl -s -X POST http://localhost:$PORT/v1/mcp \
+    -H "Content-Type: application/json" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":$((i+10)),\"method\":\"tools/call\",\"params\":{\"name\":\"create_tab\",\"arguments\":{\"workspaceId\":\"$WS_ID\"}}}" \
+    | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.loads(d['result']['content'][0]['text'])['paneId'])" 2>/dev/null)
+  sleep 1
+  curl -s -X POST http://localhost:$PORT/v1/mcp \
+    -H "Content-Type: application/json" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":$((i+20)),\"method\":\"tools/call\",\"params\":{\"name\":\"send_text\",\"arguments\":{\"paneId\":\"$PANE\",\"text\":\"claude\"}}}" > /dev/null
+  sleep 0.3
+  curl -s -X POST http://localhost:$PORT/v1/mcp \
+    -H "Content-Type: application/json" \
+    -d "{\"jsonrpc\":\"2.0\",\"id\":$((i+30)),\"method\":\"tools/call\",\"params\":{\"name\":\"send_key\",\"arguments\":{\"paneId\":\"$PANE\",\"key\":\"enter\"}}}" > /dev/null
+  echo "Started agent $i in $PANE"
+done
+
+# 5. 等待 agents 初始化（约 15s）
+echo "Waiting for agents to initialize..."
+sleep 15
+
+# 6. 验证 pane 标题（有 claude 时显示 ✳ Claude Code）
+curl -s -X POST http://localhost:$PORT/v1/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":99,"method":"tools/call","params":{"name":"list_panes","arguments":{}}}' \
+  | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+panes = json.loads(d['result']['content'][0]['text'])
+running = [p for p in panes if 'Claude Code' in p.get('title','')]
+print(f'Running agents: {len(running)}/{len(panes)}')
+for p in panes:
+    print(f'  {p[\"id\"][:8]} | {p.get(\"title\",\"\")}')
+"
+
+# 7. 打开 Dashboard 截图
+curl -s -X POST http://localhost:$PORT/v1/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":100,"method":"tools/call","params":{"name":"show_agent_dashboard","arguments":{}}}' > /dev/null
+sleep 0.8
+osascript -e 'tell application "System Events" to tell process "ghostty" to set frontmost to true'
+sleep 0.8
+screencapture -x /tmp/dashboard_test.png
+
+# 8. 裁切 Dashboard 区域
+python3 << 'PYEOF'
+from PIL import Image
+img = Image.open("/tmp/dashboard_test.png")
+w, h = img.size
+print(f"Screenshot: {w}x{h}")
+img.crop((700, 100, 1900, 860)).save("/tmp/dashboard_crop.png")
+print("Saved: /tmp/dashboard_crop.png")
+PYEOF
+
+echo "✅ 用 Read 工具查看 /tmp/dashboard_crop.png"
+```
+
+### Dashboard 验证检查清单
+
+每次 Agent Dashboard UI 改动后确认：
+
+- [ ] **Stats bar**：单行紧凑格式 `N active · N working · N subagents · Nk tokens · $0.00`
+- [ ] **多 agent 时**：每个 agent 有独立行，显示状态色点、图标、名称、时长、费用
+- [ ] **Workspace 分组头**：显示 workspace 名称 + agent 计数 badge + 色彩 accent bar
+- [ ] **状态颜色**：launching=accent色, working=绿, idle=黄, done=secondary, error=红
+- [ ] **Context bar**：有 context 使用时显示进度条，颜色随使用率变化（绿→橙→红）
+- [ ] **Toolbar**：`Show completed` checkbox + 视图切换 segmented picker
+- [ ] **空状态**：无 agent 时显示图标 + 说明 + 快捷键提示
+- [ ] **卡片视图**：切换到 cards 模式，每个 agent 正确渲染，无 sparkline 装饰
+- [ ] **键盘导航**：↑↓ 切换焦点行（accent 背景 + 描边），Return/Enter 跳转并关闭 Dashboard
+- [ ] **点击同步焦点**：点击行时 `focusedSessionId` 同步更新，键盘焦点跟随鼠标点击
+
+---
+
+## 6. SwiftUI 键盘导航实现经验
+
+### macOS 版本兼容
+
+| API | 最低版本 | 说明 |
+|-----|---------|------|
+| `.onKeyPress` | macOS 14+ | 声明式，绑定到 focusable view |
+| `NSEvent.addLocalMonitorForEvents` | macOS 10.6+ | 命令式，全局监听，需手动管理生命周期 |
+
+**结论**：Poltertty 支持 macOS 13+，必须用 `NSEvent.addLocalMonitorForEvents`。
+
+### 标准实现模式
+
+```swift
+// 1. 状态
+@State private var focusedSessionId: UUID?
+@State private var keyMonitor: Any?
+
+// 2. 生命周期绑定（在 body 最外层 VStack/view 上）
+.onAppear { installKeyMonitor() }
+.onDisappear { removeKeyMonitor() }
+
+// 3. 安装监听（仅当 Dashboard 为 key window 时消费事件）
+private func installKeyMonitor() {
+    keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        guard AgentDashboardWindowController.shared.window?.isKeyWindow == true else {
+            return event   // 非 key window：透传，不消费
+        }
+        let sessions = viewModel.activeSessions
+        guard !sessions.isEmpty else { return event }
+        switch event.keyCode {
+        case 125: moveFocus(in: sessions, delta: 1);  return nil  // ↓
+        case 126: moveFocus(in: sessions, delta: -1); return nil  // ↑
+        case 36, 76: activateFocused(in: sessions);  return nil  // Return / numpad Enter
+        default: return event
+        }
+    }
+}
+
+private func removeKeyMonitor() {
+    if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+}
+```
+
+> **关键**：`return nil` 消费事件（不向后传递），`return event` 透传。
+> 只有在 Dashboard 确实是 key window 时才消费方向键，防止影响其他窗口。
+
+### @State 在 NSEvent 闭包中的可行性
+
+SwiftUI `@State` 内部使用引用类型存储（`State<Value>.Box`）。即使 `self`（struct）被复制到闭包中，通过 `@State` property wrapper 的 mutation 仍然操作同一个引用，所以闭包内 `self.focusedSessionId = x` 能正确触发 View 更新，**无需 `DispatchQueue.main.async`**（local monitor 已在主线程回调）。
+
+### 焦点视觉指示
+
+```swift
+let isFocused = focusedSessionId == session.id
+
+// 背景：比 hover 略深的 accent 色
+.background(
+    isFocused
+        ? Color(nsColor: .controlAccentColor).opacity(dark ? 0.22 : 0.14)
+        : isHovered
+            ? Color(nsColor: .controlAccentColor).opacity(dark ? 0.15 : 0.10)
+            : Color(nsColor: .controlBackgroundColor).opacity(dark ? 0.35 : 0.5)
+)
+// 描边环：用 opacity 切换而非 if/else nil，避免布局跳动
+.overlay(
+    RoundedRectangle(cornerRadius: 5)
+        .stroke(Color(.controlAccentColor).opacity(0.55), lineWidth: 1)
+        .opacity(isFocused ? 1 : 0)
+)
+.animation(.easeOut(duration: 0.12), value: isFocused)
+```
+
+### 已知坑：Return/Enter 不关闭 Dashboard
+
+**问题**：用 Return/Enter 激活 agent 后，只调用了 `PaneLocator.navigate()`，Dashboard 窗口留在屏幕上。
+**期望**：键盘激活应与双击行为一致（跳转 + 关闭）。
+**修复**：`activateFocused()` 末尾追加 `AgentDashboardWindowController.shared.close()`。
+
+```swift
+// 错误：
+PaneLocator.navigate(to: session.surfaceId)
+
+// 正确：
+PaneLocator.navigate(to: session.surfaceId)
+AgentDashboardWindowController.shared.close()
+```
+
+**规则**：任何"激活并切换"的键盘操作，都应与对应的鼠标双击操作行为完全一致。
+
+---
+
+## 7. 通用验证检查清单
 
 每次 UI/UX 改动后，截图并逐条确认：
 
-### 4.1 Tab Bar 选中状态
+### 6.1 Tab Bar 选中状态
 
 裁切 tab bar 区域（y=140~230 @2x），检查：
 
@@ -157,7 +458,7 @@ sleep 1 && screencapture -x /tmp/poltertty_git.png
 - [ ] 非活跃 tab 图标为 secondary 色（灰）
 - [ ] badge 数字清晰可见（橙色圆角，≥10pt）
 
-### 4.2 Stage/Unstage 按钮
+### 6.2 Stage/Unstage 按钮
 
 裁切 changes 列表区域，检查：
 
@@ -165,12 +466,12 @@ sleep 1 && screencapture -x /tmp/poltertty_git.png
 - [ ] 使用 `arrow.uturn.backward` 图标而非 `xmark.circle`（后者歧义大）
 - [ ] hover 状态需手动交互验证（静态截图只能确认非 hover 态）
 
-### 4.3 Worktree Selector
+### 6.3 Worktree Selector
 
 - [ ] 只出现在 tab bar 一处，不在 Files/Git 各自面板内重复出现
 - [ ] 多 worktree 时显示下拉菜单；单 worktree 时只显示 branch 名称（无下拉）
 
-### 4.4 底部状态栏
+### 6.4 底部状态栏
 
 裁切底部区域（y=1900~1964 @2x），检查：
 
@@ -178,27 +479,38 @@ sleep 1 && screencapture -x /tmp/poltertty_git.png
 - [ ] 文字 opacity 足够清晰（≥0.8，非 0.6）
 - [ ] 右侧显示 branch 名称和变更计数
 
-### 4.5 字体尺寸
+### 6.5 字体尺寸
 
 - [ ] badge 计数（section header、commit 数、file status）最小 10pt
 - [ ] chevron 图标最小 9pt
 - [ ] 正文内容（文件名、提交信息）11pt
 
-### 4.6 空状态
+### 6.6 空状态
 
 切换到非 git 目录触发空状态测试：
-
-```bash
-# 在 Ctrl API 中或通过 App 打开一个非 git 目录的 workspace
-# 然后截图检查：
-```
 
 - [ ] 文件浏览器空状态：显示图标 + 说明文字 + 操作引导
 - [ ] Git 面板非 git 仓库：显示 `Not a git repository` + `git init` 提示 + 路径
 
 ---
 
-## 5. 完整测试脚本示例
+## 9. 常见问题
+
+| 问题 | 原因 | 解决方法 |
+|------|------|---------|
+| 截图全白 | 使用了 CPU 渲染截图（旧 `capture_screenshot`） | 改用 `screencapture` |
+| 快捷键触发了系统功能 | `keystroke` 被系统拦截 | 改用 `click menu item` |
+| App 未在前台，截图错误 | `set frontmost to true` 未生效 | 增加 `delay 0.8` 等待渲染 |
+| `make dev` 架构报错 | zig build 默认 universal，arm64 机器链接 x86_64 | `scripts/build.sh` 已修复为 `-Dxcframework-target=native` |
+| Ctrl API 端口不固定 | 每次启动随机分配 | 每次通过 `lsof -i -n -P \| grep ghostty \| grep LISTEN` 获取 |
+| `send_text` 发 `\n` 不执行命令 | `ghostty_surface_text` 不触发键事件 | 改用 `send_text` 输入内容 + `send_key enter` 提交 |
+| `send_text` 发 `\r` 也不执行 | 同上，`ghostty_surface_text` 绕过键处理管线 | 同上 |
+| App 启动进引导页，workspace 为空 | 首次启动无历史 workspace | 用 `open_workspace` API 手动打开目录 |
+| 键盘 Return 激活后 Dashboard 不关闭 | `activateFocused` 只调用了 navigate | 追加 `AgentDashboardWindowController.shared.close()` |
+
+---
+
+## 8. 旧测试脚本示例（Git 面板）
 
 ```bash
 #!/bin/bash
@@ -236,14 +548,3 @@ PYEOF
 echo "✅ 截图完成，用 Read 工具查看 /tmp/check_*.png"
 ```
 
----
-
-## 6. 常见问题
-
-| 问题 | 原因 | 解决方法 |
-|------|------|---------|
-| 截图全白 | 使用了 CPU 渲染截图（旧 `capture_screenshot`） | 改用 `screencapture` |
-| 快捷键触发了系统功能 | `keystroke` 被系统拦截 | 改用 `click menu item` |
-| App 未在前台，截图错误 | `set frontmost to true` 未生效 | 增加 `delay 0.5` 等待渲染 |
-| `make dev` 架构报错 | zig build 默认 universal，arm64 机器链接 x86_64 | `scripts/build.sh` 已修复为 `-Dxcframework-target=native` |
-| Ctrl API 端口不固定 | 每次启动随机分配 | 每次通过 `lsof -i -n -P \| grep ghostty \| grep LISTEN` 获取 |
