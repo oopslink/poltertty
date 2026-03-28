@@ -549,6 +549,35 @@ final class CtrlServer {
                         "directory": ["type": "string", "description": "Absolute path to the git repository (optional; defaults to active workspace root)"]
                     ]
                 ]
+            ],
+            [
+                "name": "open_workspace",
+                "description": "Open a directory as a new Workspace window; returns the new workspaceId and first paneId",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "directory": ["type": "string", "description": "Absolute path to the directory to open as a workspace"],
+                        "name": ["type": "string", "description": "Display name for the workspace (optional; defaults to directory basename)"]
+                    ],
+                    "required": ["directory"]
+                ]
+            ],
+            [
+                "name": "show_agent_dashboard",
+                "description": "Open and bring the Agent Dashboard floating window to the front",
+                "inputSchema": ["type": "object", "properties": [String: Any]()]
+            ],
+            [
+                "name": "send_key",
+                "description": "Send a keyboard key event to a pane via the full key-handling pipeline. Supports: enter, escape, tab, backspace, up, down, left, right, ctrl+c, ctrl+u, ctrl+d, ctrl+l, etc.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "key": ["type": "string", "description": "Key name: enter, escape, tab, backspace, up/down/left/right, or ctrl+<letter>"],
+                        "paneId": ["type": "string", "description": "Target pane UUID (optional; defaults to focused pane)"]
+                    ],
+                    "required": ["key"]
+                ]
             ]
         ]
         #if DEBUG

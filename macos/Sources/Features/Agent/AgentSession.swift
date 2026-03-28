@@ -1,5 +1,6 @@
 // macos/Sources/Features/Agent/AgentSession.swift
 import Foundation
+import SwiftUI
 
 /// Agent 运行状态机
 enum AgentState: Equatable {
@@ -68,4 +69,17 @@ struct AgentSession: Identifiable {
     var subagents: [String: SubagentInfo] = [:]
     /// 当前使用的模型名称（从 transcript 解析，如 "claude-sonnet-4-6"）
     var model: String? = nil
+}
+
+extension AgentState {
+    /// Dashboard 状态指示色（统一 source of truth）
+    var indicatorColor: Color {
+        switch self {
+        case .working:   return .green
+        case .idle:      return .yellow
+        case .launching: return Color(.controlAccentColor)
+        case .done:      return .secondary
+        case .error:     return .red
+        }
+    }
 }

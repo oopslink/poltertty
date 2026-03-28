@@ -43,6 +43,9 @@ final class CtrlToolHandler: Sendable {
         case "click_window":          return try await callClickWindow(arguments: arguments)
         case "test_fullscreen_diff":  return try await callTestFullscreenDiff(arguments: arguments)
         case "git_panel_state":       return try await callGitPanelState(arguments: arguments)
+        case "open_workspace":        return try await callOpenWorkspace(arguments: arguments)
+        case "show_agent_dashboard":  return try await callShowAgentDashboard()
+        case "send_key":              return try await callSendKey(arguments: arguments)
         default:
             throw RPCError(code: -32601, message: "Unknown tool: \(name)")
         }
@@ -609,6 +612,152 @@ final class CtrlToolHandler: Sendable {
             }
         }
         return #"{"path":"\#(path)"}"#
+    }
+
+    // MARK: - send_key
+
+    /// 向指定 pane 发送键盘事件（通过 NSEvent，走完整键处理管线）。
+    /// 支持的 key 名称：enter/return, escape, tab, backspace, up, down, left, right,
+    ///   ctrl+c, ctrl+u, ctrl+d 等 "ctrl+<char>" 组合。
+    private func callSendKey(arguments: [String: Any]) async throws -> String {
+        guard let keyName = arguments["key"] as? String else {
+            throw RPCError(code: -32602, message: "send_key: missing required parameter 'key'")
+        }
+
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            Task { @MainActor in
+                // 确定目标 surface view
+                let targetView: NSView?
+                if let paneIdStr = arguments["paneId"] as? String,
+                   let paneId = UUID(uuidString: paneIdStr),
+                   let tc = Self.tcContaining(paneId: paneId) {
+                    tc.switchToTab(containing: paneId)
+                    targetView = tc.findSurface(id: paneId)
+                } else {
+                    let window = (NSApp.keyWindow as? TerminalWindow)
+                        ?? NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
+                    targetView = window?.terminalController?.focusedSurface
+                }
+                guard let view = targetView else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "send_key: target view not found"))
+                    return
+                }
+
+                // 解析 key 名称
+                let (keyCode, chars, mods) = Self.parseKeyName(keyName)
+                guard keyCode >= 0 else {
+                    cont.resume(throwing: RPCError(code: -32602, message: "send_key: unknown key '\(keyName)'"))
+                    return
+                }
+
+                let makeEvent: (NSEvent.EventType) -> NSEvent? = { type in
+                    NSEvent.keyEvent(
+                        with: type,
+                        location: NSPoint(x: 0, y: 0),
+                        modifierFlags: mods,
+                        timestamp: ProcessInfo.processInfo.systemUptime,
+                        windowNumber: view.window?.windowNumber ?? 0,
+                        context: nil,
+                        characters: chars,
+                        charactersIgnoringModifiers: chars,
+                        isARepeat: false,
+                        keyCode: UInt16(keyCode)
+                    )
+                }
+                if let down = makeEvent(.keyDown) { view.keyDown(with: down) }
+                if let up   = makeEvent(.keyUp)   { view.keyUp(with: up) }
+                cont.resume()
+            }
+        }
+        return #"{"ok":true,"key":"\#(keyName)"}"#
+    }
+
+    private static func parseKeyName(_ name: String) -> (keyCode: Int, chars: String, mods: NSEvent.ModifierFlags) {
+        let lower = name.lowercased()
+
+        // ctrl+<char> 组合
+        if lower.hasPrefix("ctrl+"), lower.count == 6 {
+            let ch = lower.last!
+            let asciiCtrl = Int(ch.asciiValue ?? 0) - Int(Character("a").asciiValue ?? 0) + 1
+            let ctrlStr = String(UnicodeScalar(asciiCtrl)!)
+            // key code for the letter
+            let letterCode = Self.letterKeyCode(ch)
+            return (letterCode, ctrlStr, [.control])
+        }
+
+        switch lower {
+        case "enter", "return":   return (36, "\r", [])
+        case "escape", "esc":     return (53, "\u{1B}", [])
+        case "tab":               return (48, "\t", [])
+        case "backspace", "delete": return (51, "\u{7F}", [])
+        case "up":                return (126, "\u{1B}[A", [])
+        case "down":              return (125, "\u{1B}[B", [])
+        case "left":              return (123, "\u{1B}[D", [])
+        case "right":             return (124, "\u{1B}[C", [])
+        default:                  return (-1, "", [])
+        }
+    }
+
+    private static func letterKeyCode(_ ch: Character) -> Int {
+        // macOS key codes for letters a-z
+        let map: [Character: Int] = [
+            "a":0,"b":11,"c":8,"d":2,"e":14,"f":3,"g":5,"h":4,"i":34,"j":38,
+            "k":40,"l":37,"m":46,"n":45,"o":31,"p":35,"q":12,"r":15,"s":1,
+            "t":17,"u":32,"v":9,"w":13,"x":7,"y":16,"z":6
+        ]
+        return map[ch] ?? -1
+    }
+
+    // MARK: - open_workspace
+
+    /// 打开指定目录为新 Workspace 窗口，返回 workspaceId 和第一个 paneId。
+    private func callOpenWorkspace(arguments: [String: Any]) async throws -> String {
+        guard let directory = arguments["directory"] as? String, !directory.isEmpty else {
+            throw RPCError(code: -32602, message: "open_workspace: missing required parameter 'directory'")
+        }
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directory, isDirectory: &isDir), isDir.boolValue else {
+            throw RPCError(code: -32602, message: "open_workspace: directory does not exist: \(directory)")
+        }
+        let name = (arguments["name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            ?? URL(fileURLWithPath: directory).lastPathComponent
+
+        let result: (UUID, UUID) = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let appDelegate = NSApp.delegate as? AppDelegate else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "open_workspace: cannot access AppDelegate"))
+                    return
+                }
+                let workspace = WorkspaceManager.shared.create(name: name, rootDir: directory)
+                var config = Ghostty.SurfaceConfiguration()
+                config.workingDirectory = workspace.rootDirExpanded
+                let controller = TerminalController(
+                    appDelegate.ghostty, withBaseConfig: config, workspaceId: workspace.id
+                )
+                controller.showWindow(nil)
+                if let window = controller.window {
+                    WorkspaceManager.shared.registerWindow(window, for: workspace.id)
+                }
+                let panes = controller.listPanes()
+                guard let firstPane = panes.first else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "open_workspace: no pane created"))
+                    return
+                }
+                cont.resume(returning: (workspace.id, firstPane.id))
+            }
+        }
+        return #"{"workspaceId":"\#(result.0.uuidString)","paneId":"\#(result.1.uuidString)"}"#
+    }
+
+    // MARK: - show_agent_dashboard
+
+    /// 打开 Agent Dashboard 浮动窗口。
+    private func callShowAgentDashboard() async throws -> String {
+        await MainActor.run {
+            AgentDashboardWindowController.shared.showWindow(nil)
+            AgentDashboardWindowController.shared.window?.makeKeyAndOrderFront(nil)
+        }
+        return #"{"ok":true}"#
     }
 
     // MARK: - Helpers
