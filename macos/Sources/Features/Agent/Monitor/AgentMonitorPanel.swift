@@ -32,7 +32,7 @@ struct AgentMonitorPanel: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(width: 200, maxHeight: .infinity, alignment: .topLeading)
+        .frame(width: 200)
         .background(Color(.windowBackgroundColor))
     }
 
