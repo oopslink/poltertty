@@ -4,65 +4,93 @@ import SwiftUI
 struct AgentMonitorPanel: View {
     @ObservedObject var viewModel: AgentMonitorViewModel
 
-    /// 当前弹出详情的外部会话
     @State private var selectedExternalSession: ExternalSessionRecord?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 标题栏
-            HStack {
-                Text("Agents").font(.system(size: 11, weight: .semibold))
-                Spacer()
-                Button { viewModel.toggle() } label: {
-                    Image(systemName: "xmark").font(.system(size: 10))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 10).padding(.vertical, 8)
-            .background(Color(.windowBackgroundColor))
+            panelHeader
             Divider()
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     if viewModel.sessions.isEmpty && !viewModel.hasExternalSessions {
-                        // 空状态
-                        VStack(spacing: 5) {
-                            Image(systemName: "circle.hexagongrid")
-                                .font(.system(size: 24, weight: .thin))
-                                .foregroundStyle(.quaternary)
-                                .padding(.bottom, 3)
-                            Text("No active agents").font(.system(size: 11)).foregroundStyle(.secondary)
-                            Text("⌘⇧A to launch").font(.system(size: 10)).foregroundStyle(.tertiary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 40)
+                        emptyStateView
                     } else {
-                        // Agents 列表
                         ForEach(viewModel.sessions) { session in
                             AgentSessionGroup(session: session, viewModel: viewModel)
                             Divider()
                         }
                     }
 
-                    // 外部会话 section
                     if viewModel.hasExternalSessions {
                         Divider()
                         externalSessionsSectionView
                     }
 
-                    // History section
                     historySectionView
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(width: 180)
+        .frame(width: 200, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(.windowBackgroundColor))
     }
+
+    // MARK: - Panel Header
+
+    private var panelHeader: some View {
+        HStack(spacing: 6) {
+            Text("Agents")
+                .font(.system(size: 11, weight: .semibold))
+            if viewModel.sessions.count > 0 {
+                Text("\(viewModel.sessions.count)")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(AgentColors.selectionBg)
+                    .foregroundStyle(.secondary)
+                    .clipShape(Capsule())
+            }
+            Spacer()
+            Button { viewModel.toggle() } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .medium))
+                    .frame(width: 16, height: 16)
+                    .background(Color(.separatorColor).opacity(0.3))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Close Agents panel")
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(Color(.windowBackgroundColor))
+    }
+
+    // MARK: - Empty State
+
+    private var emptyStateView: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "square.stack.3d.up.slash")
+                .font(.system(size: 22, weight: .thin))
+                .foregroundStyle(.quaternary)
+                .padding(.bottom, 2)
+            Text("No active agents")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text("⌘⇧A to launch")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 36)
+    }
+
+    // MARK: - External Sessions Section
 
     private var externalSessionsSectionView: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
-                Text("External Session")
+                Text("External Sessions")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Text("\(viewModel.externalSessions.count)")
@@ -103,6 +131,8 @@ struct AgentMonitorPanel: View {
         }
     }
 
+    // MARK: - History Section
+
     private var historySectionView: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button(action: { viewModel.toggleHistory() }) {
@@ -112,13 +142,16 @@ struct AgentMonitorPanel: View {
                     Text("HISTORY")
                         .font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                 }
-                .padding(.horizontal, 10).padding(.vertical, 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             if viewModel.historyExpanded {
                 ForEach(viewModel.historicalSessions) { ps in
                     historyRow(ps)
+                    Divider()
                 }
             }
         }
@@ -136,32 +169,38 @@ struct AgentMonitorPanel: View {
             viewModel.isVisible = true
             viewModel.selectHistory(ps)
         }) {
-            HStack(spacing: 5) {
-                Image(systemName: "checkmark.circle")
-                    .font(.system(size: 8)).foregroundStyle(Color(hex: "#4caf50") ?? .green)
-                Text(ps.agentName)
-                    .font(.system(size: 9)).foregroundStyle(.secondary)
-                    .lineLimit(1).truncationMode(.tail)
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(AgentColors.success.opacity(0.8))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(ps.agentName)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1).truncationMode(.tail)
+                    Text(relativeTime(ps.finishedAt))
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
                 Spacer()
                 let cost = NSDecimalNumber(decimal: ps.tokenUsage.cost).doubleValue
                 if cost > 0 {
                     Text(String(format: "$%.2f", cost))
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundStyle(Color(hex: "#4caf50") ?? .green)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(AgentColors.success.opacity(0.9))
                 }
-                Text(relativeTime(ps.finishedAt))
-                    .font(.system(size: 8, design: .monospaced)).foregroundStyle(.tertiary)
             }
-            .padding(.leading, 18).padding(.trailing, 10).padding(.vertical, 3)
+            .padding(.leading, 10).padding(.trailing, 10).padding(.vertical, 6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
     private func relativeTime(_ date: Date) -> String {
         let secs = Int(Date().timeIntervalSince(date))
-        if secs < 3600  { return "\(secs / 60)m" }
-        if secs < 86400 { return "\(secs / 3600)h" }
-        return "\(secs / 86400)d"
+        if secs < 3600  { return "\(secs / 60)m ago" }
+        if secs < 86400 { return "\(secs / 3600)h ago" }
+        return "\(secs / 86400)d ago"
     }
 }
 
@@ -172,50 +211,40 @@ private struct ExternalSessionRow: View {
     var isSelected: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                // Badge
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
                 Text(session.toolType.badge)
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .foregroundStyle(badgeColor)
-                    .opacity(session.isAlive ? 1.0 : 0.4)
+                    .opacity(session.isAlive ? 1.0 : 0.5)
 
-                // cwd 最后一段
                 Text(cwdName)
                     .font(.system(size: 11))
                     .lineLimit(1)
 
                 Spacer()
 
-                // 存活指示
                 Circle()
-                    .fill(session.isAlive ? Color.green : Color.gray)
+                    .fill(session.isAlive ? AgentColors.success : Color.secondary.opacity(0.4))
                     .frame(width: 5, height: 5)
+            }
 
-                // pid（仅 Claude Code）
-                if let pid = session.pid {
-                    Text("\(pid)")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
+            if let msg = session.lastMessage {
+                HStack(spacing: 3) {
+                    Text(msg.role == .user ? "↑" : "↓")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(msg.role == .user ? Color.blue.opacity(0.7) : Color.orange.opacity(0.7))
+                    Text(msg.text)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
-
-            // 最后一条消息
-            if let msg = session.lastMessage {
-                Text(rolePrefix(msg.role) + msg.text)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            // 启动时间
-            Text(session.startedAt, style: .time)
-                .font(.system(size: 9))
-                .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+        .padding(.vertical, 6)
+        .background(isSelected ? AgentColors.selectionBg : Color.clear)
         .opacity(session.isAlive ? 1.0 : 0.6)
     }
 
@@ -229,10 +258,6 @@ private struct ExternalSessionRow: View {
         case .openCode:   return .blue
         case .geminiCli:  return .green
         }
-    }
-
-    private func rolePrefix(_ role: ExternalSessionRecord.LastMessage.Role) -> String {
-        role == .user ? "You:" : "Assistant:"
     }
 }
 
@@ -249,7 +274,6 @@ private struct ExternalSessionDetailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // 标题行
             HStack(spacing: 6) {
                 Text(session.toolType.badge)
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
@@ -261,11 +285,8 @@ private struct ExternalSessionDetailView: View {
             }
 
             Divider()
-
-            // 详情字段
             detailGrid
 
-            // 最后消息
             if let msg = session.lastMessage {
                 Divider()
                 lastMessageView(msg)
@@ -294,35 +315,29 @@ private struct ExternalSessionDetailView: View {
     private var statusBadge: some View {
         HStack(spacing: 4) {
             Circle()
-                .fill(session.isAlive ? Color.green : Color.gray)
+                .fill(session.isAlive ? AgentColors.success : Color.secondary.opacity(0.5))
                 .frame(width: 6, height: 6)
             Text(session.isAlive ? "Running" : "Stopped")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(session.isAlive ? .primary : .secondary)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
+        .padding(.horizontal, 6).padding(.vertical, 2)
         .background(
             RoundedRectangle(cornerRadius: 4)
                 .fill(session.isAlive
-                      ? Color.green.opacity(0.1)
-                      : Color.gray.opacity(0.1))
+                      ? AgentColors.success.opacity(0.1)
+                      : Color.secondary.opacity(0.1))
         )
     }
 
     private var detailGrid: some View {
         VStack(alignment: .leading, spacing: 6) {
             detailRow("Session ID", value: session.id)
-
             if let pid = session.pid {
                 detailRow("PID", value: "\(pid)")
             }
-
             detailRow("Working Dir", value: session.cwd, monospaced: true)
-
-            detailRow("Started",
-                      value: Self.dateFormatter.string(from: session.startedAt))
-
+            detailRow("Started", value: Self.dateFormatter.string(from: session.startedAt))
             detailRow("Duration", value: durationText)
         }
     }
@@ -352,12 +367,11 @@ private struct ExternalSessionDetailView: View {
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundStyle(.tertiary)
             }
-
             HStack(alignment: .top, spacing: 4) {
                 Text(msg.role == .user ? "User" : "Assistant")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(msg.role == .user ? .blue : .orange)
-                    .frame(width: 24, alignment: .leading)
+                    .foregroundStyle(msg.role == .user ? Color.blue : Color.orange)
+                    .frame(width: 52, alignment: .leading)
                 Text(msg.text)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
@@ -369,8 +383,8 @@ private struct ExternalSessionDetailView: View {
 
     private var durationText: String {
         let secs = Int(Date().timeIntervalSince(session.startedAt))
-        if secs < 60     { return "\(secs)s" }
-        if secs < 3600   { return "\(secs / 60)m \(secs % 60)s" }
+        if secs < 60   { return "\(secs)s" }
+        if secs < 3600 { return "\(secs / 60)m \(secs % 60)s" }
         let h = secs / 3600
         let m = (secs % 3600) / 60
         return "\(h)h \(m)m"

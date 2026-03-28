@@ -26,14 +26,12 @@ struct SessionOverviewContent: View {
     private var recentEvents: [RecentEventEntry] {
         var events: [RecentEventEntry] = []
         for sub in session.subagents.values {
-            // subagent 创建事件（Agent tool call）
             events.append(RecentEventEntry(
                 time: sub.startedAt,
                 subagentName: String(sub.name.prefix(10)),
                 toolName: "Agent",
                 isDone: !sub.state.isActive
             ))
-            // subagent 内部工具调用
             for call in sub.toolCalls {
                 events.append(RecentEventEntry(
                     time: call.startedAt,
@@ -52,24 +50,26 @@ struct SessionOverviewContent: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                // Stats grid
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 4) {
-                    statCell("Total Duration", value: elapsedSinceStart)
+                    statCell("Duration", value: elapsedSinceStart)
                     statCell("Cost", value: costLabel)
                     statCell("Tokens", value: tokensLabel)
                     statCell("Context", value: String(format: "%.0f%%", session.tokenUsage.contextUtilization * 100))
                 }
                 .padding(.bottom, 6)
+
                 contextBar
                     .padding(.bottom, 8)
-                Divider().padding(.vertical, 6)
 
+                Divider().padding(.vertical, 6)
                 subagentsSection
 
                 Divider().padding(.vertical, 6)
-                Text("Click to view details · Cmd+Click to compare")
-                    .font(.system(size: 9)).foregroundStyle(.tertiary)
+                Text("Click to view  ·  ⌘Click to compare")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
 
-                // MARK: - Activity Log（可折叠，固定高度）
                 let events = recentEvents
                 let totalToolCalls = session.subagents.count + session.subagents.values.reduce(0) { $0 + $1.toolCalls.count }
                 if !events.isEmpty {
@@ -77,7 +77,6 @@ struct SessionOverviewContent: View {
                     activitySection(events, total: totalToolCalls)
                 }
 
-                // MARK: - Agent Graph（可折叠，固定高度）
                 if !session.subagents.isEmpty {
                     Divider().padding(.vertical, 6)
                     agentGraphSection
@@ -88,20 +87,12 @@ struct SessionOverviewContent: View {
         .onReceive(timer) { t in
             if session.state.isActive {
                 tick = t
-                // F1: 保底 token 更新（仅 active session；历史 session 的 isActive==false，不会触发）
                 AgentService.shared.tokenTracker?.pollLiveTokens(surfaceId: session.surfaceId)
             }
         }
     }
 
-    private func statRow(_ label: String, value: String) -> some View {
-        HStack {
-            Text(label).font(.system(size: 10)).foregroundStyle(.secondary)
-            Spacer()
-            Text(value).font(.system(size: 10, design: .monospaced)).foregroundStyle(.primary)
-        }
-        .padding(.bottom, 3)
-    }
+    // MARK: - Stat Cell
 
     private func statCell(_ label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -114,66 +105,81 @@ struct SessionOverviewContent: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 5)
-        .padding(.horizontal, 7)
-        .background(Color(.separatorColor).opacity(0.25))
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .background(Color(.separatorColor).opacity(0.2))
         .clipShape(RoundedRectangle(cornerRadius: 5))
     }
 
+    // MARK: - Context Bar
+
     private var contextBar: some View {
         let u = CGFloat(session.tokenUsage.contextUtilization)
-        let color: Color = u < 0.55 ? (Color(hex: "#4caf50") ?? .green) : u < 0.75 ? .yellow : .red
+        let color: Color = u < 0.55 ? AgentColors.success : u < 0.75 ? AgentColors.idle : AgentColors.error
         return GeometryReader { geo in
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 2).fill(Color(.separatorColor)).frame(height: 4)
-                RoundedRectangle(cornerRadius: 2).fill(color)
-                    .frame(width: geo.size.width * u, height: 4)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color(.separatorColor).opacity(0.3))
+                    .frame(height: 4)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(color)
+                    .frame(width: max(0, geo.size.width * u), height: 4)
+                    .animation(.easeInOut(duration: 0.4), value: u)
             }
         }
         .frame(height: 4)
     }
+
+    // MARK: - Subagent Overview Row
 
     private func overviewRow(_ sub: SubagentInfo) -> some View {
         HStack(spacing: 6) {
             stateIcon(sub.state)
             Text(sub.name)
                 .font(.system(size: 10))
-                .foregroundStyle(Color(hex: "#569cd6") ?? .blue)
+                .foregroundStyle(AgentColors.linkBlue)
                 .lineLimit(1).truncationMode(.tail)
             stateBadge(sub.state)
             Spacer()
-            Text(elapsed(sub)).font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
+            Text(elapsed(sub))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
     }
 
     private func stateIcon(_ state: AgentState) -> some View {
         let (sym, col): (String, Color) = {
             switch state {
-            case .done:    return ("checkmark", Color(hex: "#4caf50") ?? .green)
-            case .error:   return ("xmark",     Color(hex: "#f44336") ?? .red)
-            case .working: return ("circle.fill", Color(hex: "#ff9800") ?? .orange)
+            case .done:    return ("checkmark.circle.fill", AgentColors.success)
+            case .error:   return ("xmark.circle.fill", AgentColors.error)
+            case .working: return ("circle.fill", AgentColors.active)
             default:       return ("circle", .secondary)
             }
         }()
-        return Image(systemName: sym).font(.system(size: 9)).foregroundStyle(col)
+        return Image(systemName: sym)
+            .font(.system(size: 9))
+            .foregroundStyle(col)
     }
 
     private func stateBadge(_ state: AgentState) -> some View {
         let (label, bg, fg): (String, Color, Color) = {
             switch state {
-            case .done:    return ("done",    Color(hex: "#1a2e1a") ?? .clear, Color(hex: "#4caf50") ?? .green)
-            case .error:   return ("error",   Color(hex: "#2e1a1a") ?? .clear, Color(hex: "#f44336") ?? .red)
-            case .working: return ("running", Color(hex: "#1a2535") ?? .clear, Color(hex: "#90bfff") ?? .blue)
-            default:       return ("idle",    Color(.separatorColor).opacity(0.4), .secondary)
+            case .done:    return ("done",    AgentColors.successBadgeBg,   AgentColors.success)
+            case .error:   return ("error",   AgentColors.errorBadgeBg,     AgentColors.error)
+            case .working: return ("running", AgentColors.activeBadgeBg,    AgentColors.active)
+            default:       return ("idle",    AgentColors.idleBadgeBg,      .secondary)
             }
         }()
         return Text(label)
             .font(.system(size: 8, weight: .medium))
             .padding(.horizontal, 4).padding(.vertical, 1)
-            .background(bg).foregroundStyle(fg)
+            .background(bg)
+            .foregroundStyle(fg)
             .clipShape(RoundedRectangle(cornerRadius: 3))
     }
+
+    // MARK: - Computed Labels
 
     private var elapsedSinceStart: String {
         let secs = max(0, Int(tick.timeIntervalSince(session.startedAt)))
@@ -210,21 +216,12 @@ struct SessionOverviewContent: View {
         return fmt
     }()
 
-    // MARK: - Subagents Section（可折叠，固定高度）
+    // MARK: - Subagents Section
 
     private var subagentsSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { subagentsExpanded.toggle() } }) {
-                HStack(spacing: 4) {
-                    Image(systemName: subagentsExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 8)).foregroundStyle(.secondary)
-                    Text("SUBAGENTS")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(.plain)
-            .padding(.bottom, 4)
+            sectionHeader("SUBAGENTS", expanded: $subagentsExpanded)
+                .padding(.bottom, 4)
 
             if subagentsExpanded {
                 ScrollView {
@@ -241,24 +238,19 @@ struct SessionOverviewContent: View {
         }
     }
 
+    // MARK: - Activity Section
+
     private func activitySection(_ events: [RecentEventEntry], total: Int) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { activityExpanded.toggle() } }) {
-                HStack(spacing: 4) {
-                    Image(systemName: activityExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 8)).foregroundStyle(.secondary)
-                    Text("ACTIVITY")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(.plain)
-            .padding(.bottom, 4)
+            sectionHeader("ACTIVITY", expanded: $activityExpanded)
+                .padding(.bottom, 4)
 
             if activityExpanded {
-                eventLogSection(events, total: total)
-                    .frame(maxHeight: 200)
-                    .clipped()
+                // 使用 ScrollView 替代 .clipped()，符合 ui-ux-rules.md 规范
+                ScrollView {
+                    eventLogSection(events, total: total)
+                }
+                .frame(maxHeight: 200)
             }
         }
     }
@@ -269,62 +261,75 @@ struct SessionOverviewContent: View {
             ForEach(Array(events.enumerated()), id: \.offset) { idx, ev in
                 HStack(spacing: 4) {
                     Text(fmt.string(from: ev.time))
-                        .font(.system(size: 9, design: .monospaced)).foregroundStyle(.tertiary)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(.tertiary)
                         .frame(width: 54, alignment: .leading)
                     Text(ev.subagentName)
-                        .font(.system(size: 9)).foregroundStyle(.secondary)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
                         .frame(width: 64, alignment: .leading)
                         .lineLimit(1).truncationMode(.tail)
                     Text(ev.toolName)
-                        .font(.system(size: 9)).foregroundStyle(.primary)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                     Spacer()
                     if ev.isDone {
                         Image(systemName: "checkmark")
                             .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(Color(hex: "#4caf50") ?? .green)
+                            .foregroundStyle(AgentColors.success)
                     } else {
                         Circle()
-                            .fill(Color.orange.opacity(0.7))
-                            .frame(width: 6, height: 6)
+                            .fill(AgentColors.active.opacity(0.7))
+                            .frame(width: 5, height: 5)
                     }
                 }
                 .padding(.vertical, 2)
                 .padding(.horizontal, 4)
-                .background(idx % 2 == 0 ? Color.clear : Color(.separatorColor).opacity(0.1))
+                .background(AgentColors.rowStripeBg.opacity(idx % 2 == 0 ? 0 : 1))
                 .clipShape(RoundedRectangle(cornerRadius: 3))
             }
             if total > 50 {
                 Text("… and \(total - 50) more")
-                    .font(.system(size: 9)).foregroundStyle(.tertiary)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
                     .padding(.top, 2)
             }
         }
     }
 
-    // MARK: - Agent Graph（可折叠，固定高度）
+    // MARK: - Agent Graph Section
 
     private var agentGraphSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: { withAnimation(.easeInOut(duration: 0.2)) { graphExpanded.toggle() } }) {
-                HStack(spacing: 4) {
-                    Image(systemName: graphExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 8)).foregroundStyle(.secondary)
-                    Text("AGENT GRAPH")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .buttonStyle(.plain)
-            .padding(.bottom, 4)
+            sectionHeader("AGENT GRAPH", expanded: $graphExpanded)
+                .padding(.bottom, 4)
 
             if graphExpanded {
                 AgentGraphView(session: session, tick: tick) { sub in
                     onSubagentTap?(sub)
                 }
                 .frame(height: 240)
-                .clipped()
             }
         }
+    }
+
+    // MARK: - Section Header Helper
+
+    private func sectionHeader(_ title: String, expanded: Binding<Bool>) -> some View {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.2)) { expanded.wrappedValue.toggle() }
+        }) {
+            HStack(spacing: 4) {
+                Image(systemName: expanded.wrappedValue ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.secondary)
+                Text(title)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
