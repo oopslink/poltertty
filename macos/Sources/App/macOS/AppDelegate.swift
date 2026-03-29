@@ -362,13 +362,8 @@ class AppDelegate: NSObject,
             }
         }
 
-        // Determine startup mode
-        let manager = WorkspaceManager.shared
-        let hasWorkspaces = !manager.formalWorkspaces.isEmpty
-
-        if (hasWorkspaces && PolterttyConfig.shared.restoreOnLaunch) || !hasWorkspaces {
-            openStartupWindow()
-        }
+        // 默认以普通终端模式启动，不展示 onboarding/restore 界面
+        // 用户可通过 ⌥⌘P 打开 workspace 侧边栏
 
         // Setup workspace menu
         setupWorkspaceMenu()
@@ -504,8 +499,8 @@ class AppDelegate: NSObject,
         // but I haven't seen it happen in releases. I'm unsure why.
         guard applicationHasBecomeActive else { return true }
 
-        // No visible windows — open the appropriate startup screen.
-        openStartupWindow()
+        // 无可见窗口时打开普通终端窗口
+        _ = TerminalController.newWindow(ghostty)
         return false
     }
 
@@ -772,6 +767,19 @@ class AppDelegate: NSObject,
     }
 
     @objc private func ghosttyNewWindow(_ notification: Notification) {
+        // workspace 模式下禁止在同一 workspace 创建新窗口
+        let sourceController: TerminalController?
+        if let surfaceView = notification.object as? Ghostty.SurfaceView,
+           let window = surfaceView.window {
+            sourceController = window.windowController as? TerminalController
+        } else {
+            sourceController = TerminalController.preferredParent
+        }
+        if let wsId = sourceController?.workspaceId,
+           WorkspaceManager.shared.windowForWorkspace(wsId) != nil {
+            return
+        }
+
         let configAny = notification.userInfo?[Ghostty.Notification.NewSurfaceConfigKey]
         let config = configAny as? Ghostty.SurfaceConfiguration
         _ = TerminalController.newWindow(ghostty, withBaseConfig: config)
@@ -1011,6 +1019,12 @@ class AppDelegate: NSObject,
     }
 
     @IBAction func newWindow(_ sender: Any?) {
+        // workspace 模式下禁止为同一 workspace 新建窗口
+        if let controller = TerminalController.preferredParent,
+           let wsId = controller.workspaceId,
+           WorkspaceManager.shared.windowForWorkspace(wsId) != nil {
+            return
+        }
         _ = TerminalController.newWindow(ghostty)
     }
 
@@ -1128,8 +1142,8 @@ class AppDelegate: NSObject,
 
         workspaceMenu.addItem(.separator())
 
-        let toggleSidebar = NSMenuItem(title: "Toggle Sidebar", action: #selector(toggleWorkspaceSidebar(_:)), keyEquivalent: "b")
-        toggleSidebar.keyEquivalentModifierMask = .command
+        let toggleSidebar = NSMenuItem(title: "Toggle Sidebar", action: #selector(toggleWorkspaceSidebar(_:)), keyEquivalent: "p")
+        toggleSidebar.keyEquivalentModifierMask = [.command, .option]
         workspaceMenu.addItem(toggleSidebar)
 
         let toggleFileBrowser = NSMenuItem(title: "Toggle File Browser", action: #selector(toggleFileBrowser(_:)), keyEquivalent: "\\")

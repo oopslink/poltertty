@@ -2053,6 +2053,11 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     // MARK: First Responder
 
     @IBAction func newWindow(_ sender: Any?) {
+        // workspace 模式下禁止为同一 workspace 新建窗口
+        if let wsId = workspaceId,
+           WorkspaceManager.shared.windowForWorkspace(wsId) != nil {
+            return
+        }
         guard let surface = focusedSurface?.surface else { return }
         ghostty.newWindow(surface: surface)
     }
