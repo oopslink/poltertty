@@ -51,10 +51,10 @@ struct GitChangesSection: View {
                 HStack {
                     Image(systemName: "checkmark.circle")
                         .font(.system(size: 10))
-                        .foregroundColor(.green.opacity(0.7))
+                        .foregroundStyle(.green.opacity(0.7))
                     Text("Working tree clean")
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 8)
@@ -92,16 +92,16 @@ struct GitChangesSection: View {
             HStack(spacing: 4) {
                 Image(systemName: isExpanded.wrappedValue ? "chevron.down" : "chevron.right")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(width: 10)
 
                 Text(title.uppercased())
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
 
                 Text("\(count)")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(accentColor.opacity(0.9))
+                    .foregroundStyle(accentColor.opacity(0.9))
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
                     .background(accentColor.opacity(0.12))
@@ -121,12 +121,13 @@ struct GitChangesSection: View {
     @ViewBuilder
     private func changeRow(_ change: GitChange, isStaged: Bool) -> some View {
         let isHovered = hoveredChangeId == change.id
+        let isKeyFocused = vm.selectedChangeId == change.id
         let fileName = URL(fileURLWithPath: change.path).lastPathComponent
 
         HStack(spacing: 4) {
             Text(change.delta.symbol)
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(Color(hex: change.delta.colorHex) ?? .secondary)
+                .foregroundStyle(Color(hex: change.delta.colorHex) ?? .secondary)
                 .frame(width: 14)
 
             Text(fileName)
@@ -140,7 +141,7 @@ struct GitChangesSection: View {
                 Button(action: { Task { await vm.unstage(change) } }) {
                     Image(systemName: "minus.circle")
                         .font(.system(size: 11))
-                        .foregroundColor(isHovered ? .secondary : .secondary.opacity(0.3))
+                        .foregroundStyle(isHovered ? Color.secondary : Color.secondary.opacity(0.3))
                 }
                 .buttonStyle(.plain)
                 .help("Unstage — Remove from next commit")
@@ -149,7 +150,7 @@ struct GitChangesSection: View {
                 Button(action: { Task { await vm.stage(change) } }) {
                     Image(systemName: "plus.circle")
                         .font(.system(size: 11))
-                        .foregroundColor(isHovered ? Color.green.opacity(0.85) : .secondary.opacity(0.3))
+                        .foregroundStyle(isHovered ? Color.green.opacity(0.85) : .secondary.opacity(0.3))
                 }
                 .buttonStyle(.plain)
                 .help("Stage — Add to next commit")
@@ -158,7 +159,7 @@ struct GitChangesSection: View {
                 Button(action: { discardConfirm = change }) {
                     Image(systemName: "arrow.uturn.backward")
                         .font(.system(size: 11))
-                        .foregroundColor(isHovered ? Color.orange.opacity(0.85) : .secondary.opacity(0.3))
+                        .foregroundStyle(isHovered ? Color.orange.opacity(0.85) : .secondary.opacity(0.3))
                 }
                 .buttonStyle(.plain)
                 .help("Discard Changes — Irreversible")
@@ -167,7 +168,16 @@ struct GitChangesSection: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
-        .background(isHovered ? Color.primary.opacity(0.05) : Color.clear)
+        .background(
+            isKeyFocused
+                ? Color(.controlAccentColor).opacity(0.18)
+                : isHovered ? Color.primary.opacity(0.05) : Color.clear
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 3)
+                .stroke(Color(.controlAccentColor).opacity(0.45), lineWidth: 1)
+                .opacity(isKeyFocused ? 1 : 0)
+        )
         .contentShape(Rectangle())
         .cornerRadius(3)
         .accessibilityElement(children: .combine)
@@ -176,6 +186,7 @@ struct GitChangesSection: View {
             hoveredChangeId = hovering ? change.id : nil
         }
         .onTapGesture {
+            vm.selectedChangeId = change.id
             Task { await vm.selectWorkingFile(change) }
         }
     }

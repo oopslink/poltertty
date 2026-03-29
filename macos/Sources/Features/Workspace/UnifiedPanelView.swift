@@ -88,7 +88,7 @@ private struct PanelTabBar: View {
             } label: {
                 Image(systemName: "questionmark")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
@@ -103,7 +103,7 @@ private struct PanelTabBar: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
@@ -121,7 +121,7 @@ private struct PanelTabBar: View {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: icon)
                     .font(.system(size: 14))
-                    .foregroundColor(
+                    .foregroundStyle(
                         activePanelTab == tab
                             ? Color(nsColor: .controlAccentColor)
                             : .secondary
@@ -147,7 +147,7 @@ private struct PanelTabBar: View {
                 if let count = badge {
                     Text(count > 99 ? "99+" : "\(count)")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 3)
                         .padding(.vertical, 1)
                         .background(Color.orange)
@@ -208,7 +208,7 @@ private struct PanelTabBar: View {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 7, weight: .semibold))
                 }
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
@@ -222,7 +222,7 @@ private struct PanelTabBar: View {
                     .font(.system(size: 11))
                     .lineLimit(1)
             }
-            .foregroundColor(.secondary)
+            .foregroundStyle(.secondary)
         }
     }
 }

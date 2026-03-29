@@ -38,6 +38,11 @@ struct AgentDashboardView: View {
             guard AgentDashboardWindowController.shared.window?.isKeyWindow == true else {
                 return event
             }
+            // Escape always closes, regardless of session count
+            if event.keyCode == 53 {                                  // Escape
+                AgentDashboardWindowController.shared.close()
+                return nil
+            }
             let sessions = viewModel.activeSessions
             guard !sessions.isEmpty else { return event }
             switch event.keyCode {
@@ -157,9 +162,11 @@ struct AgentDashboardView: View {
             Text("·")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
-            Text(String(format: "$%.2f", costDouble))
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(costDouble > 0 ? Color.orange : Color.primary)
+            if costDouble > 0 {
+                Text(String(format: "$%.2f", costDouble))
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Color.orange)
+            }
             Spacer()
         }
         .padding(.horizontal, 14)
@@ -196,18 +203,24 @@ struct AgentDashboardView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             Spacer()
             Image(systemName: "circle.hexagongrid")
-                .font(.system(size: 36, weight: .thin))
-                .foregroundStyle(.quaternary)
-            VStack(spacing: 3) {
+                .font(.system(size: 36, weight: .light))
+                .foregroundStyle(.tertiary)
+            VStack(spacing: 6) {
                 Text("No active agents")
-                    .font(.system(size: 12))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
-                Text("Double-tap Option to toggle · ⌘⇧A to launch")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                HStack(spacing: 6) {
+                    Label("Double-tap Option", systemImage: "option")
+                        .labelStyle(.titleAndIcon)
+                    Text("·").foregroundStyle(.quaternary)
+                    Label("⌘⇧A to launch", systemImage: "terminal")
+                        .labelStyle(.titleAndIcon)
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
             }
             Spacer()
         }
@@ -269,8 +282,8 @@ struct AgentDashboardView: View {
             Text("SUBAGENTS").frame(width: 56, alignment: .center)
             Text("TASK").frame(maxWidth: .infinity, alignment: .leading)
         }
-        .font(.system(size: 9, weight: .medium))
-        .foregroundStyle(.quaternary)
+        .font(.system(size: 10, weight: .medium))
+        .foregroundStyle(.tertiary)
         .tracking(0.4)
         .padding(.vertical, 3)
         .padding(.trailing, 8)
@@ -301,7 +314,7 @@ struct AgentDashboardView: View {
                             .lineLimit(1)
                         if let model = session.model {
                             Text(shortModelName(model))
-                                .font(.system(size: 8, design: .monospaced))
+                                .font(.system(size: 10, design: .monospaced))
                                 .foregroundStyle(.tertiary)
                                 .lineLimit(1)
                         }
@@ -328,7 +341,7 @@ struct AgentDashboardView: View {
                         ContextUtilBar(utilization: ctx)
                             .frame(width: 50)
                         Text(String(format: "%.0f%%", ctx * 100))
-                            .font(.system(size: 8, design: .monospaced))
+                            .font(.system(size: 10, design: .monospaced))
                             .foregroundStyle(.tertiary)
                     } else {
                         Text("—").font(.system(size: 10)).foregroundStyle(.quaternary)
@@ -516,10 +529,10 @@ struct AgentDashboardView: View {
                 VStack(spacing: 2) {
                     ContextUtilBar(utilization: ctx)
                     HStack {
-                        Text("CONTEXT").font(.system(size: 8)).foregroundStyle(.quaternary)
+                        Text("CONTEXT").font(.system(size: 10)).foregroundStyle(.tertiary)
                         Spacer()
                         Text(String(format: "%.0f%%", ctx * 100))
-                            .font(.system(size: 8, design: .monospaced))
+                            .font(.system(size: 10, design: .monospaced))
                             .foregroundStyle(.tertiary)
                     }
                 }
@@ -581,7 +594,7 @@ struct AgentDashboardView: View {
         return HStack(spacing: 0) {
             HStack(spacing: 5) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 8))
+                    .font(.system(size: 10))
                     .foregroundStyle(Color.green.opacity(0.5))
                 Text(session.agentIcon).font(.system(size: 10))
                 Text(session.agentName).font(.system(size: 10))

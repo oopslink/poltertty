@@ -21,6 +21,7 @@ class GitPanelViewModel: ObservableObject {
     @Published var selectedDiff: GitFileDiff?
     @Published var isDiffMaximized: Bool = false
     @Published var selectedCommitFileId: String?   // 当前选中的 commit 文件 ID，用于高亮
+    @Published var selectedChangeId: String?        // 键盘导航：当前聚焦的变更文件 ID
 
     @Published var isLoading = false
     @Published var error: String?
@@ -145,6 +146,13 @@ class GitPanelViewModel: ObservableObject {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// 键盘导航选中变更文件：清除 commit 选中状态并加载 working diff
+    func selectChange(_ change: GitChange) async {
+        selectedChangeId = change.id
+        selectedCommitFileId = nil
+        await selectWorkingFile(change)
     }
 
     // MARK: - DispatchSource watching

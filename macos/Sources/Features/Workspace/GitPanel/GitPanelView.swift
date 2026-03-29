@@ -16,13 +16,56 @@ struct GitPanelView: View {
                 // 面板出现（含 Tab 切换）时自动获取焦点，确保快捷键立即可用
                 DispatchQueue.main.async { isFocused = true }
             }
-            .backport.onKeyPress("f") { handleFKey(modifiers: $0) }
+            .backport.onKeyPress("f")                   { handleFKey(modifiers: $0) }
+            .backport.onKeyPress(KeyEquivalent.upArrow)  { _ in handleChangeNav(delta: -1) }
+            .backport.onKeyPress(KeyEquivalent.downArrow){ _ in handleChangeNav(delta: 1) }
+            .backport.onKeyPress(KeyEquivalent.return)   { _ in handleChangeReturn() }
+            .backport.onKeyPress("s")                   { handleStageToggle(modifiers: $0) }
     }
 
     private func handleFKey(modifiers: EventModifiers) -> BackportKeyPressResult {
         guard isFocused, !modifiers.contains(.command) else { return .ignored }
         onSwitchToFilesTab?()
         return .handled
+    }
+
+    /// 在所有变更文件（staged + unstaged）中上下导航
+    private func handleChangeNav(delta: Int) -> BackportKeyPressResult {
+        guard isFocused else { return .ignored }
+        let all = vm.stagedFiles + vm.unstagedFiles
+        guard !all.isEmpty else { return .ignored }
+        if let current = vm.selectedChangeId,
+           let idx = all.firstIndex(where: { $0.id == current }) {
+            let next = max(0, min(all.count - 1, idx + delta))
+            vm.selectedChangeId = all[next].id
+        } else {
+            vm.selectedChangeId = delta >= 0 ? all.first?.id : all.last?.id
+        }
+        return .handled
+    }
+
+    /// Return：查看选中文件的 diff
+    private func handleChangeReturn() -> BackportKeyPressResult {
+        guard isFocused, let id = vm.selectedChangeId else { return .ignored }
+        let all = vm.stagedFiles + vm.unstagedFiles
+        guard let change = all.first(where: { $0.id == id }) else { return .ignored }
+        Task { await vm.selectChange(change) }
+        return .handled
+    }
+
+    /// S：暂存 / 取消暂存选中文件
+    private func handleStageToggle(modifiers: EventModifiers) -> BackportKeyPressResult {
+        guard isFocused, modifiers.isEmpty,
+              let id = vm.selectedChangeId else { return .ignored }
+        if let change = vm.stagedFiles.first(where: { $0.id == id }) {
+            Task { await vm.unstage(change) }
+            return .handled
+        }
+        if let change = vm.unstagedFiles.first(where: { $0.id == id }) {
+            Task { await vm.stage(change) }
+            return .handled
+        }
+        return .ignored
     }
 
     @ViewBuilder
@@ -32,16 +75,16 @@ struct GitPanelView: View {
                 Spacer()
                 Image(systemName: "arrow.triangle.branch")
                     .font(.system(size: 32))
-                    .foregroundColor(.secondary.opacity(0.5))
+                    .foregroundStyle(.secondary.opacity(0.5))
                 Text("Not a git repository")
                     .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .padding(.top, 8)
                 if !vm.lastAttemptedDir.isEmpty {
                     Text(vm.lastAttemptedDir.replacingOccurrences(
                         of: NSHomeDirectory(), with: "~"))
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .foregroundStyle(.secondary.opacity(0.7))
                         .lineLimit(2)
                         .truncationMode(.middle)
                         .multilineTextAlignment(.center)
@@ -50,7 +93,7 @@ struct GitPanelView: View {
                 }
                 Text("Run `git init` in the terminal to initialize a repository,\nor open a directory that already contains one.")
                     .font(.system(size: 11))
-                    .foregroundColor(.secondary.opacity(0.7))
+                    .foregroundStyle(.secondary.opacity(0.7))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
@@ -65,7 +108,7 @@ struct GitPanelView: View {
                     if let err = vm.error {
                         Text(err)
                             .font(.system(size: 10))
-                            .foregroundColor(.red)
+                            .foregroundStyle(.red)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                     }
@@ -104,7 +147,7 @@ struct GitPanelView: View {
         HStack(spacing: 8) {
             Image(systemName: "doc.text.magnifyingglass")
                 .font(.system(size: 13))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
 
             if let diff = vm.selectedDiff {
                 Text(URL(fileURLWithPath: diff.path).lastPathComponent)
@@ -112,13 +155,13 @@ struct GitPanelView: View {
                     .lineLimit(1)
                 Text(diff.path)
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.head)
             } else {
                 Text("Diff")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
@@ -134,7 +177,7 @@ struct GitPanelView: View {
                           ? "arrow.down.right.and.arrow.up.left"
                           : "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
                 }
@@ -148,7 +191,7 @@ struct GitPanelView: View {
                 }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
                 }

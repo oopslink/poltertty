@@ -568,6 +568,21 @@ final class CtrlServer {
                 "inputSchema": ["type": "object", "properties": [String: Any]()]
             ],
             [
+                "name": "show_file_browser",
+                "description": "Toggle the File Browser panel (Files tab) in the key window",
+                "inputSchema": ["type": "object", "properties": [String: Any]()]
+            ],
+            [
+                "name": "show_git_panel",
+                "description": "Toggle the Git panel (Git tab) in the key window",
+                "inputSchema": ["type": "object", "properties": [String: Any]()]
+            ],
+            [
+                "name": "show_agent_monitor",
+                "description": "Toggle the Agent Monitor side drawer in the key window",
+                "inputSchema": ["type": "object", "properties": [String: Any]()]
+            ],
+            [
                 "name": "send_key",
                 "description": "Send a keyboard key event to a pane via the full key-handling pipeline. Supports: enter, escape, tab, backspace, up, down, left, right, ctrl+c, ctrl+u, ctrl+d, ctrl+l, etc.",
                 "inputSchema": [

@@ -18,12 +18,12 @@ struct GitCommitRow: View {
             HStack(spacing: 5) {
                 Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(width: 10)
 
                 Text(commit.shortId)
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.accentColor.opacity(0.8))
+                    .foregroundStyle(Color.accentColor.opacity(0.8))
 
                 Text(commit.message)
                     .font(.system(size: 11))
@@ -34,7 +34,7 @@ struct GitCommitRow: View {
 
                 Text(commit.date.relativeShort)
                     .font(.system(size: 10))
-                    .foregroundColor(.secondary.opacity(0.7))
+                    .foregroundStyle(.secondary.opacity(0.7))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -61,7 +61,7 @@ struct GitCommitRow: View {
                             HStack(spacing: 4) {
                                 Text(file.delta.symbol)
                                     .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                    .foregroundColor(Color(hex: file.delta.colorHex) ?? .secondary)
+                                    .foregroundStyle(Color(hex: file.delta.colorHex) ?? .secondary)
                                     .frame(width: 14)
                                 Text(URL(fileURLWithPath: file.path).lastPathComponent)
                                     .font(.system(size: 11))
@@ -70,7 +70,7 @@ struct GitCommitRow: View {
                                 Spacer()
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 9))
-                                    .foregroundColor(.secondary.opacity(fileHovered || isSelected ? 0.8 : 0.4))
+                                    .foregroundStyle(.secondary.opacity(fileHovered || isSelected ? 0.8 : 0.4))
                             }
                             .padding(.leading, 20)
                             .padding(.trailing, 8)
@@ -96,7 +96,7 @@ struct GitCommitRow: View {
                     ProgressView().scaleEffect(0.6)
                     Text("Loading...")
                         .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
