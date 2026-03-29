@@ -332,6 +332,14 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .onReceive(NotificationCenter.default.publisher(for: .toggleAgentMonitor)) { _ in
             agentMonitorVM.toggle()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleFileBrowser)) { _ in
+            if fileBrowserVM.isVisible {
+                fileBrowserVM.isVisible = false
+            } else {
+                fileBrowserVM.isVisible = true
+                activePanelTab = .files
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .toggleGitPanel)) { _ in
             if fileBrowserVM.isVisible {
                 if activePanelTab == .git {

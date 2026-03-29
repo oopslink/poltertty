@@ -45,6 +45,9 @@ final class CtrlToolHandler: Sendable {
         case "git_panel_state":       return try await callGitPanelState(arguments: arguments)
         case "open_workspace":        return try await callOpenWorkspace(arguments: arguments)
         case "show_agent_dashboard":  return try await callShowAgentDashboard()
+        case "show_file_browser":     return try await callShowFileBrowser(arguments: arguments)
+        case "show_git_panel":        return try await callShowGitPanel(arguments: arguments)
+        case "show_agent_monitor":    return try await callShowAgentMonitor(arguments: arguments)
         case "send_key":              return try await callSendKey(arguments: arguments)
         default:
             throw RPCError(code: -32601, message: "Unknown tool: \(name)")
@@ -756,6 +759,36 @@ final class CtrlToolHandler: Sendable {
         await MainActor.run {
             AgentDashboardWindowController.shared.showWindow(nil)
             AgentDashboardWindowController.shared.window?.makeKeyAndOrderFront(nil)
+        }
+        return #"{"ok":true}"#
+    }
+
+    // MARK: - show_file_browser
+
+    /// 打开文件浏览器面板（Files Tab）。
+    private func callShowFileBrowser(arguments: [String: Any]) async throws -> String {
+        await MainActor.run {
+            NotificationCenter.default.post(name: .init("poltertty.toggleFileBrowser"), object: nil)
+        }
+        return #"{"ok":true}"#
+    }
+
+    // MARK: - show_git_panel
+
+    /// 打开指定 workspace 的 Git 面板（Git Tab）。
+    private func callShowGitPanel(arguments: [String: Any]) async throws -> String {
+        await MainActor.run {
+            NotificationCenter.default.post(name: .init("poltertty.toggleGitPanel"), object: nil)
+        }
+        return #"{"ok":true}"#
+    }
+
+    // MARK: - show_agent_monitor
+
+    /// 打开 Agent Monitor 侧边抽屉。
+    private func callShowAgentMonitor(arguments: [String: Any]) async throws -> String {
+        await MainActor.run {
+            NotificationCenter.default.post(name: .init("poltertty.toggleAgentMonitor"), object: nil)
         }
         return #"{"ok":true}"#
     }

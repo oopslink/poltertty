@@ -103,9 +103,10 @@ final class AgentDashboardViewModel: ObservableObject {
         return String(format: "%.1fk", Double(total) / 1000.0)
     }
 
-    /// 费用格式化
+    /// 费用格式化（零费用返回空字符串）
     func costString(for usage: TokenUsage) -> String {
         let cost = NSDecimalNumber(decimal: usage.cost).doubleValue
+        guard cost > 0 else { return "" }
         return String(format: "$%.2f", cost)
     }
 

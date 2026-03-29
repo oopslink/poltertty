@@ -39,6 +39,12 @@ struct ShortcutHelpView: View {
             ShortcutItem(keys: "⌘⇧C", description: "Copy Path"),
             ShortcutItem(keys: "⌘A", description: "Select All"),
         ]),
+        ShortcutSection(title: "Git Panel", items: [
+            ShortcutItem(keys: "↑ / ↓", description: "Select Changed File"),
+            ShortcutItem(keys: "Return", description: "View Diff"),
+            ShortcutItem(keys: "s", description: "Stage / Unstage File"),
+            ShortcutItem(keys: "f", description: "Switch to Files Tab"),
+        ]),
         ShortcutSection(title: "Help", items: [
             ShortcutItem(keys: "?", description: "Show/Hide Shortcuts"),
             ShortcutItem(keys: "Esc", description: "Close This Panel"),
@@ -63,18 +69,18 @@ struct ShortcutHelpView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(section.title)
                                 .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                                 .padding(.horizontal, 16)
 
                             ForEach(section.items) { item in
                                 HStack(spacing: 0) {
                                     Text(item.keys)
                                         .font(.system(size: 11, design: .monospaced))
-                                        .foregroundColor(.primary)
+                                        .foregroundStyle(.primary)
                                         .frame(width: 80, alignment: .leading)
                                     Text(item.description)
                                         .font(.system(size: 11))
-                                        .foregroundColor(.secondary)
+                                        .foregroundStyle(.secondary)
                                     Spacer()
                                 }
                                 .padding(.horizontal, 16)

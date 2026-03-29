@@ -12,7 +12,7 @@ struct DiffView: View {
             if let t = title {
                 Text(t)
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -23,7 +23,7 @@ struct DiffView: View {
                 if diff.patches.isEmpty {
                     Text("No changes")
                         .font(.system(size: 12))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     GeometryReader { geo in
@@ -43,10 +43,23 @@ struct DiffView: View {
                     }
                 }
             } else {
-                Text("Select a file to view diff")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 10) {
+                    Spacer()
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundStyle(.tertiary)
+                    VStack(spacing: 4) {
+                        Text("No file selected")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Text("Click a changed file on the left to view its diff")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+                            .multilineTextAlignment(.center)
+                    }
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -70,7 +83,7 @@ private struct PatchRowView: View {
             // Hunk header
             Text(patch.header)
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(Color(hex: "#60a5fa") ?? .blue)
+                .foregroundStyle(Color(hex: "#60a5fa") ?? .blue)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -84,7 +97,7 @@ private struct PatchRowView: View {
                 Button(action: { isExpanded = true }) {
                     Text("展开剩余 \(lines.count - maxVisibleLines) 行…")
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -101,24 +114,24 @@ private struct PatchRowView: View {
             // 旧行号
             Text(line.oldLineNo.map { "\($0)" } ?? "")
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary.opacity(0.5))
+                .foregroundStyle(.secondary.opacity(0.5))
                 .frame(width: 36, alignment: .trailing)
                 .padding(.trailing, 4)
             // 新行号
             Text(line.newLineNo.map { "\($0)" } ?? "")
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary.opacity(0.5))
+                .foregroundStyle(.secondary.opacity(0.5))
                 .frame(width: 36, alignment: .trailing)
                 .padding(.trailing, 6)
             // 前缀符号
             Text(linePrefix(for: line.origin))
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(lineForeground(for: line.origin))
+                .foregroundStyle(lineForeground(for: line.origin))
                 .frame(width: 12)
             // 内容
             Text(line.content)
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(lineForeground(for: line.origin))
+                .foregroundStyle(lineForeground(for: line.origin))
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
         }
