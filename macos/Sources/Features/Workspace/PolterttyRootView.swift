@@ -417,12 +417,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .sheet(isPresented: $showConvertAlert) {
             convertToFormalSheet
         }
-        .onChange(of: manager.formalWorkspaces.count) { count in
-            // When all formal workspaces are deleted, return to onboarding
-            if count == 0 && startupMode == .terminal {
-                startupMode = .onboarding
-            }
-        }
+        // 删除所有 workspace 后保持 terminal 模式（不跳 onboarding），用户可通过侧边栏重新创建
     }
 
     private func navigateWorkspace(direction: Int) {
