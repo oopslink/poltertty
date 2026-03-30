@@ -34,10 +34,9 @@ Poltertty 是 [Ghostty](https://ghostty.org) 的 macOS fork，在完整保留 Gh
 - **创建与管理** — 每个 Workspace 拥有独立的名称、颜色、图标、根目录和描述
 - **分组** — 将相关 Workspace 整理到可折叠分组中，侧边栏拖拽重新排序
 - **持久化** — 配置与窗口快照自动保存至 `~/.config/poltertty/workspaces/`，重启后自动恢复
-- **临时 Workspace** — 打开目录时创建临时 Workspace，退出后自动清理，不写入磁盘
 - **快速切换** — `Cmd+K` 在 Workspace 间瞬间跳转
-- **侧边栏** — 右键菜单支持重命名、删除和移入分组；双击空白区域快速新建临时 Workspace
-- **单窗口限制** — Workspace 模式激活时只允许一个 Poltertty 窗口；打开新 Workspace 以获取新窗口
+- **侧边栏** — 右键菜单支持重命名、删除和移入分组
+- **单窗口限制** — 每个 Workspace 独占一个窗口；`⌘N` 在 Workspace 模式下打开一个独立的普通终端窗口
 
 ### Git Worktree 管理
 
@@ -104,7 +103,7 @@ Poltertty 是 [Ghostty](https://ghostty.org) 的 macOS fork，在完整保留 Gh
 
 ### 文件浏览器
 
-直接集成在终端内的轻量文件树面板（`Cmd+\`）：
+直接集成在终端内的轻量文件树面板（`⌥⌘F`）：
 
 - **树形视图** — 浏览 Workspace 根目录；单击展开/折叠目录
 - **多选操作** — `Cmd+A` 全选、`Shift+Click` 范围选择，支持批量删除和移动

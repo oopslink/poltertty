@@ -1019,12 +1019,6 @@ class AppDelegate: NSObject,
     }
 
     @IBAction func newWindow(_ sender: Any?) {
-        // workspace 模式下禁止为同一 workspace 新建窗口
-        if let controller = TerminalController.preferredParent,
-           let wsId = controller.workspaceId,
-           WorkspaceManager.shared.windowForWorkspace(wsId) != nil {
-            return
-        }
         _ = TerminalController.newWindow(ghostty)
     }
 
@@ -1095,18 +1089,6 @@ class AppDelegate: NSObject,
         }
     }
 
-    @IBAction func newTemporaryWorkspace(_ sender: Any?) {
-        let manager = WorkspaceManager.shared
-        let workspace = manager.createTemporary()
-
-        var config = Ghostty.SurfaceConfiguration()
-        config.workingDirectory = workspace.rootDirExpanded
-        let controller = TerminalController.newWindow(ghostty, withBaseConfig: config, workspaceId: workspace.id)
-        if let window = controller.window {
-            manager.registerWindow(window, for: workspace.id)
-        }
-    }
-
     private func setupTabNavigationMenuItems() {
         guard let windowMenu = NSApp.mainMenu?.item(withTitle: "Window")?.submenu else { return }
 
@@ -1136,22 +1118,18 @@ class AppDelegate: NSObject,
         newItem.keyEquivalentModifierMask = [.command, .shift]
         workspaceMenu.addItem(newItem)
 
-        let newTemp = NSMenuItem(title: "New Temporary Workspace", action: #selector(newTemporaryWorkspace(_:)), keyEquivalent: "T")
-        newTemp.keyEquivalentModifierMask = [.command, .shift]
-        workspaceMenu.addItem(newTemp)
-
         workspaceMenu.addItem(.separator())
 
         let toggleSidebar = NSMenuItem(title: "Toggle Sidebar", action: #selector(toggleWorkspaceSidebar(_:)), keyEquivalent: "p")
         toggleSidebar.keyEquivalentModifierMask = [.command, .option]
         workspaceMenu.addItem(toggleSidebar)
 
-        let toggleFileBrowser = NSMenuItem(title: "Toggle File Browser", action: #selector(toggleFileBrowser(_:)), keyEquivalent: "\\")
-        toggleFileBrowser.keyEquivalentModifierMask = .command
+        let toggleFileBrowser = NSMenuItem(title: "Toggle File Browser", action: #selector(toggleFileBrowser(_:)), keyEquivalent: "f")
+        toggleFileBrowser.keyEquivalentModifierMask = [.command, .option]
         workspaceMenu.addItem(toggleFileBrowser)
 
         let toggleGitPanel = NSMenuItem(title: "Toggle Git Tab", action: #selector(toggleGitPanel(_:)), keyEquivalent: "g")
-        toggleGitPanel.keyEquivalentModifierMask = [.command, .shift]
+        toggleGitPanel.keyEquivalentModifierMask = [.command, .option]
         workspaceMenu.addItem(toggleGitPanel)
 
         let workspaceMenuItem = NSMenuItem(title: "Workspace", action: nil, keyEquivalent: "")

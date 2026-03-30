@@ -28,3 +28,15 @@
 - 临时 Workspace 不持久化到磁盘（`save()` 和 `saveSnapshot()` 中有 guard）
 - App 退出时 `destroyAllTemporary()` 必须在 snapshot 保存循环之前调用
 - 创建临时 Workspace 使用随机颜色（从 `temporaryColors` 数组随机选取）
+
+## 快捷键规范
+
+Workspace 功能菜单项的快捷键统一使用 `Option+Cmd` 前缀：
+
+| 功能 | 快捷键 |
+|------|--------|
+| Toggle Sidebar | ⌥⌘P |
+| Toggle File Browser | ⌥⌘F |
+| Toggle Git Tab | ⌥⌘G |
+
+**新增功能快捷键必须使用 `[.command, .option]` 修饰符**，避免与 Ghostty 原生 `⌘` / `⌘⇧` 快捷键冲突。
