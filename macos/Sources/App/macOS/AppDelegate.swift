@@ -104,6 +104,9 @@ class AppDelegate: NSObject,
     /// The global undo manager for app-level state such as window restoration.
     lazy var undoManager = ExpiringUndoManager()
 
+    /// 新建 Workspace 对话框的窗口引用，防止被 ARC 提前释放
+    private var newWorkspacePanel: NSWindow?
+
     /// The current state of the quick terminal.
     private var quickTerminalControllerState: QuickTerminalState = .uninitialized
 
@@ -1076,17 +1079,49 @@ class AppDelegate: NSObject,
     }
 
     @IBAction func newWorkspace(_ sender: Any?) {
-        let name = "workspace-\(WorkspaceManager.shared.workspaces.count + 1)"
-        let rootDir = FileManager.default.currentDirectoryPath
-        let workspace = WorkspaceManager.shared.create(name: name, rootDir: rootDir)
+        let form = WorkspaceCreateForm(
+            onSubmit: { [weak self] name, rootDir, color, description in
+                guard let self else { return }
+                self.dismissNewWorkspacePanel()
+                let workspace = WorkspaceManager.shared.create(
+                    name: name, rootDir: rootDir, colorHex: color, description: description
+                )
+                var config = Ghostty.SurfaceConfiguration()
+                config.workingDirectory = workspace.rootDirExpanded
+                let controller = TerminalController(self.ghostty, withBaseConfig: config, workspaceId: workspace.id)
+                controller.showWindow(nil)
+                if let window = controller.window {
+                    WorkspaceManager.shared.registerWindow(window, for: workspace.id)
+                }
+            },
+            onCancel: { [weak self] in
+                self?.dismissNewWorkspacePanel()
+            }
+        )
 
-        var config = Ghostty.SurfaceConfiguration()
-        config.workingDirectory = workspace.rootDirExpanded
-        let controller = TerminalController(ghostty, withBaseConfig: config, workspaceId: workspace.id)
-        controller.showWindow(nil)
-        if let window = controller.window {
-            WorkspaceManager.shared.registerWindow(window, for: workspace.id)
+        let hc = NSHostingController(rootView: form)
+        let panel = NSWindow(contentViewController: hc)
+        panel.title = "New Workspace"
+        panel.styleMask = [.titled, .closable]
+        panel.isReleasedWhenClosed = false
+        newWorkspacePanel = panel
+
+        if let keyWindow = NSApp.keyWindow {
+            keyWindow.beginSheet(panel)
+        } else {
+            panel.center()
+            panel.makeKeyAndOrderFront(nil)
         }
+    }
+
+    private func dismissNewWorkspacePanel() {
+        guard let panel = newWorkspacePanel else { return }
+        if let parent = panel.sheetParent {
+            parent.endSheet(panel)
+        } else {
+            panel.close()
+        }
+        newWorkspacePanel = nil
     }
 
     private func setupTabNavigationMenuItems() {
