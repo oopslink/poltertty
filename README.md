@@ -30,12 +30,14 @@ Modern AI coding agents — Claude Code, Gemini CLI, OpenCode — run inside ter
 
 Persistent, per-project terminal environments:
 
+- **Opt-in mode** — Workspace mode is disabled by default; enable it via the menu or press `⌥⌘P` to toggle the sidebar
 - **Create & manage** — each Workspace has a name, color, icon, root directory, and description
 - **Groups** — organize Workspaces into collapsible groups in the sidebar; drag-and-drop to reorganize
 - **Persistence** — configuration and window snapshots saved to `~/.config/poltertty/workspaces/`, restored automatically on restart
 - **Temporary Workspaces** — opening a directory creates a transient Workspace that is cleaned up on exit, nothing written to disk
 - **Quick Switcher** — `Cmd+K` to jump between Workspaces instantly
 - **Sidebar** — right-click to rename, delete, or move to group; double-click empty area to create a temporary Workspace
+- **Single-window constraint** — when Workspace mode is active, only one Poltertty window is allowed; open a new Workspace to get a new window
 
 ### Git Worktree Management
 
