@@ -74,7 +74,7 @@ final class AppCommandRegistry: ObservableObject {
                     guard let wsId = (NSApp.keyWindow?.windowController as? TerminalController)?.workspaceId
                             ?? (NSApp.mainWindow?.windowController as? TerminalController)?.workspaceId
                     else { return }
-                    NotificationCenter.default.post(name: .toggleWorkspaceSidebar, object: wsId as AnyObject)
+                    NotificationCenter.default.post(name: .toggleWorkspaceSidebar, object: nil, userInfo: ["workspaceId": wsId])
                 }
             ),
             CommandOption(
