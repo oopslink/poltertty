@@ -318,7 +318,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
         }
         .onAppear { startupMode = initialStartupMode }
         .onReceive(NotificationCenter.default.publisher(for: .toggleWorkspaceSidebar)) { notification in
-            guard (notification.userInfo?["workspaceId"] as? UUID) == workspaceId else { return }
+            guard notification.object as? NSWindow == windowProvider() else { return }
             sidebarVisible.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleWorkspaceQuickSwitcher)) { _ in
