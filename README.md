@@ -34,10 +34,9 @@ Persistent, per-project terminal environments:
 - **Create & manage** — each Workspace has a name, color, icon, root directory, and description
 - **Groups** — organize Workspaces into collapsible groups in the sidebar; drag-and-drop to reorganize
 - **Persistence** — configuration and window snapshots saved to `~/.config/poltertty/workspaces/`, restored automatically on restart
-- **Temporary Workspaces** — opening a directory creates a transient Workspace that is cleaned up on exit, nothing written to disk
 - **Quick Switcher** — `Cmd+K` to jump between Workspaces instantly
-- **Sidebar** — right-click to rename, delete, or move to group; double-click empty area to create a temporary Workspace
-- **Single-window constraint** — when Workspace mode is active, only one Poltertty window is allowed; open a new Workspace to get a new window
+- **Sidebar** — right-click to rename, delete, or move to group
+- **Single-window constraint** — each Workspace owns exactly one window; `⌘N` opens a new plain terminal window outside Workspace mode
 
 ### Git Worktree Management
 
@@ -104,7 +103,7 @@ Keyboard-first navigation across split panes:
 
 ### File Browser
 
-A lightweight file tree panel, integrated directly into the terminal (`Cmd+\`):
+A lightweight file tree panel, integrated directly into the terminal (`⌥⌘F`):
 
 - **Tree view** — browse the Workspace root; single-click to expand/collapse directories
 - **Multi-select** — `Cmd+A` to select all, `Shift+Click` for range selection; batch delete and move
