@@ -1252,7 +1252,10 @@ class AppDelegate: NSObject,
     }
 
     @objc func toggleWorkspaceSidebar(_ sender: Any?) {
-        NotificationCenter.default.post(name: .toggleWorkspaceSidebar, object: nil)
+        guard let window = NSApp.keyWindow,
+              let controller = window.windowController as? TerminalController,
+              let wsId = controller.workspaceId else { return }
+        NotificationCenter.default.post(name: .toggleWorkspaceSidebar, object: wsId as AnyObject)
     }
 
     @objc func toggleFileBrowser(_ sender: Any?) {

@@ -5,7 +5,11 @@ import SwiftUI
 
 /// AppKit 侧观察 NSHostingView 的实际渲染宽度，传给 SwiftUI 用于计算可见 tab 数
 final class ToolbarWidthTracker: ObservableObject {
-    @Published var availableWidth: CGFloat = 400
+    @Published var availableWidth: CGFloat
+
+    init(initialWidth: CGFloat = 400) {
+        self.availableWidth = initialWidth
+    }
 }
 
 // MARK: - NSToolbar 代理
@@ -19,12 +23,13 @@ final class WorkspaceToolbarDelegate: NSObject, NSToolbarDelegate {
     private let onNewTab: () -> Void
     private let onCloseTab: (UUID) -> Void
     private let onSwitchTab: (UUID) -> Void
-    private let widthTracker = ToolbarWidthTracker()
+    private let widthTracker: ToolbarWidthTracker
 
     init(
         tabBarViewModel: TabBarViewModel,
         workspaceName: String,
         accentColor: Color,
+        initialWidth: CGFloat = 800,
         onNewTab: @escaping () -> Void,
         onCloseTab: @escaping (UUID) -> Void,
         onSwitchTab: @escaping (UUID) -> Void
@@ -32,6 +37,7 @@ final class WorkspaceToolbarDelegate: NSObject, NSToolbarDelegate {
         self.tabBarViewModel = tabBarViewModel
         self.workspaceName = workspaceName
         self.accentColor = accentColor
+        self.widthTracker = ToolbarWidthTracker(initialWidth: initialWidth)
         self.onNewTab = onNewTab
         self.onCloseTab = onCloseTab
         self.onSwitchTab = onSwitchTab

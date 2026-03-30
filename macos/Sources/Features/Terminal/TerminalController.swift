@@ -1706,10 +1706,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         if let wsId = workspaceId,
            let workspace = WorkspaceManager.shared.workspace(for: wsId) {
             let accentColor = Color(hex: workspace.colorHex) ?? .accentColor
+            let initialWidth = window.contentView?.frame.width ?? 800
             let delegate = WorkspaceToolbarDelegate(
                 tabBarViewModel: tabBarViewModel,
                 workspaceName: workspace.name,
                 accentColor: accentColor,
+                initialWidth: initialWidth,
                 onNewTab: { [weak self] in self?.addNewTab() },
                 onCloseTab: { [weak self] id in self?.closePolterttyTab(id) },
                 onSwitchTab: { [weak self] id in self?.switchToTab(id) }

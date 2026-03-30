@@ -71,7 +71,10 @@ final class AppCommandRegistry: ObservableObject {
                 subtitle: "Workspace Sidebar",
                 leadingIcon: "sidebar.left",
                 action: {
-                    NotificationCenter.default.post(name: .toggleWorkspaceSidebar, object: nil)
+                    guard let wsId = (NSApp.keyWindow?.windowController as? TerminalController)?.workspaceId
+                            ?? (NSApp.mainWindow?.windowController as? TerminalController)?.workspaceId
+                    else { return }
+                    NotificationCenter.default.post(name: .toggleWorkspaceSidebar, object: wsId as AnyObject)
                 }
             ),
             CommandOption(

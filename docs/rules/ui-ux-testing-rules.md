@@ -494,7 +494,101 @@ AgentDashboardWindowController.shared.close()
 
 ---
 
-## 9. 常见问题
+## 9. 多窗口场景测试
+
+涉及以下任意一类改动时，**必须**进行多窗口验证：
+
+- 新增或修改菜单项/快捷键 action
+- 新增 `NotificationCenter.default.post`
+- 修改 per-window 视图的 `onReceive`
+- 修改 toolbar/titlebar 初始化逻辑
+
+### 9.1 快捷键隔离测试
+
+验证快捷键只作用于当前焦点窗口，不广播到其他窗口。
+
+```bash
+PORT=$(lsof -i -n -P 2>/dev/null | grep ghostty | grep LISTEN | awk '{print $9}' | sed 's/.*://' | head -1)
+
+# 1. 打开两个 workspace 窗口
+WS1=$(curl -s -X POST http://localhost:$PORT/v1/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"open_workspace","arguments":{"directory":"/tmp","name":"test-ws-1"}}}' \
+  | python3 -c "import sys,json; print(json.loads(json.load(sys.stdin)['result']['content'][0]['text'])['workspaceId'])")
+
+WS2=$(curl -s -X POST http://localhost:$PORT/v1/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"open_workspace","arguments":{"directory":"/tmp","name":"test-ws-2"}}}' \
+  | python3 -c "import sys,json; print(json.loads(json.load(sys.stdin)['result']['content'][0]['text'])['workspaceId'])")
+
+echo "WS1: $WS1"
+echo "WS2: $WS2"
+
+# 2. 截图：记录两个窗口的初始状态
+sleep 1
+osascript -e 'tell application "System Events" to tell process "ghostty" to set frontmost to true'
+sleep 0.8
+screencapture -x /tmp/multi_window_before.png
+
+# 3. 通过菜单触发侧边栏切换（焦点在 WS2 窗口）
+osascript << 'OSEOF'
+tell application "System Events"
+    tell process "ghostty"
+        set frontmost to true
+        delay 0.5
+        click menu item "Toggle Sidebar" of menu "Workspace" of menu bar 1
+    end tell
+end tell
+OSEOF
+
+sleep 0.8
+screencapture -x /tmp/multi_window_after.png
+
+echo "✅ 对比 before/after 截图：只有焦点窗口的侧边栏发生变化"
+echo "   用 Read 工具查看 /tmp/multi_window_before.png 和 /tmp/multi_window_after.png"
+```
+
+**验证要点**：
+- [ ] 触发快捷键前，记录两个窗口侧边栏的可见状态
+- [ ] 触发后，只有当前焦点窗口状态改变，另一个窗口不变
+- [ ] 切换焦点到另一窗口后再次触发，验证方向正确
+
+### 9.2 新 Workspace 窗口 Tab 初始位置
+
+每次修改 toolbar/titlebar 初始化逻辑后验证。
+
+```bash
+PORT=$(lsof -i -n -P 2>/dev/null | grep ghostty | grep LISTEN | awk '{print $9}' | sed 's/.*://' | head -1)
+
+# 打开新 workspace 窗口
+curl -s -X POST http://localhost:$PORT/v1/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"open_workspace","arguments":{"directory":"/tmp","name":"tab-pos-test"}}}' > /dev/null
+
+# 立即截图（不等待，捕获第一帧状态）
+sleep 0.3
+osascript -e 'tell application "System Events" to tell process "ghostty" to set frontmost to true'
+sleep 0.3
+screencapture -x /tmp/tab_position_test.png
+
+python3 << 'PYEOF'
+from PIL import Image
+img = Image.open("/tmp/tab_position_test.png")
+w, h = img.size
+# 裁切 titlebar 区域（Retina 2x，titlebar 约在 y=200~270）
+img.crop((0, 200, w, 280)).save("/tmp/tab_position_titlebar.png")
+print(f"截图尺寸: {w}x{h}")
+print("Saved: /tmp/tab_position_titlebar.png")
+PYEOF
+
+echo "✅ 检查 tab 是否在 titlebar 右侧（非紧贴 workspace 名称）"
+```
+
+**验证要点**：
+- [ ] Tab 出现在 titlebar 右侧（workspace 名与 tab 之间有明显间距）
+- [ ] 重复打开 5 次，每次 tab 位置一致，无概率性偏左
+
+## 10. 常见问题
 
 | 问题 | 原因 | 解决方法 |
 |------|------|---------|
