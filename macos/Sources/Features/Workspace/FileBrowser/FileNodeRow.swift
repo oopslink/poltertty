@@ -33,6 +33,7 @@ struct FileNodeRow: View {
     var onCancelRename: (() -> Void)? = nil
 
     @State private var isHovering = false
+    @State private var hoverTask: Task<Void, Never>? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: 4) {
@@ -113,7 +114,25 @@ struct FileNodeRow: View {
             }
         }
         .onHover { hovering in
-            isHovering = hovering
+            hoverTask?.cancel()
+            if hovering {
+                hoverTask = Task {
+                    do {
+                        try await Task.sleep(nanoseconds: 50_000_000) // 50ms
+                    } catch {
+                        return // 任务被取消，不更新状态
+                    }
+                    await MainActor.run {
+                        guard !Task.isCancelled else { return }
+                        isHovering = true
+                    }
+                }
+            } else {
+                isHovering = false
+            }
+        }
+        .onDisappear {
+            hoverTask?.cancel()
         }
         .gesture(TapGesture(count: 2).onEnded { onDoubleClick() })
         .simultaneousGesture(TapGesture(count: 1).onEnded { onSingleClick() })
@@ -249,6 +268,14 @@ private struct RenameTextField: NSViewRepresentable {
 private struct FileIconView: NSViewRepresentable {
     let url: URL
 
+    private static let cache = NSCache<NSURL, NSImage>()
+
+    class Coordinator {
+        var currentURL: URL?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeNSView(context: Context) -> NSImageView {
         let view = NSImageView()
         view.imageScaling = .scaleProportionallyDown
@@ -258,12 +285,25 @@ private struct FileIconView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSImageView, context: Context) {
-        let icon = NSWorkspace.shared.icon(forFile: url.path)
-        nsView.image = icon
+        let normalizedURL = url.standardized
+        context.coordinator.currentURL = normalizedURL
+        let nsurl = normalizedURL as NSURL
 
-        // Force the bounds to constrain the image
-        if let superview = nsView.superview {
-            nsView.frame = superview.bounds
+        if let cached = Self.cache.object(forKey: nsurl) {
+            nsView.image = cached
+            return
+        }
+        // 清除旧图标，避免视图复用时显示错误图标
+        nsView.image = nil
+
+        Task.detached(priority: .utility) {
+            let icon = NSWorkspace.shared.icon(forFile: normalizedURL.path)
+            Self.cache.setObject(icon, forKey: nsurl)
+            await MainActor.run {
+                // 仅当视图仍显示同一 URL 时才更新，防止视图复用竞态
+                guard context.coordinator.currentURL == normalizedURL else { return }
+                nsView.image = icon
+            }
         }
     }
 }

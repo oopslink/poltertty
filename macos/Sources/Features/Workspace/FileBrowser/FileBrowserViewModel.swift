@@ -1,6 +1,7 @@
 // macos/Sources/Features/Workspace/FileBrowser/FileBrowserViewModel.swift
 import Foundation
 import AppKit
+import Combine
 
 final class FileBrowserViewModel: ObservableObject {
     // MARK: - Published State
@@ -43,6 +44,7 @@ final class FileBrowserViewModel: ObservableObject {
 
     let rootDir: String
     private var monitor: FileSystemMonitor?
+    private var cancellables = Set<AnyCancellable>()
     private(set) var gitRepo: GitRepository?
     private var isRecursiveFilter: Bool = false
     private var savedExpandedUrls: Set<URL> = []
@@ -53,6 +55,19 @@ final class FileBrowserViewModel: ObservableObject {
         self.rootDir = rootDir
         self.isVisible = isVisible
         self.panelWidth = panelWidth
+
+        Publishers.MergeMany(
+            $rootNodes.map { _ in () }.eraseToAnyPublisher(),
+            $filterText.map { _ in () }.eraseToAnyPublisher(),
+            $activeExtensions.map { _ in () }.eraseToAnyPublisher(),
+            $activeGitStatuses.map { _ in () }.eraseToAnyPublisher(),
+            $focusedRootURL.map { _ in () }.eraseToAnyPublisher(),
+            $gitStatuses.map { _ in () }.eraseToAnyPublisher()
+            // 注：git 状态刷新时若无 git 过滤激活，rebuild 代价极小（debounce 合并后仅一次）
+        )
+        .debounce(for: .milliseconds(0), scheduler: DispatchQueue.main)  // 合并同 RunLoop 内的多次触发，避免双触发冗余计算
+        .sink { [weak self] in self?.rebuildVisibleNodes() }
+        .store(in: &cancellables)
 
         guard !rootDir.isEmpty, FileManager.default.fileExists(atPath: rootDir) else { return }
         setupMonitor()
@@ -200,7 +215,11 @@ final class FileBrowserViewModel: ObservableObject {
 
     // MARK: - Visible Nodes (flat list with depth for the scroll view)
 
-    var visibleNodes: [(node: FileNode, depth: Int)] {
+    @Published private(set) var visibleNodes: [(node: FileNode, depth: Int)] = []
+
+    // MARK: - Visible Nodes Cache
+
+    private func computeVisibleNodes() -> [(node: FileNode, depth: Int)] {
         var result: [(FileNode, Int)] = []
         let baseNodes: [FileNode]
         if let focusURL = focusedRootURL,
@@ -216,6 +235,12 @@ final class FileBrowserViewModel: ObservableObject {
         collectVisible(from: source, depth: 0, into: &result)
         return result
     }
+
+    private func rebuildVisibleNodes() {
+        visibleNodes = computeVisibleNodes()
+    }
+
+    // MARK: - Filter Tree
 
     /// 检查目录下是否有匹配当前 git 状态过滤条件的文件
     private func directoryHasMatchingGitStatus(url: URL) -> Bool {
@@ -272,8 +297,6 @@ final class FileBrowserViewModel: ObservableObject {
             }
         }
     }
-
-    // MARK: - Hidden Files Toggle
 
     func toggleHiddenFiles() {
         showHiddenFiles.toggle()

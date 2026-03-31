@@ -221,4 +221,49 @@ struct FileBrowserViewModelNavigationTests {
         // 方向键后应清空多选，只剩一个（从 lastSelectedId 位置移动一步）
         #expect(vm.selectedNodeIds.count == 1)
     }
+
+    @Test func testVisibleNodesReflectsFilterTextChange() async throws {
+        let dir = try makeTempDir() // creates a.txt, b.txt, c.txt
+        let vm = FileBrowserViewModel(rootDir: dir.path)
+        defer {
+            vm.stop()
+            try? FileManager.default.removeItem(at: dir)
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        #expect(vm.visibleNodes.count == 3)
+
+        await MainActor.run { vm.filterText = "a" }
+        try await Task.sleep(nanoseconds: 50_000_000) // 等 Combine sink 触发
+        #expect(vm.visibleNodes.count == 1)
+        #expect(vm.visibleNodes.first?.node.name == "a.txt")
+
+        await MainActor.run { vm.filterText = "" }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(vm.visibleNodes.count == 3)
+    }
+
+    @Test func testVisibleNodesReflectsToggleExpand() async throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let subdir = tmp.appendingPathComponent("subdir")
+        try FileManager.default.createDirectory(at: subdir, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: subdir.appendingPathComponent("nested.txt").path, contents: nil)
+
+        let vm = FileBrowserViewModel(rootDir: tmp.path)
+        defer {
+            vm.stop()
+            try? FileManager.default.removeItem(at: tmp)
+        }
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        #expect(vm.visibleNodes.count == 1)
+
+        guard let dirNode = vm.visibleNodes.first else {
+            Issue.record("Expected subdir node"); return
+        }
+        vm.toggleExpand(nodeId: dirNode.node.id)
+
+        #expect(vm.visibleNodes.count == 2)
+    }
 }

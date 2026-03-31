@@ -595,15 +595,15 @@ struct FileBrowserPanel: View {
                     viewModel.extendSelection(to: entry.node.id)
                 } else {
                     viewModel.selectNode(id: entry.node.id)
-                    if entry.node.isDirectory {
-                        viewModel.toggleExpand(nodeId: entry.node.id)
-                    }
+                    // 单击只选中，不展开/折叠。展开由箭头点击或双击触发。
                 }
                 // 延迟设焦，确保 AppKit 原生点击事件处理完后再夺回焦点
                 DispatchQueue.main.async { isFocused = true }
             },
             onDoubleClick: {
-                if !entry.node.isDirectory {
+                if entry.node.isDirectory {
+                    viewModel.toggleExpand(nodeId: entry.node.id)
+                } else {
                     viewModel.openInDefaultApp(entry.node.url)
                 }
             },
