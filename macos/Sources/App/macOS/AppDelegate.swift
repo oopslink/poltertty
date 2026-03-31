@@ -107,6 +107,9 @@ class AppDelegate: NSObject,
     /// 新建 Workspace 对话框的窗口引用，防止被 ARC 提前释放
     private var newWorkspacePanel: NSWindow?
 
+    /// 快照管理面板窗口引用，防止被 ARC 提前释放
+    private var snapshotManagerWindow: NSWindow?
+
     /// The current state of the quick terminal.
     private var quickTerminalControllerState: QuickTerminalState = .uninitialized
 
@@ -1039,6 +1042,18 @@ class AppDelegate: NSObject,
         var isFirst = true
         for id in ids {
             guard let workspace = manager.workspace(for: id) else { continue }
+
+            // 校验工作目录是否存在（空路径跳过校验）
+            if !workspace.rootDir.isEmpty && !workspace.rootDirExists {
+                let alert = NSAlert()
+                alert.messageText = "无法恢复 Workspace"
+                alert.informativeText = "\"\(workspace.name)\" 的工作目录不存在：\(workspace.rootDirExpanded)"
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "跳过")
+                alert.runModal()
+                continue
+            }
+
             var config = Ghostty.SurfaceConfiguration()
             config.workingDirectory = workspace.rootDirExpanded
 
@@ -1124,6 +1139,27 @@ class AppDelegate: NSObject,
         newWorkspacePanel = nil
     }
 
+    @objc func openSnapshotManager(_ sender: Any?) {
+        // 若面板已存在则前置显示，避免重复打开
+        if let existing = snapshotManagerWindow {
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+        let view = SnapshotManagerView()
+        let hc = NSHostingController(rootView: view)
+        let window = NSWindow(contentViewController: hc)
+        window.title = "快照管理"
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.isReleasedWhenClosed = false
+        window.center()
+        snapshotManagerWindow = window
+        // 窗口关闭时释放引用
+        NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            self?.snapshotManagerWindow = nil
+        }
+        window.makeKeyAndOrderFront(nil)
+    }
+
     private func setupTabNavigationMenuItems() {
         guard let windowMenu = NSApp.mainMenu?.item(withTitle: "Window")?.submenu else { return }
 
@@ -1152,6 +1188,9 @@ class AppDelegate: NSObject,
         let newItem = NSMenuItem(title: "New Workspace", action: #selector(newWorkspace(_:)), keyEquivalent: "N")
         newItem.keyEquivalentModifierMask = [.command, .shift]
         workspaceMenu.addItem(newItem)
+
+        let snapshotManagerItem = NSMenuItem(title: "管理快照…", action: #selector(openSnapshotManager(_:)), keyEquivalent: "")
+        workspaceMenu.addItem(snapshotManagerItem)
 
         workspaceMenu.addItem(.separator())
 

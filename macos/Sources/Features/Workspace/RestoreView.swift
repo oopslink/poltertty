@@ -1,12 +1,20 @@
 // macos/Sources/Features/Workspace/RestoreView.swift
 import SwiftUI
 
+private struct SnapshotImageItem: Identifiable {
+    let id = UUID()
+    let image: NSImage
+}
+
 struct RestoreView: View {
     let workspaces: [WorkspaceModel]
     let onRestore: ([UUID]) -> Void
     let onCreateNew: () -> Void
 
     @State private var selected: Set<UUID> = []
+    @State private var enlargedSnapshotItem: SnapshotImageItem? = nil
+    /// 异步预加载的截图缓存，Key 为 Workspace ID，避免在渲染路径中做磁盘 I/O
+    @State private var screenshots: [UUID: NSImage] = [:]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,6 +32,8 @@ struct RestoreView: View {
                 ForEach(workspaces) { workspace in
                     Button(action: { toggleSelection(workspace.id) }) {
                         HStack(spacing: 12) {
+                            thumbnailView(for: workspace)
+
                             Image(systemName: selected.contains(workspace.id) ? "checkmark.square.fill" : "square")
                                 .font(.system(size: 16))
                                 .foregroundColor(selected.contains(workspace.id) ? .accentColor : .secondary)
@@ -55,7 +65,7 @@ struct RestoreView: View {
             }
             .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
             .cornerRadius(10)
-            .frame(width: 400)
+            .frame(width: 480)
 
             Spacer().frame(height: 24)
 
@@ -116,7 +126,56 @@ struct RestoreView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear { preselectRecent() }
+        .task { await loadScreenshots() }
+        .sheet(item: $enlargedSnapshotItem) { item in
+            EnlargedSnapshotView(item: item)
+        }
     }
+
+    // MARK: - 子视图
+
+    /// 缩略图 View（从预加载缓存读取，不做磁盘 I/O）
+    @ViewBuilder
+    private func thumbnailView(for workspace: WorkspaceModel) -> some View {
+        if let img = screenshots[workspace.id] {
+            Image(nsImage: img)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 80, height: 50)
+                .clipped()
+                .cornerRadius(4)
+                // onTapGesture 优先于外层 Button，点击缩略图只放大，不切换选中
+                .onTapGesture { enlargedSnapshotItem = SnapshotImageItem(image: img) }
+        } else {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color(nsColor: .tertiaryLabelColor).opacity(0.15))
+                .frame(width: 80, height: 50)
+        }
+    }
+
+    // MARK: - 数据加载
+
+    /// 异步预加载所有 workspace 的最新快照截图，结果写入 screenshots 缓存
+    @MainActor
+    private func loadScreenshots() async {
+        let rootURL = URL(fileURLWithPath: PolterttyConfig.shared.workspaceDir)
+        await withTaskGroup(of: (UUID, NSImage?).self) { group in
+            for workspace in workspaces {
+                group.addTask {
+                    let store = SnapshotStore(workspaceId: workspace.id, storageRootURL: rootURL)
+                    guard let latest = store.loadLatest() else { return (workspace.id, nil) }
+                    return (workspace.id, store.screenshot(for: latest.id))
+                }
+            }
+            for await (id, image) in group {
+                if let image {
+                    screenshots[id] = image
+                }
+            }
+        }
+    }
+
+    // MARK: - 辅助
 
     private func toggleSelection(_ id: UUID) {
         if selected.contains(id) {
@@ -139,5 +198,23 @@ struct RestoreView: View {
 
     private func relativeTime(_ date: Date) -> String {
         Self.timeFormatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
+// MARK: - 放大预览 View
+
+private struct EnlargedSnapshotView: View {
+    let item: SnapshotImageItem
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(nsImage: item.image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 900, maxHeight: 600)
+            Button("关闭") { dismiss() }
+        }
+        .padding(24)
     }
 }

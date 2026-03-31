@@ -6,6 +6,8 @@ struct WorkspaceCreateForm: View {
     let onCancel: () -> Void
     /// When set, the form is in "edit" mode — pre-fills fields and changes title/button text
     var editing: WorkspaceModel?
+    /// 从快照管理面板点击「从此创建」时传入，自动开启「从已有快照创建」并预选来源
+    var preselectedSourceWorkspaceId: UUID? = nil
 
     @State private var name = ""
     @State private var rootDir = "~"
@@ -13,7 +15,22 @@ struct WorkspaceCreateForm: View {
     @State private var selectedColor = "#FF6B6B"
     @State private var errorMessage: String?
     @State private var isShaking = false
+    @State private var createFromSnapshot = false
+    @State private var snapshotWorkspaceId: UUID? = nil
+    @State private var snapshotEntryId: UUID? = nil
     @ObservedObject var manager = WorkspaceManager.shared
+
+    private var availableWorkspaces: [WorkspaceModel] {
+        WorkspaceManager.shared.workspaces.filter { !$0.isTemporary }
+    }
+
+    private func snapshotEntries(for workspaceId: UUID) -> [SnapshotEntry] {
+        let store = SnapshotStore(
+            workspaceId: workspaceId,
+            storageRootURL: URL(fileURLWithPath: PolterttyConfig.shared.workspaceDir)
+        )
+        return store.loadAll().sorted { $0.savedAt > $1.savedAt }
+    }
 
     static let presetColors = [
         "#FF6B6B", "#4ECDC4", "#FFD93D", "#6BCB77",
@@ -103,6 +120,49 @@ struct WorkspaceCreateForm: View {
                         }
                     }
                 }
+
+                // 从快照创建（仅新建模式显示）
+                if editing == nil {
+                    Divider()
+                        .padding(.vertical, 4)
+
+                    Toggle("从已有快照创建", isOn: $createFromSnapshot)
+                        .font(.system(size: 12, weight: .medium))
+
+                    if createFromSnapshot {
+                        if availableWorkspaces.isEmpty {
+                            Text("暂无可用 Workspace 快照")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        } else {
+                            Picker("来源 Workspace", selection: $snapshotWorkspaceId) {
+                                Text("请选择").tag(UUID?.none)
+                                ForEach(availableWorkspaces) { ws in
+                                    Text(ws.name).tag(Optional(ws.id))
+                                }
+                            }
+                            .font(.system(size: 13))
+
+                            if let wsId = snapshotWorkspaceId {
+                                let entries = snapshotEntries(for: wsId)
+                                if entries.isEmpty {
+                                    Text("该 Workspace 暂无快照")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Picker("快照", selection: $snapshotEntryId) {
+                                        Text("请选择").tag(UUID?.none)
+                                        ForEach(entries) { entry in
+                                            Text(entry.savedAt.formatted(.relative(presentation: .named)))
+                                                .tag(Optional(entry.id))
+                                        }
+                                    }
+                                    .font(.system(size: 13))
+                                }
+                            }
+                        }
+                    }
+                }
             }
             .padding(.horizontal, 24)
 
@@ -127,6 +187,13 @@ struct WorkspaceCreateForm: View {
                         return
                     }
                     errorMessage = nil
+                    // 选中「从快照创建」时，从来源 Workspace 复制 rootDir
+                    if createFromSnapshot,
+                       let wsId = snapshotWorkspaceId,
+                       let sourceWorkspace = WorkspaceManager.shared.workspace(for: wsId),
+                       rootDir == "~" || rootDir.isEmpty {
+                        rootDir = sourceWorkspace.rootDir
+                    }
                     onSubmit(name, rootDir, selectedColor, description)
                 }
                 .keyboardShortcut(.return)
@@ -145,6 +212,10 @@ struct WorkspaceCreateForm: View {
                 rootDir = ws.rootDir
                 description = ws.description
                 selectedColor = ws.colorHex
+            } else if let wsId = preselectedSourceWorkspaceId {
+                // 从快照管理面板的「从此创建」触发：自动开启并预选来源 Workspace
+                createFromSnapshot = true
+                snapshotWorkspaceId = wsId
             }
         }
     }

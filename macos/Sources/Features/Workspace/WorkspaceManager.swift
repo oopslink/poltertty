@@ -67,6 +67,7 @@ class WorkspaceManager: ObservableObject {
     }
 
     private let storageDir: String
+    private var storageDirURL: URL { URL(fileURLWithPath: storageDir) }
     private var groupsFilePath: String {
         (storageDir as NSString).appendingPathComponent("groups.json")
     }
@@ -287,9 +288,49 @@ class WorkspaceManager: ObservableObject {
         if let data = try? encoder.encode(snapshot) {
             try? data.write(to: URL(fileURLWithPath: path))
         }
+
+        // 同步写入 SnapshotStore（支持最多 5 条历史快照）
+        // 注意：截图捕获和文件写入均在调用线程（通常为主线程）同步执行。
+        // 关闭/退出场景需要同步保证数据完整性，此处不适合改为异步。
+        let store = SnapshotStore(workspaceId: workspaceId, storageRootURL: storageDirURL)
+        let snapshotEntry = SnapshotEntry(
+            id: UUID(),
+            savedAt: Date(),
+            windowFrame: snapshot.windowFrame.map {
+                SnapshotEntry.WindowFrame(CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height))
+            },
+            sidebarWidth: sidebarWidth,
+            sidebarVisible: sidebarVisible,
+            tabs: tabs?.map { SnapshotEntry.PersistedTab(title: $0.title, titleLocked: $0.titleLocked) },
+            activeTabIndex: activeTabIndex
+        )
+        let screenshotData = SnapshotCapture.capture(window: window)
+        try? store.save(snapshotEntry, screenshot: screenshotData)
     }
 
     func loadSnapshot(for workspaceId: UUID) -> WorkspaceSnapshot? {
+        // 优先读 SnapshotStore 中的最新快照
+        if let ws = workspace(for: workspaceId) {
+            let store = SnapshotStore(workspaceId: workspaceId, storageRootURL: storageDirURL)
+            if let entry = store.loadLatest() {
+                return WorkspaceSnapshot(
+                    workspace: ws,
+                    windowFrame: entry.windowFrame.map {
+                        WorkspaceSnapshot.WindowFrame(from: NSRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height))
+                    },
+                    sidebarWidth: entry.sidebarWidth,
+                    sidebarVisible: entry.sidebarVisible,
+                    tabs: entry.tabs?.map {
+                        WorkspaceSnapshot.PersistedTab(title: $0.title, titleLocked: $0.titleLocked)
+                    },
+                    activeTabIndex: entry.activeTabIndex
+                )
+            }
+        }
+
+        // Fallback：读旧版 workspace.json（向后兼容）
+        // 注意：workspace.json 中仅保存基础 WorkspaceModel，不含完整布局（windowFrame/tabs 可能为 nil）。
+        // 此路径仅用于 SnapshotStore 首次写入前的兼容，不保证恢复完整布局。
         let path = snapshotPath(for: workspaceId)
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return nil }
         return try? decoder.decode(WorkspaceSnapshot.self, from: data)
