@@ -33,6 +33,7 @@ struct FileNodeRow: View {
     var onCancelRename: (() -> Void)? = nil
 
     @State private var isHovering = false
+    @State private var hoverTask: Task<Void, Never>? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: 4) {
@@ -113,7 +114,25 @@ struct FileNodeRow: View {
             }
         }
         .onHover { hovering in
-            isHovering = hovering
+            hoverTask?.cancel()
+            if hovering {
+                hoverTask = Task {
+                    do {
+                        try await Task.sleep(nanoseconds: 50_000_000) // 50ms
+                    } catch {
+                        return // 任务被取消，不更新状态
+                    }
+                    await MainActor.run {
+                        guard !Task.isCancelled else { return }
+                        isHovering = true
+                    }
+                }
+            } else {
+                isHovering = false
+            }
+        }
+        .onDisappear {
+            hoverTask?.cancel()
         }
         .gesture(TapGesture(count: 2).onEnded { onDoubleClick() })
         .simultaneousGesture(TapGesture(count: 1).onEnded { onSingleClick() })
