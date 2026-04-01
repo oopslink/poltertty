@@ -1,0 +1,6 @@
+# macos/Resources/yazi-config/keymap.toml
+
+[[manager.keymap]]
+on   = [ "<Enter>" ]
+run  = "open"
+desc = "Open file in Poltertty tab"

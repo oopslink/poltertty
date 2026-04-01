@@ -1,0 +1,7 @@
+# macos/Resources/yazi-config/theme.toml
+
+[manager]
+border_style = { fg = "gray" }
+
+[status]
+separator_style = { fg = "gray" }

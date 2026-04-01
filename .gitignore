@@ -35,3 +35,6 @@ macos/macos/
 .claude/worktrees
 .worktrees/
 .build/
+
+# Bundled tools download cache
+.bundled-tools-cache/

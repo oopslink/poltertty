@@ -1,0 +1,21 @@
+# macos/Resources/yazi-config/yazi.toml
+
+[manager]
+show_hidden = false
+sort_by = "natural"
+sort_sensitive = false
+sort_reverse = false
+sort_dir_first = true
+
+[opener]
+edit = [
+    { run = 'poltertty-open "$@"', desc = "Open in Poltertty tab", for = "unix" },
+]
+open = [
+    { run = 'open "$@"', desc = "Open with system default", for = "macos" },
+]
+
+[plugin]
+prepend_previewers = [
+    { mime = "text/*", run = "git-diff" },
+]

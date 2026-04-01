@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# macos/Resources/bin/poltertty-open
+set -euo pipefail
+
+FILE_PATH="$1"
+
+if [ -z "${POLTERTTY_CTRL_PORT:-}" ]; then
+    open "$FILE_PATH"
+    exit 0
+fi
+
+curl -s -X POST "http://localhost:${POLTERTTY_CTRL_PORT}/api/new_tab" \
+    -H "Content-Type: application/json" \
+    -d "{\"command\": \"${EDITOR:-vim} '${FILE_PATH}'\"}" >/dev/null 2>&1 || open "$FILE_PATH"
