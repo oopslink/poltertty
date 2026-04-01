@@ -1046,10 +1046,10 @@ class AppDelegate: NSObject,
             // 校验工作目录是否存在（空路径跳过校验）
             if !workspace.rootDir.isEmpty && !workspace.rootDirExists {
                 let alert = NSAlert()
-                alert.messageText = "无法恢复 Workspace"
-                alert.informativeText = "\"\(workspace.name)\" 的工作目录不存在：\(workspace.rootDirExpanded)"
+                alert.messageText = "Cannot Restore Workspace"
+                alert.informativeText = "\"\(workspace.name)\" — working directory does not exist: \(workspace.rootDirExpanded)"
                 alert.alertStyle = .warning
-                alert.addButton(withTitle: "跳过")
+                alert.addButton(withTitle: "Skip")
                 alert.runModal()
                 continue
             }
@@ -1148,7 +1148,7 @@ class AppDelegate: NSObject,
         let view = SnapshotManagerView()
         let hc = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: hc)
-        window.title = "快照管理"
+        window.title = "Snapshot Manager"
         window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.isReleasedWhenClosed = false
         window.center()
@@ -1189,7 +1189,7 @@ class AppDelegate: NSObject,
         newItem.keyEquivalentModifierMask = [.command, .shift]
         workspaceMenu.addItem(newItem)
 
-        let snapshotManagerItem = NSMenuItem(title: "管理快照…", action: #selector(openSnapshotManager(_:)), keyEquivalent: "")
+        let snapshotManagerItem = NSMenuItem(title: "Manage Snapshots…", action: #selector(openSnapshotManager(_:)), keyEquivalent: "")
         workspaceMenu.addItem(snapshotManagerItem)
 
         workspaceMenu.addItem(.separator())

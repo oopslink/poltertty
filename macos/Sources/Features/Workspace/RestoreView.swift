@@ -192,6 +192,7 @@ struct RestoreView: View {
 
     private static let timeFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
+        f.locale = Locale(identifier: "en_US")
         f.unitsStyle = .short
         return f
     }()
@@ -213,7 +214,7 @@ private struct EnlargedSnapshotView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(maxWidth: 900, maxHeight: 600)
-            Button("关闭") { dismiss() }
+            Button("Close") { dismiss() }
         }
         .padding(24)
     }

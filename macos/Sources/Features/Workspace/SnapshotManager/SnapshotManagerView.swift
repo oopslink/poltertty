@@ -18,12 +18,12 @@ struct SnapshotManagerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 标题栏
+            // Title bar
             HStack {
-                Text("快照管理")
+                Text("Snapshot Manager")
                     .font(.system(size: 15, weight: .semibold))
                 Spacer()
-                Button("完成") { dismiss() }
+                Button("Done") { dismiss() }
                     .keyboardShortcut(.escape, modifiers: [])
             }
             .padding(.horizontal, 20)
@@ -31,7 +31,7 @@ struct SnapshotManagerView: View {
 
             Divider()
 
-            // 内容区
+            // Content
             if vm.groups.isEmpty {
                 emptyStateView
             } else {
@@ -73,7 +73,7 @@ struct SnapshotManagerView: View {
         }
     }
 
-    // MARK: - 空状态
+    // MARK: - Empty state
 
     private var emptyStateView: some View {
         VStack(spacing: 12) {
@@ -81,10 +81,10 @@ struct SnapshotManagerView: View {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 36))
                 .foregroundColor(.secondary.opacity(0.5))
-            Text("暂无快照记录")
+            Text("No snapshots yet")
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
-            Text("Workspace 活动时会自动保存快照")
+            Text("Snapshots are saved automatically when a workspace is closed")
                 .font(.system(size: 12))
                 .foregroundColor(Color(nsColor: .tertiaryLabelColor))
             Spacer()
@@ -92,24 +92,25 @@ struct SnapshotManagerView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Workspace 分组
+    // MARK: - Workspace group
 
     @ViewBuilder
     private func groupSection(_ group: WorkspaceSnapshotGroup) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            // 分组标题
+            // Group header
             HStack(spacing: 6) {
                 Circle()
                     .fill(group.workspace.color)
                     .frame(width: 8, height: 8)
                 Text(group.workspace.name)
                     .font(.system(size: 13, weight: .semibold))
-                Text("(\(group.entries.count) 条快照)")
+                let count = group.entries.count
+                Text("(\(count) \(count == 1 ? "snapshot" : "snapshots"))")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
             }
 
-            // 快照条目列表
+            // Snapshot entry list
             VStack(spacing: 0) {
                 ForEach(Array(group.entries.enumerated()), id: \.element.id) { index, entry in
                     entryRow(entry: entry, workspace: group.workspace)
@@ -124,24 +125,25 @@ struct SnapshotManagerView: View {
         }
     }
 
-    // MARK: - 快照条目行
+    // MARK: - Snapshot entry row
 
     @ViewBuilder
     private func entryRow(entry: SnapshotEntry, workspace: WorkspaceModel) -> some View {
         HStack(spacing: 12) {
-            // 缩略图
+            // Thumbnail
             thumbnailView(entryId: entry.id)
 
-            // 元信息
+            // Metadata
             VStack(alignment: .leading, spacing: 3) {
                 Text(relativeTime(entry.savedAt))
                     .font(.system(size: 13, weight: .medium))
                 if let tabs = entry.tabs, !tabs.isEmpty {
-                    Text("\(tabs.count) 个标签页")
+                    let tc = tabs.count
+                    Text("\(tc) \(tc == 1 ? "tab" : "tabs")")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                 } else {
-                    Text("无标签信息")
+                    Text("No tab info")
                         .font(.system(size: 11))
                         .foregroundColor(Color(nsColor: .tertiaryLabelColor))
                 }
@@ -149,9 +151,9 @@ struct SnapshotManagerView: View {
 
             Spacer()
 
-            // 操作按钮
+            // Action buttons
             HStack(spacing: 8) {
-                Button("从此创建") {
+                Button("Create From") {
                     vm.requestCreate(from: entry, workspace: workspace)
                 }
                 .font(.system(size: 12))
@@ -166,14 +168,14 @@ struct SnapshotManagerView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .help("删除此快照")
+                .help("Delete snapshot")
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
     }
 
-    // MARK: - 缩略图
+    // MARK: - Thumbnail
 
     @ViewBuilder
     private func thumbnailView(entryId: UUID) -> some View {
@@ -194,7 +196,7 @@ struct SnapshotManagerView: View {
         }
     }
 
-    // MARK: - 异步加载截图
+    // MARK: - Async screenshot loading
 
     @MainActor
     private func loadScreenshots() async {
@@ -218,12 +220,12 @@ struct SnapshotManagerView: View {
         }
     }
 
-    // MARK: - 辅助
+    // MARK: - Helpers
 
     private static let timeFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
+        f.locale = Locale(identifier: "en_US")
         f.unitsStyle = .short
-        f.locale = Locale(identifier: "zh_CN")
         return f
     }()
 
@@ -232,7 +234,7 @@ struct SnapshotManagerView: View {
     }
 }
 
-// MARK: - 放大预览
+// MARK: - Enlarged preview
 
 private struct EnlargedSnapshotView: View {
     let item: SnapshotImageItem
@@ -244,7 +246,7 @@ private struct EnlargedSnapshotView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(maxWidth: 900, maxHeight: 600)
-            Button("关闭") { dismiss() }
+            Button("Close") { dismiss() }
         }
         .padding(24)
     }

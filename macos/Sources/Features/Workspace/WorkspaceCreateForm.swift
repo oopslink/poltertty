@@ -121,22 +121,22 @@ struct WorkspaceCreateForm: View {
                     }
                 }
 
-                // 从快照创建（仅新建模式显示）
+                // Create from snapshot (new workspace only)
                 if editing == nil {
                     Divider()
                         .padding(.vertical, 4)
 
-                    Toggle("从已有快照创建", isOn: $createFromSnapshot)
+                    Toggle("Create from snapshot", isOn: $createFromSnapshot)
                         .font(.system(size: 12, weight: .medium))
 
                     if createFromSnapshot {
                         if availableWorkspaces.isEmpty {
-                            Text("暂无可用 Workspace 快照")
+                            Text("No snapshots available")
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
                         } else {
-                            Picker("来源 Workspace", selection: $snapshotWorkspaceId) {
-                                Text("请选择").tag(UUID?.none)
+                            Picker("Source Workspace", selection: $snapshotWorkspaceId) {
+                                Text("Select…").tag(UUID?.none)
                                 ForEach(availableWorkspaces) { ws in
                                     Text(ws.name).tag(Optional(ws.id))
                                 }
@@ -146,12 +146,12 @@ struct WorkspaceCreateForm: View {
                             if let wsId = snapshotWorkspaceId {
                                 let entries = snapshotEntries(for: wsId)
                                 if entries.isEmpty {
-                                    Text("该 Workspace 暂无快照")
+                                    Text("No snapshots for this workspace")
                                         .font(.system(size: 12))
                                         .foregroundColor(.secondary)
                                 } else {
-                                    Picker("快照", selection: $snapshotEntryId) {
-                                        Text("请选择").tag(UUID?.none)
+                                    Picker("Snapshot", selection: $snapshotEntryId) {
+                                        Text("Select…").tag(UUID?.none)
                                         ForEach(entries) { entry in
                                             Text(entry.savedAt.formatted(.relative(presentation: .named)))
                                                 .tag(Optional(entry.id))
@@ -205,6 +205,14 @@ struct WorkspaceCreateForm: View {
         .frame(width: 400)
         .onChange(of: name) { _ in
             errorMessage = nil
+        }
+        .onChange(of: snapshotWorkspaceId) { wsId in
+            // 选择来源 Workspace 后实时预填 Root Directory
+            guard createFromSnapshot, rootDir == "~" || rootDir.isEmpty,
+                  let wsId,
+                  let sourceWorkspace = WorkspaceManager.shared.workspace(for: wsId)
+            else { return }
+            rootDir = sourceWorkspace.rootDir
         }
         .onAppear {
             if let ws = editing {
