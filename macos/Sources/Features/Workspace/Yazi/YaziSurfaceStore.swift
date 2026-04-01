@@ -10,14 +10,16 @@ class YaziSurfaceStore: ObservableObject {
     /// Get or create the yazi surface for a workspace.
     /// - Parameters:
     ///   - workspaceId: The workspace UUID
-    ///   - app: The Ghostty app instance for creating surfaces
+    ///   - ghostty: The Ghostty.App Swift wrapper
     ///   - rootDir: The workspace root directory (expanded path)
-    /// - Returns: The existing or newly created SurfaceView running yazi
+    /// - Returns: The existing or newly created SurfaceView running yazi, or nil if app is not ready
     @MainActor
-    func surface(for workspaceId: UUID, app: ghostty_app_t, rootDir: String) -> Ghostty.SurfaceView {
+    func surface(for workspaceId: UUID, ghostty: Ghostty.App, rootDir: String) -> Ghostty.SurfaceView? {
         if let existing = surfaces[workspaceId] {
             return existing
         }
+
+        guard let app = ghostty.app else { return nil }
 
         var config = Ghostty.SurfaceConfiguration()
         config.command = BundledTool.yaziPath

@@ -20,8 +20,8 @@ struct YaziPanelView: View {
             )
             Divider()
 
-            if let wsId = workspaceId, let app = ghostty.app {
-                let surface = yaziStore.surface(for: wsId, app: app, rootDir: rootDir)
+            if let wsId = workspaceId,
+               let surface = yaziStore.surface(for: wsId, ghostty: ghostty, rootDir: rootDir) {
                 Ghostty.SurfaceWrapper(surfaceView: surface)
             } else {
                 noWorkspaceView
