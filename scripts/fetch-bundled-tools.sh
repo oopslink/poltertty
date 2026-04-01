@@ -3,6 +3,9 @@
 # Downloads yazi, ya, and delta universal binaries for macOS.
 set -euo pipefail
 
+# Note: Downloads aarch64 (Apple Silicon) binaries only.
+# yazi does not publish universal macOS binaries. x86_64 Macs are not supported.
+
 YAZI_VERSION="${YAZI_VERSION:-0.4.2}"
 DELTA_VERSION="${DELTA_VERSION:-0.18.2}"
 CACHE_DIR="${PROJECT_DIR:-.}/.bundled-tools-cache"
@@ -13,7 +16,7 @@ mkdir -p "$CACHE_DIR" "$OUTPUT_DIR"
 # --- yazi + ya ---
 YAZI_ARCHIVE="yazi-aarch64-apple-darwin.zip"
 YAZI_URL="https://github.com/sxyazi/yazi/releases/download/v${YAZI_VERSION}/${YAZI_ARCHIVE}"
-if [ ! -f "$CACHE_DIR/yazi-${YAZI_VERSION}" ]; then
+if [ ! -f "$CACHE_DIR/yazi-${YAZI_VERSION}" ] || [ ! -f "$OUTPUT_DIR/yazi" ]; then
     echo "Downloading yazi v${YAZI_VERSION}..."
     curl -fSL "$YAZI_URL" -o "$CACHE_DIR/${YAZI_ARCHIVE}"
     unzip -o "$CACHE_DIR/${YAZI_ARCHIVE}" -d "$CACHE_DIR/yazi-extract"
@@ -26,7 +29,7 @@ fi
 # --- delta ---
 DELTA_ARCHIVE="delta-${DELTA_VERSION}-aarch64-apple-darwin.tar.gz"
 DELTA_URL="https://github.com/dandavison/delta/releases/download/${DELTA_VERSION}/${DELTA_ARCHIVE}"
-if [ ! -f "$CACHE_DIR/delta-${DELTA_VERSION}" ]; then
+if [ ! -f "$CACHE_DIR/delta-${DELTA_VERSION}" ] || [ ! -f "$OUTPUT_DIR/delta" ]; then
     echo "Downloading delta v${DELTA_VERSION}..."
     curl -fSL "$DELTA_URL" -o "$CACHE_DIR/${DELTA_ARCHIVE}"
     tar xzf "$CACHE_DIR/${DELTA_ARCHIVE}" -C "$CACHE_DIR"
