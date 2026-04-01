@@ -1,6 +1,5 @@
 // macos/Sources/Features/Workspace/Yazi/YaziSurfaceStore.swift
 import Foundation
-import GhosttyKit
 
 /// Manages one yazi terminal surface per workspace.
 /// Surfaces are lazily created on first panel open and kept alive
