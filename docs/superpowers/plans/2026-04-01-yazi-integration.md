@@ -1069,7 +1069,14 @@ git commit -m "feat(yazi): replace FileBrowser and GitPanel with bundled yazi + 
 
 ---
 
-## Task 11: 手动测试验证
+## Task 11: 自动化 UI 截图测试
+
+使用 AppleScript + screencapture 自动验证 UI 效果。
+
+**注意：**
+- **不要用** Ctrl API 的 `capture_screenshot`（Metal/GPU 终端内容截出白图）
+- **不要用** AppleScript `keystroke` 发快捷键（会触发系统快捷键而非 App 快捷键）
+- **正确方式**：`click menu item` 点菜单项触发操作，`screencapture -x` 截屏
 
 - [ ] **Step 1: 下载 bundled tools**
 
@@ -1077,21 +1084,92 @@ git commit -m "feat(yazi): replace FileBrowser and GitPanel with bundled yazi + 
 ./scripts/fetch-bundled-tools.sh macos/Resources/bin
 ```
 
-- [ ] **Step 2: 启动 App 并验证以下场景**
+- [ ] **Step 2: 构建并启动 App**
 
-1. 创建一个 Workspace，点击 File Browser 按钮 → 面板打开，显示 yazi 文件树
-2. 在 yazi 中浏览文件，图片文件能预览（Kitty 图像协议）
-3. 修改一个有 git 变更的文件，选中后 preview 显示 delta 渲染的 diff
-4. 在 yazi 中按 Enter 打开文件 → Poltertty 新开 tab
-5. 切换到另一个 Workspace → yazi 自动 cd 到新 Workspace 目录
-6. 关闭面板再打开 → yazi 状态保留（目录位置不变）
-7. 如果有多个 worktree，通过面板工具栏切换 → yazi 自动 cd 到 worktree 路径
-8. 删除一个 Workspace → 对应的 yazi surface 被清理
-9. `Cmd+Option+F` 快捷键切换面板可见性
+```bash
+cd macos && xcodebuild build -scheme Ghostty -destination 'platform=macOS' 2>&1 | tail -5
+# 启动 App
+open build/Build/Products/Debug/Ghostty.app
+sleep 3
+```
 
-- [ ] **Step 3: Commit 任何修复**
+- [ ] **Step 3: 测试场景 1 — 面板打开显示 yazi**
+
+```bash
+# 确保 App 在前台
+osascript -e 'tell application "System Events" to tell process "ghostty" to set frontmost to true'
+sleep 0.5
+
+# 点菜单打开 File Browser
+osascript -e '
+tell application "System Events"
+    tell process "ghostty"
+        set frontmost to true
+        delay 0.5
+        click menu item "Toggle File Browser" of menu "Workspace" of menu bar 1
+    end tell
+end tell
+'
+sleep 1.5
+
+# 截屏验证
+screencapture -x /tmp/yazi_test_01_panel_open.png
+```
+
+用 Read 工具查看 `/tmp/yazi_test_01_panel_open.png`，确认：
+- 左侧面板显示 yazi 文件树
+- 工具栏有 worktree selector 和 close 按钮
+- 右侧是正常终端区域
+
+- [ ] **Step 4: 测试场景 2 — 面板关闭再打开（状态保留）**
+
+```bash
+# 关闭面板
+osascript -e '
+tell application "System Events"
+    tell process "ghostty"
+        click menu item "Toggle File Browser" of menu "Workspace" of menu bar 1
+    end tell
+end tell
+'
+sleep 0.5
+
+# 再次打开
+osascript -e '
+tell application "System Events"
+    tell process "ghostty"
+        click menu item "Toggle File Browser" of menu "Workspace" of menu bar 1
+    end tell
+end tell
+'
+sleep 1.5
+
+# 截屏验证
+screencapture -x /tmp/yazi_test_02_panel_reopen.png
+```
+
+用 Read 工具查看 `/tmp/yazi_test_02_panel_reopen.png`，确认：
+- yazi 面板重新出现
+- 目录位置与之前一致（yazi 状态保留）
+
+- [ ] **Step 5: 测试场景 3 — Workspace 切换（面板可见性跨 workspace）**
+
+如果有多个 workspace，通过侧边栏切换，截屏验证面板是否跟随 workspace 切换：
+
+```bash
+sleep 1
+screencapture -x /tmp/yazi_test_03_workspace_switch.png
+```
+
+用 Read 工具查看截屏确认 yazi 显示了新 workspace 的目录。
+
+- [ ] **Step 6: 检查截屏结果并修复问题**
+
+逐一查看所有截屏，如发现 UI 问题（布局错乱、面板不显示、yazi 未启动等），修复代码后重新测试。
+
+- [ ] **Step 7: Commit 任何修复**
 
 ```bash
 git add -A
-git commit -m "fix(yazi): address issues found during manual testing"
+git commit -m "fix(yazi): address issues found during UI screenshot testing"
 ```
