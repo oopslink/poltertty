@@ -624,7 +624,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     func switchToWorkspace(_ targetId: UUID) {
         // Save current workspace snapshot
         if let currentId = workspaceId, let window = self.window {
-            persistFileBrowserState(for: currentId)
+            persistPanelState(for: currentId)
             WorkspaceManager.shared.saveSnapshot(
                 for: currentId,
                 window: window,
@@ -718,13 +718,10 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         tabBarViewModel.tmuxMonitor.start()
     }
 
-    private func persistFileBrowserState(for workspaceId: UUID) {
-        guard var ws = WorkspaceManager.shared.workspace(for: workspaceId) else { return }
-        let vm = WorkspaceManager.shared.fileBrowserViewModel(for: workspaceId)
-        ws.fileBrowserVisible = vm.isVisible
-        ws.fileBrowserWidth = vm.panelWidth
-        let gitVM = WorkspaceManager.shared.gitPanelViewModel(for: workspaceId)
-        ws.gitPanelWidth = gitVM.gitPanelWidth
+    private func persistPanelState(for workspaceId: UUID) {
+        // panelVisible/panelWidth 由 PolterttyRootView 的 onChange 实时写入 WorkspaceModel，
+        // 此处只需确保调用 update 触发持久化即可
+        guard let ws = WorkspaceManager.shared.workspace(for: workspaceId) else { return }
         WorkspaceManager.shared.update(ws)
     }
 
@@ -1937,7 +1934,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     override func windowWillClose(_ notification: Notification) {
         // Save tab state before super clears contentView
         if let wsId = workspaceId, let window = self.window {
-            persistFileBrowserState(for: wsId)
+            persistPanelState(for: wsId)
             WorkspaceManager.shared.saveSnapshot(
                 for: wsId,
                 window: window,
@@ -2003,21 +2000,11 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         self.relabelTabs()
         self.fixTabBar()
         terminalViewContainer?.updateGlassTintOverlay(isKeyWindow: true)
-        if let wsId = workspaceId {
-            let vm = WorkspaceManager.shared.fileBrowserViewModel(for: wsId)
-            vm.resume()
-            // Force SwiftUI to re-render the file browser panel in case updates
-            // were missed while this window was in a background tab.
-            vm.objectWillChange.send()
-        }
     }
 
     override func windowDidResignKey(_ notification: Notification) {
         super.windowDidResignKey(notification)
         terminalViewContainer?.updateGlassTintOverlay(isKeyWindow: false)
-        if let wsId = workspaceId {
-            WorkspaceManager.shared.fileBrowserViewModel(for: wsId).pause()
-        }
     }
 
     override func windowDidMove(_ notification: Notification) {

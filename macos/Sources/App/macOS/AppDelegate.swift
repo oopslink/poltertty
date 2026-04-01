@@ -1202,10 +1202,6 @@ class AppDelegate: NSObject,
         toggleFileBrowser.keyEquivalentModifierMask = [.command, .option]
         workspaceMenu.addItem(toggleFileBrowser)
 
-        let toggleGitPanel = NSMenuItem(title: "Toggle Git Tab", action: #selector(toggleGitPanel(_:)), keyEquivalent: "g")
-        toggleGitPanel.keyEquivalentModifierMask = [.command, .option]
-        workspaceMenu.addItem(toggleGitPanel)
-
         let workspaceMenuItem = NSMenuItem(title: "Workspace", action: nil, keyEquivalent: "")
         workspaceMenuItem.submenu = workspaceMenu
 
@@ -1296,10 +1292,7 @@ class AppDelegate: NSObject,
     }
 
     @objc func toggleFileBrowser(_ sender: Any?) {
-        guard let window = NSApp.keyWindow,
-              let controller = window.windowController as? TerminalController,
-              let wsId = controller.workspaceId else { return }
-        WorkspaceManager.shared.fileBrowserViewModel(for: wsId).isVisible.toggle()
+        NotificationCenter.default.post(name: .toggleFileBrowser, object: nil)
     }
 
     @objc func toggleAgentMonitor(_ sender: Any?) {
@@ -1310,10 +1303,6 @@ class AppDelegate: NSObject,
         Task { @MainActor in
             CtrlAPIStore.shared.isMonitorVisible.toggle()
         }
-    }
-
-    @objc func toggleGitPanel(_ sender: Any?) {
-        NotificationCenter.default.post(name: .toggleGitPanel, object: nil)
     }
 
     @objc func showAgentDashboard(_ sender: Any?) {

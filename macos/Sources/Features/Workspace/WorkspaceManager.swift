@@ -11,40 +11,8 @@ class WorkspaceManager: ObservableObject {
     /// Maps workspace ID to its owning NSWindow
     var activeWindows: [UUID: WeakWindow] = [:]
 
-    // MARK: - File Browser ViewModels (per-workspace)
-    private var fileBrowserViewModels: [UUID: FileBrowserViewModel] = [:]
-
-    // MARK: - Git Panel ViewModels (per-workspace)
-    private var gitPanelViewModels: [UUID: GitPanelViewModel] = [:]
-
-    func fileBrowserViewModel(for workspaceId: UUID) -> FileBrowserViewModel {
-        if let existing = fileBrowserViewModels[workspaceId] { return existing }
-        let ws = workspace(for: workspaceId)
-        let vm = FileBrowserViewModel(
-            rootDir: ws?.rootDirExpanded ?? "",
-            isVisible: ws?.fileBrowserVisible ?? false,
-            panelWidth: ws?.fileBrowserWidth ?? 260
-        )
-        fileBrowserViewModels[workspaceId] = vm
-        return vm
-    }
-
-    func removeFileBrowserViewModel(for workspaceId: UUID) {
-        fileBrowserViewModels[workspaceId]?.stop()
-        fileBrowserViewModels.removeValue(forKey: workspaceId)
-    }
-
-    @MainActor func gitPanelViewModel(for workspaceId: UUID) -> GitPanelViewModel {
-        if let vm = gitPanelViewModels[workspaceId] { return vm }
-        let savedWidth = workspace(for: workspaceId)?.gitPanelWidth ?? 600
-        let vm = GitPanelViewModel(gitPanelWidth: savedWidth)
-        gitPanelViewModels[workspaceId] = vm
-        return vm
-    }
-
-    func removeGitPanelViewModel(for workspaceId: UUID) {
-        gitPanelViewModels.removeValue(forKey: workspaceId)
-    }
+    /// PolterttyRootView 创建 yazi store 后注入此引用（用于 delete 时清理 surface）
+    weak var yaziSurfaceStore: YaziSurfaceStore?
 
     /// Only formal (non-temporary) workspaces
     var formalWorkspaces: [WorkspaceModel] {
@@ -172,8 +140,7 @@ class WorkspaceManager: ObservableObject {
         let tempIds = tempWorkspaces.map { $0.id }
         for id in tempIds {
             activeWindows.removeValue(forKey: id)
-            removeFileBrowserViewModel(for: id)
-            removeGitPanelViewModel(for: id)
+            yaziSurfaceStore?.removeSurface(for: id)
         }
         workspaces.removeAll { $0.isTemporary }
     }
@@ -209,8 +176,7 @@ class WorkspaceManager: ObservableObject {
         }
         workspaces.removeAll { $0.id == id }
         activeWindows.removeValue(forKey: id)
-        removeFileBrowserViewModel(for: id)
-        removeGitPanelViewModel(for: id)
+        yaziSurfaceStore?.removeSurface(for: id)
         let dirPath = workspaceDir(for: id)
         try? FileManager.default.removeItem(atPath: dirPath)
         let legacyPath = legacySnapshotPath(for: id)

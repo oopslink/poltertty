@@ -18,7 +18,6 @@ extension Notification.Name {
     static let toggleNotificationCenter = Notification.Name("poltertty.toggleNotificationCenter")
     static let jumpToHighestPriorityUnread = Notification.Name("poltertty.jumpToHighestPriorityUnread")
     static let toggleAgentDashboard = Notification.Name("poltertty.toggleAgentDashboard")
-    static let toggleGitPanel = Notification.Name("poltertty.toggleGitPanel")
 }
 
 struct PolterttyRootView<TerminalContent: View>: View {
@@ -47,17 +46,17 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var startupMode: WorkspaceStartupMode = .terminal
 
     @State private var showConvertAlert = false
-    @State private var fileBrowserDividerHovered = false
-    @State private var activePanelTab: PanelTab = .files
     @State private var showTmuxPicker = false
     @State private var tmuxPickerAttachInCurrentPane = false
     @State private var launcherVisible = false
     @State private var convertTargetId: UUID?
     @State private var convertName = ""
 
-    @ObservedObject private var fileBrowserVM: FileBrowserViewModel
+    @StateObject private var yaziStore = YaziSurfaceStore()
+    @State private var panelVisible: Bool = false
+    @State private var yaziPanelWidth: CGFloat = 260
+
     @ObservedObject private var agentMonitorVM: AgentMonitorViewModel
-    @ObservedObject private var gitPanelVM: GitPanelViewModel
     @ObservedObject var tabBarViewModel: TabBarViewModel
     let workspaceAccentColor: Color
     let onSwitchTab: ((UUID) -> Void)?
@@ -101,16 +100,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
         self.onOpenWorktreeInWindow = onOpenWorktreeInWindow
 
         if let wsId = workspaceId {
-            self._fileBrowserVM = ObservedObject(
-                wrappedValue: WorkspaceManager.shared.fileBrowserViewModel(for: wsId)
-            )
-        } else {
-            self._fileBrowserVM = ObservedObject(
-                wrappedValue: FileBrowserViewModel(rootDir: "")
-            )
-        }
-
-        if let wsId = workspaceId {
             self._agentMonitorVM = ObservedObject(
                 wrappedValue: AgentMonitorViewModel(workspaceId: wsId)
             )
@@ -119,15 +108,6 @@ struct PolterttyRootView<TerminalContent: View>: View {
                 wrappedValue: AgentMonitorViewModel(workspaceId: UUID())
             )
         }
-
-        if let wsId = workspaceId {
-            self._gitPanelVM = ObservedObject(
-                wrappedValue: WorkspaceManager.shared.gitPanelViewModel(for: wsId)
-            )
-        } else {
-            self._gitPanelVM = ObservedObject(wrappedValue: GitPanelViewModel())
-        }
-
     }
 
     private var showStatusBar: Bool {
@@ -140,16 +120,12 @@ struct PolterttyRootView<TerminalContent: View>: View {
         sidebarCollapsed ? 48 : sidebarWidth
     }
 
-    private var unifiedPanelWidth: CGFloat {
-        switch activePanelTab {
-        case .git:
-            return gitPanelVM.gitPanelWidth
-        case .files:
-            if fileBrowserVM.showPreviewPanel {
-                return fileBrowserVM.previewTotalWidth
-            }
-            return fileBrowserVM.panelWidth
-        }
+    private var effectivePanelWidth: CGFloat { yaziPanelWidth }
+
+    private var currentWorkspaceRootDir: String {
+        guard let wsId = workspaceId,
+              let ws = WorkspaceManager.shared.workspace(for: wsId) else { return "" }
+        return ws.rootDirExpanded
     }
 
     var body: some View {
@@ -211,49 +187,20 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         Divider()
                     }
 
-                    // Unified Panel (File Browser + Git Tab)
-                    if fileBrowserVM.isVisible {
-                        if fileBrowserVM.isPreviewFullscreen {
-                            UnifiedPanelView(
-                                fileBrowserVM: fileBrowserVM,
-                                gitPanelVM: gitPanelVM,
-                                activePanelTab: $activePanelTab,
-                                worktreeMonitor: worktreeMonitor,
-                                onOpenInTerminal: { url in
-                                    NotificationCenter.default.post(
-                                        name: .fileBrowserOpenInTerminal,
-                                        object: nil,
-                                        userInfo: [
-                                            "workspaceId": workspaceId as Any,
-                                            "path": url.path
-                                        ]
-                                    )
-                                }
-                            )
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        } else {
-                            UnifiedPanelView(
-                                fileBrowserVM: fileBrowserVM,
-                                gitPanelVM: gitPanelVM,
-                                activePanelTab: $activePanelTab,
-                                worktreeMonitor: worktreeMonitor,
-                                onOpenInTerminal: { url in
-                                    NotificationCenter.default.post(
-                                        name: .fileBrowserOpenInTerminal,
-                                        object: nil,
-                                        userInfo: [
-                                            "workspaceId": workspaceId as Any,
-                                            "path": url.path
-                                        ]
-                                    )
-                                }
-                            )
-                            .frame(width: unifiedPanelWidth)
+                    // Yazi 文件管理面板
+                    if panelVisible {
+                        YaziPanelView(
+                            workspaceId: workspaceId,
+                            yaziStore: yaziStore,
+                            rootDir: currentWorkspaceRootDir,
+                            worktreeMonitor: worktreeMonitor,
+                            onClose: { panelVisible = false }
+                        )
+                        .frame(width: effectivePanelWidth)
 
-                            unifiedPanelDivider
+                        yaziPanelDivider
 
-                            terminalAreaView
-                        }
+                        terminalAreaView
                     } else {
                         terminalAreaView
                     }
@@ -316,7 +263,14 @@ struct PolterttyRootView<TerminalContent: View>: View {
                 .ignoresSafeArea()
             }
         }
-        .onAppear { startupMode = initialStartupMode }
+        .onAppear {
+            startupMode = initialStartupMode
+            if let wsId = workspaceId, let ws = WorkspaceManager.shared.workspace(for: wsId) {
+                panelVisible = ws.panelVisible
+                yaziPanelWidth = ws.panelWidth
+            }
+            WorkspaceManager.shared.yaziSurfaceStore = yaziStore
+        }
         .onReceive(NotificationCenter.default.publisher(for: .toggleWorkspaceSidebar)) { notification in
             guard notification.object as? NSWindow == windowProvider() else { return }
             sidebarVisible.toggle()
@@ -334,37 +288,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
             agentMonitorVM.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleFileBrowser)) { _ in
-            if fileBrowserVM.isVisible {
-                fileBrowserVM.isVisible = false
-            } else {
-                fileBrowserVM.isVisible = true
-                activePanelTab = .files
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleGitPanel)) { _ in
-            if fileBrowserVM.isVisible {
-                if activePanelTab == .git {
-                    // 已在 Git Tab：隐藏整个统一面板（toggle）
-                    fileBrowserVM.isVisible = false
-                } else {
-                    // 在 Files Tab：切换到 Git Tab
-                    if fileBrowserVM.isPreviewFullscreen {
-                        fileBrowserVM.togglePreviewFullscreen()
-                    }
-                    activePanelTab = .git
-                }
-            } else {
-                // 面板隐藏：打开面板并切到 Git Tab
-                fileBrowserVM.isVisible = true
-                activePanelTab = .git
-            }
-        }
-        // 跟随文件浏览器当前路径（切换 worktree 时自动更新）
-        .task(id: fileBrowserVM.effectiveRootDir) {
-            let dir = fileBrowserVM.effectiveRootDir
-            guard !dir.isEmpty else { return }
-            await gitPanelVM.load(rootDir: dir)
-            fileBrowserVM.updateGitRepo(gitPanelVM.repo)
+            panelVisible.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleNotificationCenter)) { _ in
             notificationCenterVisible.toggle()
@@ -418,6 +342,19 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .sheet(isPresented: $showConvertAlert) {
             convertToFormalSheet
         }
+        // panelVisible/yaziPanelWidth 变化时即时写回 WorkspaceModel，供 persistPanelState 读取
+        .onChange(of: panelVisible) { newValue in
+            guard let wsId = workspaceId else { return }
+            guard var ws = WorkspaceManager.shared.workspace(for: wsId) else { return }
+            ws.panelVisible = newValue
+            WorkspaceManager.shared.update(ws)
+        }
+        .onChange(of: yaziPanelWidth) { newValue in
+            guard let wsId = workspaceId else { return }
+            guard var ws = WorkspaceManager.shared.workspace(for: wsId) else { return }
+            ws.panelWidth = newValue
+            WorkspaceManager.shared.update(ws)
+        }
         // 删除所有 workspace 后保持 terminal 模式（不跳 onboarding），用户可通过侧边栏重新创建
     }
 
@@ -469,50 +406,26 @@ struct PolterttyRootView<TerminalContent: View>: View {
         // tab 切换通过 onSwitchTab 回调更新 controller 的 surfaceTree
         terminalView
             .environmentObject(tabBarViewModel)
-            .environmentObject(gitPanelVM)
     }
 
-    private var unifiedPanelDivider: some View {
-        ZStack {
-            // 悬停时加深边框，方便用户找到拖拽区域
-            Color(nsColor: fileBrowserDividerHovered ? .controlAccentColor : .separatorColor)
-                .frame(width: fileBrowserDividerHovered ? 2 : 1)
-                .animation(.easeInOut(duration: 0.15), value: fileBrowserDividerHovered)
-            if fileBrowserDividerHovered {
-                DividerGripHandle()
-            }
-        }
-        .frame(width: 24)
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            fileBrowserDividerHovered = hovering
-            if hovering { NSCursor.resizeLeftRight.push() }
-            else { NSCursor.pop() }
-        }
-        .gesture(
-            DragGesture(minimumDistance: 1)
-                .onChanged { value in
-                    switch activePanelTab {
-                    case .git:
-                        let newWidth = gitPanelVM.gitPanelWidth + value.translation.width
-                        gitPanelVM.gitPanelWidth = max(400, min(1200, newWidth))
-                    case .files:
-                        if fileBrowserVM.showPreviewPanel {
-                            let minW = fileBrowserVM.treeWidth + 217
-                            let newWidth = fileBrowserVM.previewTotalWidth + value.translation.width
-                            fileBrowserVM.previewTotalWidth = max(minW, min(1200, newWidth))
-                        } else {
-                            let newWidth = fileBrowserVM.panelWidth + value.translation.width
-                            fileBrowserVM.panelWidth = max(160, min(600, newWidth))
-                        }
+    private var yaziPanelDivider: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: 1)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle().inset(by: -4))
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { value in
+                        let newWidth = yaziPanelWidth + value.translation.width
+                        yaziPanelWidth = max(160, min(600, newWidth))
                     }
-                }
-        )
+            )
     }
 
     // Called by TerminalController to get current sidebar state for snapshots
     var currentSidebarWidth: CGFloat { effectiveSidebarWidth }
     var currentSidebarVisible: Bool { sidebarVisible }
-    var currentFileBrowserVisible: Bool { fileBrowserVM.isVisible }
-    var currentFileBrowserWidth: CGFloat { fileBrowserVM.panelWidth }
+    var currentFileBrowserVisible: Bool { panelVisible }
+    var currentFileBrowserWidth: CGFloat { yaziPanelWidth }
 }

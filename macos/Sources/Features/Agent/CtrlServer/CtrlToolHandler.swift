@@ -515,13 +515,11 @@ final class CtrlToolHandler: Sendable {
                 let allIdsStr = allIds.map { $0.uuidString }.joined(separator: ",")
                 var gitState = "no_wsId"
                 if let id = wsId {
-                    let vm = WorkspaceManager.shared.gitPanelViewModel(for: id)
-                    let fbvm = WorkspaceManager.shared.fileBrowserViewModel(for: id)
-                    gitState = "{\"isGitRepo\":\(vm.isGitRepo),\"isDiffMaximized\":\(vm.isDiffMaximized),\"hasDiff\":\(vm.selectedDiff != nil),\"changedCount\":\(vm.changedCount),\"isVisible\":\(fbvm.isVisible)}"
+                    let ws = WorkspaceManager.shared.workspace(for: id)
+                    gitState = "{\"panelVisible\":\(ws?.panelVisible ?? false)}"
                 } else if let firstId = allIds.first {
-                    let vm = WorkspaceManager.shared.gitPanelViewModel(for: firstId)
-                    let fbvm = WorkspaceManager.shared.fileBrowserViewModel(for: firstId)
-                    gitState = "{\"isGitRepo\":\(vm.isGitRepo),\"isDiffMaximized\":\(vm.isDiffMaximized),\"hasDiff\":\(vm.selectedDiff != nil),\"changedCount\":\(vm.changedCount),\"isVisible\":\(fbvm.isVisible),\"fromAllIds\":true}"
+                    let ws = WorkspaceManager.shared.workspace(for: firstId)
+                    gitState = "{\"panelVisible\":\(ws?.panelVisible ?? false),\"fromAllIds\":true}"
                 }
                 cont.resume(returning: "{\"wsId\":\"\(wsIdStr)\",\"allIds\":\"\(allIdsStr)\",\"isTermWin\":\(isTerminal),\"winCount\":\(windowCount),\"termWinCount\":\(termWindowCount),\"state\":\(gitState)}")
             }
@@ -530,91 +528,9 @@ final class CtrlToolHandler: Sendable {
 
     // MARK: - test_fullscreen_diff
 
-    /// 用于测试：切换到 Git 面板并将 diff 设为全屏状态，然后截图返回路径。
-    /// 可选参数: workspaceId (UUID string)
+    /// 已废弃：Git 面板已迁移到 yazi，此方法保留接口兼容性。
     private func callTestFullscreenDiff(arguments: [String: Any]) async throws -> String {
-        let path: String = try await withCheckedThrowingContinuation { cont in
-            Task { @MainActor in
-                // 找到目标 workspace：优先用参数，其次从 keyWindow 反推，最后用 allWorkspaceIds
-                let wsId: UUID
-                if let str = arguments["workspaceId"] as? String, let id = UUID(uuidString: str) {
-                    wsId = id
-                } else if let id = (NSApp.keyWindow ?? NSApp.windows.first(where: { $0 is TerminalWindow }))
-                                    .flatMap({ WorkspaceManager.shared.workspaceId(for: $0) }) {
-                    wsId = id
-                } else if let first = WorkspaceManager.shared.allWorkspaceIds().first {
-                    wsId = first
-                } else {
-                    cont.resume(throwing: RPCError(code: -32603, message: "test_fullscreen_diff: no workspace found"))
-                    return
-                }
-
-                let fileBrowserVM = WorkspaceManager.shared.fileBrowserViewModel(for: wsId)
-                let gitPanelVM = WorkspaceManager.shared.gitPanelViewModel(for: wsId)
-
-                // 将根目录指向 poltertty 主仓库，确保加载到真实 git 仓库
-                let gitRootPath = "/Users/oopslink/works/codes/oopslink/poltertty"
-                fileBrowserVM.switchRoot(to: gitRootPath)
-
-                // 确保面板可见并切换到 git tab
-                fileBrowserVM.isVisible = true
-                NotificationCenter.default.post(name: .toggleGitPanel, object: nil)
-
-                // 用嵌套 Task + Task.sleep 避免 asyncAfter 重载歧义
-                Task { @MainActor in
-                    // 等待 git 仓库加载（需要时间检测 git repo）
-                    try? await Task.sleep(nanoseconds: 3_000_000_000)
-
-                    // 构造一个简单的测试 diff（GitFileDiff）
-                    let lines: [GitDiffLine] = [
-                        GitDiffLine(id: 1, origin: .context, oldLineNo: 1, newLineNo: 1, content: " // 测试文件"),
-                        GitDiffLine(id: 2, origin: .removed, oldLineNo: 2, newLineNo: nil, content: "-// 旧代码"),
-                        GitDiffLine(id: 3, origin: .added, oldLineNo: nil, newLineNo: 3, content: "+// 新代码（全屏修复后不覆盖侧边栏）"),
-                    ]
-                    let patch = GitPatch(header: "@@ -1,3 +1,3 @@", lines: lines)
-                    let diff = GitFileDiff(path: "TestFile.swift", oldPath: nil, delta: .modified, patches: [patch])
-                    gitPanelVM.isGitRepo = true
-                    gitPanelVM.selectedDiff = diff
-                    gitPanelVM.isDiffMaximized = true
-                    fileBrowserVM.isPreviewFullscreen = true
-
-                    // 等待布局更新后截图（更长时间确保 SwiftUI 渲染完成）
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
-
-                    // 强制触发 AppKit 渲染管线
-                    NSApp.windows.forEach { $0.contentView?.displayIfNeeded() }
-                    try? await Task.sleep(nanoseconds: 100_000_000)
-
-                    // 用 workspace 对应的 window（不用 keyWindow，因为 keyWindow 可能是未注册的窗口）
-                    let window = WorkspaceManager.shared.windowForWorkspace(wsId)
-                        ?? (NSApp.keyWindow as? TerminalWindow)
-                        ?? NSApp.windows.first(where: { $0 is TerminalWindow })
-                    guard let contentView = window?.contentView else {
-                        cont.resume(throwing: RPCError(code: -32603, message: "test_fullscreen_diff: window not found"))
-                        return
-                    }
-                    let bounds = contentView.bounds
-                    guard let bitmap = contentView.bitmapImageRepForCachingDisplay(in: bounds) else {
-                        cont.resume(throwing: RPCError(code: -32603, message: "test_fullscreen_diff: bitmap failed"))
-                        return
-                    }
-                    contentView.cacheDisplay(in: bounds, to: bitmap)
-                    let img = NSImage(size: bounds.size)
-                    img.addRepresentation(bitmap)
-                    guard let tiff = img.tiffRepresentation,
-                          let bmp = NSBitmapImageRep(data: tiff),
-                          let png = bmp.representation(using: .png, properties: [:]) else {
-                        cont.resume(throwing: RPCError(code: -32603, message: "test_fullscreen_diff: encode failed"))
-                        return
-                    }
-                    let filename = UUID().uuidString + ".png"
-                    let filePath = Self.screenshotDir + "/" + filename
-                    try? png.write(to: URL(fileURLWithPath: filePath))
-                    cont.resume(returning: filePath)
-                }
-            }
-        }
-        return #"{"path":"\#(path)"}"#
+        throw RPCError(code: -32603, message: "test_fullscreen_diff: git panel has been replaced by yazi")
     }
 
     // MARK: - send_key
@@ -765,22 +681,19 @@ final class CtrlToolHandler: Sendable {
 
     // MARK: - show_file_browser
 
-    /// 打开文件浏览器面板（Files Tab）。
+    /// 打开 yazi 文件管理面板。
     private func callShowFileBrowser(arguments: [String: Any]) async throws -> String {
         await MainActor.run {
-            NotificationCenter.default.post(name: .init("poltertty.toggleFileBrowser"), object: nil)
+            NotificationCenter.default.post(name: .toggleFileBrowser, object: nil)
         }
         return #"{"ok":true}"#
     }
 
     // MARK: - show_git_panel
 
-    /// 打开指定 workspace 的 Git 面板（Git Tab）。
+    /// Git 面板已迁移到 yazi，此方法转发到 show_file_browser。
     private func callShowGitPanel(arguments: [String: Any]) async throws -> String {
-        await MainActor.run {
-            NotificationCenter.default.post(name: .init("poltertty.toggleGitPanel"), object: nil)
-        }
-        return #"{"ok":true}"#
+        return try await callShowFileBrowser(arguments: arguments)
     }
 
     // MARK: - show_agent_monitor

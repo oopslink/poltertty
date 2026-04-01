@@ -15,9 +15,8 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
     var updatedAt: Date
     var lastActiveAt: Date
     var isTemporary: Bool
-    var fileBrowserVisible: Bool = false
-    var fileBrowserWidth: CGFloat = 260
-    var gitPanelWidth: CGFloat = 600
+    var panelVisible: Bool = false
+    var panelWidth: CGFloat = 260
     var groupId: UUID?    // nil = 未分组
     var groupOrder: Int   // workspace 在所属区域内的排列顺序
 
@@ -33,9 +32,9 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
         case updatedAt
         case lastActiveAt
         case isTemporary
-        case fileBrowserVisible
-        case fileBrowserWidth
-        case gitPanelWidth
+        // raw value 保留旧 JSON key，实现向后兼容
+        case panelVisible = "fileBrowserVisible"
+        case panelWidth = "fileBrowserWidth"
         case groupId
         case groupOrder
     }
@@ -69,9 +68,8 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         lastActiveAt = try container.decode(Date.self, forKey: .lastActiveAt)
         isTemporary = try container.decodeIfPresent(Bool.self, forKey: .isTemporary) ?? false
-        fileBrowserVisible = try container.decodeIfPresent(Bool.self, forKey: .fileBrowserVisible) ?? false
-        fileBrowserWidth   = try container.decodeIfPresent(CGFloat.self, forKey: .fileBrowserWidth) ?? 260
-        gitPanelWidth      = try container.decodeIfPresent(CGFloat.self, forKey: .gitPanelWidth) ?? 600
+        panelVisible = try container.decodeIfPresent(Bool.self, forKey: .panelVisible) ?? false
+        panelWidth = try container.decodeIfPresent(CGFloat.self, forKey: .panelWidth) ?? 260
         groupId    = try container.decodeIfPresent(UUID.self, forKey: .groupId)
         groupOrder = try container.decodeIfPresent(Int.self, forKey: .groupOrder) ?? 0
     }
