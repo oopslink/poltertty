@@ -69,6 +69,17 @@ struct AgentSession: Identifiable {
     var subagents: [String: SubagentInfo] = [:]
     /// 当前使用的模型名称（从 transcript 解析，如 "claude-sonnet-4-6"）
     var model: String? = nil
+    /// 顶层工具调用记录（非 subagent 发起的工具调用）
+    var topLevelToolCalls: [ToolCallRecord] = []
+    /// 上下文压缩事件时间戳（PostCompact hook 触发）
+    var compactEvents: [Date] = []
+    /// 权限拒绝计数（PermissionDenied notification 触发）
+    var deniedToolCount: Int = 0
+
+    /// 当前活跃的 subagent 数量
+    var activeSubagentCount: Int {
+        subagents.values.filter { $0.state.isActive }.count
+    }
 }
 
 extension AgentState {

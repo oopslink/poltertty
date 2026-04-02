@@ -195,6 +195,14 @@ final class AgentSessionManager: ObservableObject {
                         session.subagents[key]?.toolCalls.append(record)
                     }
                 }
+            } else if let toolUseId = payload.toolUseId, let toolName = payload.toolName {
+                // 顶层工具调用（非 subagent 发起）→ 追加到 topLevelToolCalls
+                let record = ToolCallRecord(id: toolUseId, toolName: toolName, toolInput: payload.toolInputRaw)
+                updateFromClaudeSession(sid) { session in
+                    if !session.topLevelToolCalls.contains(where: { $0.id == toolUseId }) {
+                        session.topLevelToolCalls.append(record)
+                    }
+                }
             }
         case .postToolUse:
             guard let sid else { Self.logger.warning("postToolUse: no sessionId"); return }
@@ -227,6 +235,13 @@ final class AgentSessionManager: ObservableObject {
                         session.subagents[key]?.toolCalls[idx].isDone = true
                     }
                 }
+            } else if let toolUseId = payload.toolUseId {
+                // 顶层工具调用完成 → 标记 done
+                updateFromClaudeSession(sid) { session in
+                    if let idx = session.topLevelToolCalls.firstIndex(where: { $0.id == toolUseId }) {
+                        session.topLevelToolCalls[idx].isDone = true
+                    }
+                }
             }
             // F1: 实时 token 轮询
             if let surfaceId = claudeSessionIndex[sid] {
@@ -246,6 +261,9 @@ final class AgentSessionManager: ObservableObject {
                         body: nil, priority: .high
                     ))
                 }
+            } else if payload.notificationType == "permission_denied" {
+                // 权限拒绝：记录计数，供 Monitor Panel 显示角标
+                updateFromClaudeSession(sid) { $0.deniedToolCount += 1 }
             }
         case .stop:
             guard let sid else { return }
@@ -274,7 +292,20 @@ final class AgentSessionManager: ObservableObject {
                 }
             }
         case .subagentStop:
-            break
+            // Subagent 结束 → 更新 state 和 finishedAt
+            guard let sid, let agentId = payload.agentId else { break }
+            updateFromClaudeSession(sid) { session in
+                guard let key = session.subagents.values
+                    .first(where: { $0.agentId == agentId })?.id else { return }
+                session.subagents[key]?.state = .done(exitCode: 0)
+                if session.subagents[key]?.finishedAt == nil {
+                    session.subagents[key]?.finishedAt = Date()
+                }
+            }
+        case .postCompact:
+            // 上下文压缩：记录时间戳供 Monitor Panel 时间线展示
+            guard let sid else { break }
+            updateFromClaudeSession(sid) { $0.compactEvents.append(Date()) }
         default:
             break
         }

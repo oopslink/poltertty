@@ -35,16 +35,29 @@ struct AgentButtonView: View {
 
     @ViewBuilder
     private func agentStateIcon(session: AgentSession) -> some View {
-        AgentInlineIcon(agent: session.definition, size: 13)
-            .opacity(session.state == .working ? (pulse ? 1.0 : 0.4) : (session.state.isActive ? 0.8 : 0.4))
-            .onChange(of: session.state == .working) { isWorking in
-                pulse = isWorking
+        let subCount = session.activeSubagentCount
+        ZStack(alignment: .topTrailing) {
+            AgentInlineIcon(agent: session.definition, size: 13)
+                .opacity(session.state == .working ? (pulse ? 1.0 : 0.4) : (session.state.isActive ? 0.8 : 0.4))
+                .onChange(of: session.state == .working) { isWorking in
+                    pulse = isWorking
+                }
+                .animation(
+                    session.state == .working
+                        ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true)
+                        : .default,
+                    value: pulse
+                )
+            if subCount > 0 {
+                Text("\(subCount)")
+                    .font(.system(size: 6, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 9, minHeight: 9)
+                    .padding(.horizontal, 1)
+                    .background(Color.green)
+                    .clipShape(Capsule())
+                    .offset(x: 4, y: -4)
             }
-            .animation(
-                session.state == .working
-                    ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true)
-                    : .default,
-                value: pulse
-            )
+        }
     }
 }

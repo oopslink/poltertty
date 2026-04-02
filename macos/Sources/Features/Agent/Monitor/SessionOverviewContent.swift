@@ -3,10 +3,16 @@ import SwiftUI
 
 /// 跨 subagent 全局工具调用事件（供 Overview ActivityLog 使用）
 struct RecentEventEntry {
+    enum Kind {
+        case toolCall       // 普通工具调用
+        case compact        // 上下文压缩
+        case permDenied     // 权限拒绝
+    }
     let time: Date
     let subagentName: String
     let toolName: String
     let isDone: Bool
+    var kind: Kind = .toolCall
 }
 
 struct SessionOverviewContent: View {
@@ -25,6 +31,7 @@ struct SessionOverviewContent: View {
 
     private var recentEvents: [RecentEventEntry] {
         var events: [RecentEventEntry] = []
+        // Subagent 事件
         for sub in session.subagents.values {
             events.append(RecentEventEntry(
                 time: sub.startedAt,
@@ -40,6 +47,25 @@ struct SessionOverviewContent: View {
                     isDone: call.isDone
                 ))
             }
+        }
+        // 顶层工具调用（非 subagent）
+        for call in session.topLevelToolCalls {
+            events.append(RecentEventEntry(
+                time: call.startedAt,
+                subagentName: "",
+                toolName: call.toolName,
+                isDone: call.isDone
+            ))
+        }
+        // 上下文压缩事件
+        for compactAt in session.compactEvents {
+            events.append(RecentEventEntry(
+                time: compactAt,
+                subagentName: "",
+                toolName: "context compacted",
+                isDone: true,
+                kind: .compact
+            ))
         }
         return events
             .sorted { $0.time > $1.time }
@@ -71,7 +97,7 @@ struct SessionOverviewContent: View {
                     .foregroundStyle(.tertiary)
 
                 let events = recentEvents
-                let totalToolCalls = session.subagents.count + session.subagents.values.reduce(0) { $0 + $1.toolCalls.count }
+                let totalToolCalls = session.subagents.count + session.subagents.values.reduce(0) { $0 + $1.toolCalls.count } + session.topLevelToolCalls.count
                 if !events.isEmpty {
                     Divider().padding(.vertical, 6)
                     activitySection(events, total: totalToolCalls)
@@ -242,8 +268,18 @@ struct SessionOverviewContent: View {
 
     private func activitySection(_ events: [RecentEventEntry], total: Int) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("ACTIVITY", expanded: $activityExpanded)
-                .padding(.bottom, 4)
+            HStack(spacing: 6) {
+                sectionHeader("ACTIVITY", expanded: $activityExpanded)
+                if session.deniedToolCount > 0 {
+                    Text("\(session.deniedToolCount) denied")
+                        .font(.system(size: 8, weight: .medium))
+                        .padding(.horizontal, 4).padding(.vertical, 1)
+                        .background(AgentColors.errorBadgeBg)
+                        .foregroundStyle(AgentColors.error)
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+            }
+            .padding(.bottom, 4)
 
             if activityExpanded {
                 // 使用 ScrollView 替代 .clipped()，符合 ui-ux-rules.md 规范
@@ -269,19 +305,43 @@ struct SessionOverviewContent: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 64, alignment: .leading)
                         .lineLimit(1).truncationMode(.tail)
-                    Text(ev.toolName)
-                        .font(.system(size: 9))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
+                    switch ev.kind {
+                    case .compact:
+                        // 上下文压缩：橙色加刷新图标
+                        Label(ev.toolName, systemImage: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.orange)
+                            .lineLimit(1)
+                    case .permDenied:
+                        // 权限拒绝：红色加锁图标
+                        Label(ev.toolName, systemImage: "lock.slash")
+                            .font(.system(size: 9))
+                            .foregroundStyle(AgentColors.error)
+                            .lineLimit(1)
+                    case .toolCall:
+                        Text(ev.toolName)
+                            .font(.system(size: 9))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                    }
                     Spacer()
-                    if ev.isDone {
-                        Image(systemName: "checkmark")
+                    switch ev.kind {
+                    case .compact:
+                        EmptyView()
+                    case .permDenied:
+                        Image(systemName: "xmark")
                             .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(AgentColors.success)
-                    } else {
-                        Circle()
-                            .fill(AgentColors.active.opacity(0.7))
-                            .frame(width: 5, height: 5)
+                            .foregroundStyle(AgentColors.error)
+                    case .toolCall:
+                        if ev.isDone {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(AgentColors.success)
+                        } else {
+                            Circle()
+                                .fill(AgentColors.active.opacity(0.7))
+                                .frame(width: 5, height: 5)
+                        }
                     }
                 }
                 .padding(.vertical, 2)
