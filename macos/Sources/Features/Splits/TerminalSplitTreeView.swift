@@ -141,6 +141,14 @@ private struct TerminalSplitLeafContainer: View {
                 paneSelectorVM.unregisterPane(surfaceId: surfaceView.id)
             }
             .overlay {
+                if paneSelectorVM.isActive {
+                    Color.black.opacity(0.52)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                        .animation(.easeInOut(duration: 0.15), value: paneSelectorVM.isActive)
+                }
+            }
+            .overlay {
                 if paneSelectorVM.isActive,
                    let info = paneSelectorVM.overlayInfos[surfaceView.id] {
                     PaneOverlayCardView(info: info)
