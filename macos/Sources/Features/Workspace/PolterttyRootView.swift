@@ -191,6 +191,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
                     if panelVisible {
                         YaziPanelView(
                             workspaceId: workspaceId,
+                            ghostty: ghostty,
                             yaziStore: yaziStore,
                             rootDir: currentWorkspaceRootDir,
                             worktreeMonitor: worktreeMonitor,
