@@ -45,6 +45,12 @@ if [[ "$MODE" == "dev" ]]; then
     ACTUAL_OUTPUT=$(find "$OUTPUT_DIR" -name "Poltertty.app" -path "*/Debug/Poltertty.app" 2>/dev/null | head -n 1)
 
     if [[ -n "$ACTUAL_OUTPUT" ]]; then
+        # 同步 yazi-config（Xcode 不自动复制，需手动同步）
+        echo "==> sync yazi-config"
+        BUNDLE_YAZI_CFG="$ACTUAL_OUTPUT/Contents/Resources/yazi-config"
+        rm -rf "$BUNDLE_YAZI_CFG"
+        cp -r "$REPO_ROOT/macos/Resources/yazi-config" "$BUNDLE_YAZI_CFG"
+
         # 编译 poltertty-cli 并放入 app bundle
         echo "==> swiftc poltertty-cli"
         CLI_SRC="$REPO_ROOT/macos/PolterttyCLI"

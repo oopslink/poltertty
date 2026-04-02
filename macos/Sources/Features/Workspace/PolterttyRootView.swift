@@ -54,7 +54,9 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
     @StateObject private var yaziStore = YaziSurfaceStore()
     @State private var panelVisible: Bool = false
+    @State private var panelExpanded: Bool = false
     @State private var yaziPanelWidth: CGFloat = 260
+    @GestureState private var panelWidthDelta: CGFloat = 0
 
     @ObservedObject private var agentMonitorVM: AgentMonitorViewModel
     @ObservedObject var tabBarViewModel: TabBarViewModel
@@ -120,7 +122,9 @@ struct PolterttyRootView<TerminalContent: View>: View {
         sidebarCollapsed ? 48 : sidebarWidth
     }
 
-    private var effectivePanelWidth: CGFloat { yaziPanelWidth }
+    private var effectivePanelWidth: CGFloat {
+        max(160, min(600, yaziPanelWidth + panelWidthDelta))
+    }
 
     private var currentWorkspaceRootDir: String {
         guard let wsId = workspaceId,
@@ -195,13 +199,22 @@ struct PolterttyRootView<TerminalContent: View>: View {
                             yaziStore: yaziStore,
                             rootDir: currentWorkspaceRootDir,
                             worktreeMonitor: worktreeMonitor,
-                            onClose: { panelVisible = false }
+                            isExpanded: panelExpanded,
+                            onToggleExpand: { panelExpanded.toggle() },
+                            onClose: { panelVisible = false; panelExpanded = false }
                         )
-                        .frame(width: effectivePanelWidth)
+                        .frame(width: panelExpanded ? nil : effectivePanelWidth)
+                        .frame(maxWidth: panelExpanded ? .infinity : effectivePanelWidth)
 
-                        yaziPanelDivider
+                        if !panelExpanded {
+                            yaziPanelDivider
+                        }
 
+                        // 终端始终保留在视图树中（防止进程被销毁），展开时宽度压缩为 0
                         terminalAreaView
+                            .frame(width: panelExpanded ? 0 : nil)
+                            .opacity(panelExpanded ? 0 : 1)
+                            .clipped()
                     } else {
                         terminalAreaView
                     }
@@ -415,11 +428,20 @@ struct PolterttyRootView<TerminalContent: View>: View {
             .frame(width: 1)
             .frame(maxHeight: .infinity)
             .contentShape(Rectangle().inset(by: -4))
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
             .gesture(
                 DragGesture(minimumDistance: 1)
-                    .onChanged { value in
-                        let newWidth = yaziPanelWidth + value.translation.width
-                        yaziPanelWidth = max(160, min(600, newWidth))
+                    .updating($panelWidthDelta) { value, state, _ in
+                        state = value.translation.width
+                    }
+                    .onEnded { value in
+                        yaziPanelWidth = max(160, min(600, yaziPanelWidth + value.translation.width))
                     }
             )
     }

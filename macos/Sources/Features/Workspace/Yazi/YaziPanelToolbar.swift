@@ -6,6 +6,8 @@ struct YaziPanelToolbar: View {
     var workspaceId: UUID?
     var worktreeMonitor: GitWorktreeMonitor?
     var currentRootDir: String
+    var isExpanded: Bool = false
+    var onToggleExpand: () -> Void = {}
     var onClose: () -> Void
 
     var body: some View {
@@ -28,6 +30,36 @@ struct YaziPanelToolbar: View {
 
             Spacer()
 
+            // Expand / collapse button
+            Button {
+                onToggleExpand()
+            } label: {
+                Image(systemName: isExpanded
+                      ? "arrow.down.right.and.arrow.up.left"       // 已展开 → 点击收起
+                      : "arrow.up.left.and.arrow.down.right")      // 未展开 → 点击铺满
+                    .font(.system(size: 11))
+                    .foregroundStyle(isExpanded ? Color(nsColor: .controlAccentColor) : .secondary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help(isExpanded ? "Collapse Panel (⌥⌘O)" : "Expand to Full Width (⌥⌘O)")
+            .keyboardShortcut("o", modifiers: [.option, .command])
+
+            // Layout ratio cycle button
+            Button {
+                if let wsId = workspaceId {
+                    yaziStore.cycleRatio(for: wsId)
+                }
+            } label: {
+                Image(systemName: "rectangle.3.group")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help(layoutHelp + " (⌥⌘L)")
+            .keyboardShortcut("l", modifiers: [.option, .command])
+
             // Close panel button
             Button {
                 onClose()
@@ -43,6 +75,15 @@ struct YaziPanelToolbar: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var layoutHelp: String {
+        guard let wsId = workspaceId else { return "Cycle Layout" }
+        let current = yaziStore.ratioLabel(for: wsId)
+        let presets = YaziSurfaceStore.ratioPresets
+        let currentIdx = presets.firstIndex(where: { $0.label == current }) ?? 0
+        let next = presets[(currentIdx + 1) % presets.count].label
+        return "Layout: \(current) → \(next)"
     }
 
     @ViewBuilder

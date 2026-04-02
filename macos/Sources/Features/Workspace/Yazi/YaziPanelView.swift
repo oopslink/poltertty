@@ -7,6 +7,8 @@ struct YaziPanelView: View {
     @ObservedObject var yaziStore: YaziSurfaceStore
     var rootDir: String
     var worktreeMonitor: GitWorktreeMonitor?
+    var isExpanded: Bool = false
+    var onToggleExpand: () -> Void = {}
     var onClose: () -> Void
 
     var body: some View {
@@ -16,6 +18,8 @@ struct YaziPanelView: View {
                 workspaceId: workspaceId,
                 worktreeMonitor: worktreeMonitor,
                 currentRootDir: rootDir,
+                isExpanded: isExpanded,
+                onToggleExpand: onToggleExpand,
                 onClose: onClose
             )
             Divider()
@@ -24,6 +28,7 @@ struct YaziPanelView: View {
                let surface = yaziStore.surface(for: wsId, ghostty: ghostty, rootDir: rootDir) {
                 Ghostty.SurfaceWrapper(surfaceView: surface)
                     .environmentObject(ghostty)
+                    .id(ObjectIdentifier(surface))
             } else {
                 noWorkspaceView
             }
