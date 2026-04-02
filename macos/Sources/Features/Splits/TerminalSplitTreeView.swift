@@ -141,12 +141,24 @@ private struct TerminalSplitLeafContainer: View {
                 paneSelectorVM.unregisterPane(surfaceId: surfaceView.id)
             }
             .overlay {
-                if paneSelectorVM.isActive,
-                   let info = paneSelectorVM.overlayInfos[surfaceView.id] {
-                    PaneOverlayCardView(info: info)
-                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                        .animation(.easeInOut(duration: 0.15), value: paneSelectorVM.isActive)
+                Group {
+                    if paneSelectorVM.isActive {
+                        Color.black.opacity(0.52)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
                 }
+                .animation(.easeInOut(duration: 0.15), value: paneSelectorVM.isActive)
+            }
+            .overlay {
+                Group {
+                    if paneSelectorVM.isActive,
+                       let info = paneSelectorVM.overlayInfos[surfaceView.id] {
+                        PaneOverlayCardView(info: info)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    }
+                }
+                .animation(.easeInOut(duration: 0.15), value: paneSelectorVM.isActive)
             }
     }
 
