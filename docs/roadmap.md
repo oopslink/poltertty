@@ -1,15 +1,15 @@
 # Poltertty 开发路线图
 
-> 基于竞品分析（2025 年 3 月），聚焦"Ghostty 原生体验 + Workspace 管理 + AI Agent 协作层"定位。
+> 基于竞品分析（2025 年 3 月 + 2026 年 4 月 cmux 深度调研），聚焦"Ghostty 原生体验 + Workspace 管理 + AI Agent 协作层"定位。
 
 ---
 
 ## 总览
 
 ```
-Phase 1 ──── Session 持久化 · Yazi 集成 · Worktree 绑定
-Phase 2 ──── Agent 调度台 · Ctrl API 扩展
-Phase 3 ──── Layout-as-Code · Quick Terminal 融合
+Phase 1 ──── Session 持久化 · Yazi 集成 · Worktree 绑定 · 侧边栏元数据增强
+Phase 2 ──── Agent 调度台 · Ctrl API 扩展 · 可观测性 · OSC 通知序列
+Phase 3 ──── Layout-as-Code · Quick Terminal 融合 · Popup Overlay 窗口
 ```
 
 ---
@@ -68,6 +68,27 @@ Phase 3 ──── Layout-as-Code · Quick Terminal 融合
 
 ---
 
+### 1.4 侧边栏 Workspace 元数据增强
+
+**价值**：cmux 调研中最受用户好评的功能（侧边栏信息密度）——不切换到对应 Workspace，仅看侧边栏就能感知每个 Workspace 的运行状态。当前 Poltertty 侧边栏仅显示 Workspace 名称，信息密度严重不足。
+
+**功能范围**：
+- **监听端口列表**：扫描各 Workspace 前台进程占用的 TCP 端口，以小徽标形式展示（如 `:3000` `:8080`）；点击端口标签可在浏览器或新 tab 打开
+- **PR 状态徽标**：若 Workspace 绑定了 Git Worktree（1.3 落地后），通过 `gh pr status` 查询当前 branch 的 PR 编号与状态（Open / Draft / Merged），显示在 branch 名旁
+- **Agent 活跃指示**：若该 Workspace 有注册的 Agent session（2.1 落地后），显示小 bot 图标 + 当前状态色
+- **未读通知角标**：结合 2.1 通知系统，有未读通知的 Workspace 显示蓝色圆点
+
+**技术路径**：
+- 端口扫描：`lsof -iTCP -sTCP:LISTEN -P` 解析前台进程 PID 对应的端口；每 5 秒轮询一次
+- PR 状态：后台线程异步调用 `gh` CLI，缓存结果（60 秒 TTL），避免阻塞 UI
+- UI 布局：Workspace 条目高度微增，元数据以小字号横排，不遮挡核心操作区
+
+**依赖**：1.3 Worktree 绑定（PR 状态需要绑定 branch），2.1 通知系统（未读角标）
+
+**成功标准**：侧边栏中 5 个 Workspace 并列时，不点击任何条目，能看出哪个有 agent 在跑、哪个服务在 :3000 上、哪个 branch 有未合并 PR。
+
+---
+
 ## Phase 2：Agent 协作层
 
 ### 2.1 Agent Monitor → 多 Agent 调度台
@@ -84,6 +105,8 @@ Phase 3 ──── Layout-as-Code · Quick Terminal 融合
 - 支持在调度台中发送快捷指令（如"继续"/"中止"）到对应 pane
 
 **Ctrl API 配合**（见 2.2）：Agent 通过 `set_agent_label` 自报状态，Poltertty 订阅后更新 UI。
+
+**OSC 通知序列兼容**（见 2.4）：Agent 也可通过标准 OSC 序列发送通知，无需集成 Ctrl API。
 
 **成功标准**：同时跑 5 个 Claude Code session，不打开任何一个 tab，能从 Agents 面板知道每个的进度并在出错时立即定位。
 
@@ -131,6 +154,29 @@ Phase 3 ──── Layout-as-Code · Quick Terminal 融合
 
 ---
 
+### 2.4 OSC 通知序列支持（OSC 777 / OSC 99）
+
+**价值**：cmux 调研中发现的低成本高价值功能。OSC 777（RXVT）和 OSC 99（Kitty）是标准终端通知协议，任何 shell 脚本、AI agent 或 CI 工具都可以通过简单的 `printf` 触发通知，无需集成 Ctrl API。实现成本低，但能大幅扩大 Poltertty 通知系统的覆盖面。
+
+**功能范围**：
+- **OSC 777 支持**（RXVT 兼容）：`printf '\e]777;notify;标题;内容\a'` 触发通知面板消息
+- **OSC 99 支持**（Kitty 协议）：支持 `title`、`body`、`subtitle` 字段，通知 ID 用于去重和更新
+- 通知自动关联到来源 Workspace：哪个 pane 发的 OSC 序列，通知就归属哪个 Workspace
+- **抑制规则**：来源 Workspace 当前处于活跃/聚焦状态时，静默通知（不弹桌面提示）；Notification Panel 已打开时抑制
+- **与 2.1 通知系统复用**：OSC 触发的通知走同一条通知队列，在侧边栏显示未读角标（1.4 落地后）
+
+**标准 Hook 集成**：Claude Code `Stop` hook 可通过 OSC 序列通知 Poltertty，不需要 Ctrl API 集成：
+```bash
+# ~/.claude/hooks/stop.sh
+printf '\e]777;notify;Claude 完成;%s\a' "$CLAUDE_SESSION_ID"
+```
+
+**技术路径**：在 Ghostty libghostty 的 OSC 处理层新增 777/99 case，解析 payload 后通过 `NotificationService` 分发。
+
+**成功标准**：任意 shell 脚本执行 `printf '\e]777;notify;构建完成;main 分支 CI 通过\a'` 后，Poltertty 侧边栏对应 Workspace 出现未读通知角标，Notification Panel 中显示完整通知内容。
+
+---
+
 ## Phase 3：Power User 与体验打磨
 
 ### 3.1 Layout-as-Code
@@ -159,6 +205,29 @@ tabs:
 ```
 
 **成功标准**：一条命令从零启动包含 3 个 tab + 预设目录的完整开发环境。
+
+---
+
+### 3.3 Popup Overlay 窗口
+
+**价值**：cmux 社区高票功能请求（源于 tmux `popup` 命令）。LazyGit、yazi、fzf 等 TUI 工具在分屏中长期占用 pane 位置，浪费屏幕空间；用 Popup 浮动窗口调用这类工具，用完即关，不破坏当前布局。
+
+**功能范围**：
+- 快捷键（默认 `⌘⇧P`）在当前 Workspace 上方弹出浮动终端 pane，居中显示，宽高可配置（默认 80%）
+- Popup 内可运行任意命令：`lazygit`、`yazi`、`fzf`、`htop` 等
+- 按 `ESC` 或 `q`（进程退出）自动关闭 Popup，回到原焦点
+- 支持配置"命名 Popup"：特定 Popup 绑定预设命令，快捷键直接调用（如 `⌘G` → lazygit popup）
+- Popup 关闭后不保留历史，下次打开是全新 shell（可选：保留同一 Popup 会话）
+
+**典型用法**：
+```
+Cmd+G → lazygit popup（查看 diff，commit，按 q 关闭）
+Cmd+Shift+P → 空 shell popup（临时命令）
+```
+
+**技术路径**：在当前 Window 上层添加一个浮动 `NSPanel`，内嵌 Ghostty Surface；焦点 trap 在 Panel 内，按 ESC/进程退出时 dismiss。
+
+**成功标准**：`⌘G` 调出 lazygit，完成提交操作后按 `q`，Popup 关闭，焦点回到原来的 pane，原 pane 布局完全不变。
 
 ---
 
@@ -192,13 +261,17 @@ tabs:
 ```
 1.2 Yazi 集成
     └── 1.3 Worktree 绑定（yazi cd 跟随需要 1.2 先落地）
+            ├── 1.4 侧边栏元数据增强（PR 状态需要 branch 绑定）
             └── 2.1 Agent 调度台（跨 worktree 状态需要 1.3 数据）
+                    └── 1.4 未读角标（需要 2.1 通知系统）
 
 1.1 Session 持久化（独立，可并行）
 
 2.2 Ctrl API 扩展（与 2.1 并行，互为前提）
 2.3 Agent 可观测性（依赖 2.2 的 hook 接收基础，可与 2.1 并行）
+2.4 OSC 通知序列（独立，可与 2.1 并行；通知合并到 2.1 的队列）
 
 3.1 Layout-as-Code（依赖 1.1 的序列化方案）
 3.2 Quick Terminal 融合（依赖 2.1 的 Agents 面板）
+3.3 Popup Overlay 窗口（独立，可并行）
 ```
