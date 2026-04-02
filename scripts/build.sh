@@ -70,8 +70,19 @@ elif [[ "$MODE" == "release" ]]; then
     OPTIMIZE="ReleaseFast"
     OUTPUT_DIR="$REPO_ROOT/macos/build/ReleaseLocal"
 
+    echo "==> fetch bundled tools (yazi, ya, delta)"
+    PROJECT_DIR="$REPO_ROOT" "$REPO_ROOT/scripts/fetch-bundled-tools.sh" "$REPO_ROOT/macos/Resources/bin"
+
     echo "==> zig build -Doptimize=$OPTIMIZE"
     zig build -Doptimize="$OPTIMIZE"
+
+    echo "==> copy bin/ into app bundle"
+    BUNDLE_BIN="$OUTPUT_DIR/Poltertty.app/Contents/Resources/bin"
+    mkdir -p "$BUNDLE_BIN"
+    cp -f "$REPO_ROOT/macos/Resources/bin/"* "$BUNDLE_BIN/"
+
+    echo "==> xattr -cr (清除扩展属性，防止签名无效)"
+    xattr -cr "$OUTPUT_DIR/Poltertty.app"
 
     echo "==> codesign"
     codesign --force --deep --sign - "$OUTPUT_DIR/Poltertty.app"
