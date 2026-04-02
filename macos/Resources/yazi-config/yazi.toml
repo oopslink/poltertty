@@ -1,6 +1,7 @@
 # macos/Resources/yazi-config/yazi.toml
 
 [manager]
+ratio = [1, 4, 3]
 show_hidden = false
 sort_by = "natural"
 sort_sensitive = false

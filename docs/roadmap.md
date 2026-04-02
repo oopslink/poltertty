@@ -111,6 +111,26 @@ Phase 3 ──── Layout-as-Code · Quick Terminal 融合
 
 ---
 
+### 2.3 Agent 可观测性增强（基于 Hook 系统）
+
+**价值**：Claude Code hook 系统暴露了大量生命周期事件，目前 Poltertty 仅消费了其中少数。利用未接入的 hook 事件可以让用户对"agent 正在做什么"有更清晰的感知，无需额外工具。
+
+**功能范围**：
+
+| 优先级 | Hook 事件 | 功能 |
+|--------|-----------|------|
+| 高 | `PostToolUse` | 在 Monitor Panel 展示工具执行耗时 timeline，PreToolUse/PostToolUse 配对计算每个工具的耗时 |
+| 高 | `PostCompact` | 在 session 时间线上打"上下文已压缩"标记，提示用户 agent 记忆清零点 |
+| 中 | `SubagentStart` / `SubagentStop` | 追踪 subagent 嵌套层级，CtrlAPIRecord 新增 `agentDepth` 字段，statusbar agent 按钮显示子 agent 数量角标 |
+| 中 | `PermissionDenied` | 在 Monitor Panel 中以红色记录被拒工具调用，显示拒绝计数角标，帮助用户判断 agent 是否被过度限制 |
+| 低 | `SessionEnd` | 将 session 统计摘要（工具调用次数、失败次数、压缩次数、总耗时）持久化到磁盘，供事后审计 |
+
+**技术路径**：`/hooks/prepare-session` 订阅阶段注册上述 hook 类型；CtrlAPIRecord 扩展字段；CtrlAPIMonitorPanel 新增 Timeline 视图。
+
+**成功标准**：不打开任何外部工具，能在 Monitor Panel 中看到 agent 执行了哪些工具、每步耗时多少、上下文何时被压缩、哪些操作被权限拦截。
+
+---
+
 ## Phase 3：Power User 与体验打磨
 
 ### 3.1 Layout-as-Code
@@ -177,6 +197,7 @@ tabs:
 1.1 Session 持久化（独立，可并行）
 
 2.2 Ctrl API 扩展（与 2.1 并行，互为前提）
+2.3 Agent 可观测性（依赖 2.2 的 hook 接收基础，可与 2.1 并行）
 
 3.1 Layout-as-Code（依赖 1.1 的序列化方案）
 3.2 Quick Terminal 融合（依赖 2.1 的 Agents 面板）
