@@ -3,7 +3,7 @@ import SwiftUI
 
 struct YaziPanelView: View {
     let workspaceId: UUID?
-    @EnvironmentObject var ghostty: Ghostty.App
+    let ghostty: Ghostty.App
     @ObservedObject var yaziStore: YaziSurfaceStore
     var rootDir: String
     var worktreeMonitor: GitWorktreeMonitor?
@@ -23,6 +23,7 @@ struct YaziPanelView: View {
             if let wsId = workspaceId,
                let surface = yaziStore.surface(for: wsId, ghostty: ghostty, rootDir: rootDir) {
                 Ghostty.SurfaceWrapper(surfaceView: surface)
+                    .environmentObject(ghostty)
             } else {
                 noWorkspaceView
             }
