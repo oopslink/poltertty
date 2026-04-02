@@ -3,6 +3,7 @@ import SwiftUI
 
 struct AgentDashboardView: View {
     @StateObject private var viewModel = AgentDashboardViewModel()
+    @ObservedObject private var paneSelectorVM = PaneSelectorViewModel.shared
     @Environment(\.colorScheme) private var colorScheme
     @State private var hoveredRowId: UUID?
     @State private var focusedSessionId: UUID?
@@ -318,6 +319,16 @@ struct AgentDashboardView: View {
                                 .foregroundStyle(.tertiary)
                                 .lineLimit(1)
                         }
+                        if let annotation = paneSelectorVM.annotations[session.surfaceId] {
+                            HStack(spacing: 2) {
+                                Image(systemName: "tag.fill")
+                                    .font(.system(size: 7))
+                                Text(annotation)
+                                    .font(.system(size: 9))
+                                    .lineLimit(1)
+                            }
+                            .foregroundStyle(Color.accentColor)
+                        }
                     }
                 }
                 .frame(width: 124, alignment: .leading)
@@ -458,6 +469,20 @@ struct AgentDashboardView: View {
                             .font(.system(size: 9, design: .monospaced))
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
+                    }
+                    if let annotation = paneSelectorVM.annotations[session.surfaceId] {
+                        HStack(spacing: 3) {
+                            Image(systemName: "tag.fill")
+                                .font(.system(size: 8))
+                            Text(annotation)
+                                .font(.system(size: 9, weight: .medium))
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.1))
+                        .clipShape(Capsule())
                     }
                 }
                 Spacer()
