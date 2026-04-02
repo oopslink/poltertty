@@ -12,7 +12,7 @@ struct PaneOverlayCardView: View {
                 // annotation 是主角
                 Text(annotation.count > 20 ? String(annotation.prefix(20)) + "…" : annotation)
                     .font(.system(size: 16, weight: .heavy))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 Rectangle()
