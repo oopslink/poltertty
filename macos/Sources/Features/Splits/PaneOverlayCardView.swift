@@ -7,70 +7,76 @@ struct PaneOverlayCardView: View {
     let info: PaneSelectorViewModel.PaneOverlayInfo
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            firstLine
-            secondLine
+        VStack(spacing: 7) {
+            if let annotation = info.annotation {
+                // annotation 是主角
+                Text(annotation.count > 20 ? String(annotation.prefix(20)) + "…" : annotation)
+                    .font(.system(size: 16, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                Rectangle()
+                    .fill(Color.primary.opacity(0.1))
+                    .frame(width: 28, height: 1)
+
+                keyBadge(size: 30, fontSize: 16)
+            } else {
+                // 无 annotation：key badge 放大顶替主角
+                keyBadge(size: 44, fontSize: 22)
+            }
+
+            subInfoView
         }
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 18)
+        .padding(.vertical, 15)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color.primary.opacity(0.15), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Color.primary.opacity(0.09), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.2), radius: 8, y: 2)
+        .shadow(color: .black.opacity(0.7), radius: 24, y: 4)
         .fixedSize()
     }
 
-    // MARK: - 第一行：编号 + 注释
+    // MARK: - Key badge
 
-    private var firstLine: some View {
-        HStack(spacing: 6) {
-            Text("#\(PaneSelectorViewModel.label(for: info.index))")
-                .foregroundStyle(Color.accentColor)
-                .fontWeight(.bold)
-            if let annotation = info.annotation {
-                Text(truncatedAnnotation(annotation))
-                    .foregroundStyle(.primary)
-            }
-        }
+    private func keyBadge(size: CGFloat, fontSize: CGFloat) -> some View {
+        let cornerRadius = size * 0.23
+        return Text(PaneSelectorViewModel.label(for: info.index))
+            .font(.system(size: fontSize, weight: .black, design: .monospaced))
+            .foregroundStyle(Color.accentColor)
+            .frame(width: size, height: size)
+            .background(
+                Color.accentColor.opacity(0.15),
+                in: RoundedRectangle(cornerRadius: cornerRadius)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .strokeBorder(Color.accentColor.opacity(0.45), lineWidth: 1.5)
+            )
     }
 
-    // MARK: - 第二行：shell · 进程 · 时长 · pwd (branch)
+    // MARK: - 辅助信息
 
-    private var secondLine: some View {
-        Text(secondLineText)
+    private var subInfoView: some View {
+        Text(subInfo)
+            .font(.system(size: 10, design: .monospaced))
             .foregroundStyle(.secondary)
             .lineLimit(1)
     }
 
-    private var secondLineText: String {
-        var segments: [String] = []
-        segments.append(info.shellName)
+    private var subInfo: String {
+        var parts: [String] = []
         if let fg = info.foregroundProcess {
-            segments.append(fg)
+            parts.append(fg)
+        } else {
+            parts.append(info.shellName)
         }
-        if info.duration > 0 {
-            segments.append(PaneSelectorViewModel.formatDuration(info.duration))
+        let pwd = info.pwd.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+        parts.append(pwd)
+        if info.duration >= 60 {
+            parts.append(PaneSelectorViewModel.formatDuration(info.duration))
         }
-        segments.append(pwdWithGit)
-        return segments.joined(separator: " · ")
-    }
-
-    private var pwdWithGit: String {
-        let abbreviated = info.pwd.replacingOccurrences(of: NSHomeDirectory(), with: "~")
-        if let branch = info.gitBranch {
-            let dirty = info.gitDirty ? "*" : ""
-            return "\(abbreviated) (\(branch)\(dirty))"
-        }
-        return abbreviated
-    }
-
-    private func truncatedAnnotation(_ text: String) -> String {
-        if text.count > 30 {
-            return String(text.prefix(30)) + "…"
-        }
-        return text
+        return parts.joined(separator: " · ")
     }
 }
