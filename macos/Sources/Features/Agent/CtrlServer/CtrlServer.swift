@@ -541,6 +541,19 @@ final class CtrlServer {
                 ]
             ],
             [
+                "name": "open_worktree_in_split",
+                "description": "Open a git worktree in a new split pane at the specified direction; the new pane starts in the worktree directory",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "worktreePath": ["type": "string", "description": "Absolute path to the worktree directory"],
+                        "direction": ["type": "string", "enum": ["left", "right", "up", "down"], "description": "Direction to split relative to the current or specified pane"],
+                        "paneId": ["type": "string", "description": "UUID of the base pane to split (optional; defaults to current focused pane)"]
+                    ],
+                    "required": ["worktreePath", "direction"]
+                ]
+            ],
+            [
                 "name": "get_git_status",
                 "description": "Get git status for the given directory: branch name, staged/unstaged/untracked files",
                 "inputSchema": [

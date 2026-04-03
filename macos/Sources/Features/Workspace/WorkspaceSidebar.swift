@@ -17,6 +17,7 @@ struct WorkspaceSidebar: View {
     var worktreeMonitor: GitWorktreeMonitor? = nil
     var onOpenWorktreeInTab: ((String) -> Void)? = nil
     var onOpenWorktreeInWindow: ((String) -> Void)? = nil
+    var onOpenWorktreeInSplit: ((String, SplitTree<Ghostty.SurfaceView>.NewDirection) -> Void)? = nil
 
     @State private var isCreating = false
     @State private var editingWorkspace: WorkspaceModel?
@@ -187,6 +188,7 @@ struct WorkspaceSidebar: View {
                                 worktreeMonitor: workspace.id == currentWorkspaceId ? worktreeMonitor : nil,
                                 onOpenWorktreeInTab: workspace.id == currentWorkspaceId ? onOpenWorktreeInTab : nil,
                                 onOpenWorktreeInWindow: workspace.id == currentWorkspaceId ? onOpenWorktreeInWindow : nil,
+                                onOpenWorktreeInSplit: workspace.id == currentWorkspaceId ? onOpenWorktreeInSplit : nil,
                                 onDeleteWorktree: workspace.id == currentWorkspaceId ? { path in
                                     if let monitor = worktreeMonitor {
                                         confirmDeleteWorktree(path: path, monitor: monitor)
@@ -235,6 +237,7 @@ struct WorkspaceSidebar: View {
                                             worktreeMonitor: workspace.id == currentWorkspaceId ? worktreeMonitor : nil,
                                             onOpenWorktreeInTab: workspace.id == currentWorkspaceId ? onOpenWorktreeInTab : nil,
                                             onOpenWorktreeInWindow: workspace.id == currentWorkspaceId ? onOpenWorktreeInWindow : nil,
+                                            onOpenWorktreeInSplit: workspace.id == currentWorkspaceId ? onOpenWorktreeInSplit : nil,
                                             onDeleteWorktree: workspace.id == currentWorkspaceId ? { path in
                                                 if let monitor = worktreeMonitor {
                                                     confirmDeleteWorktree(path: path, monitor: monitor)
@@ -263,6 +266,7 @@ struct WorkspaceSidebar: View {
                                     worktreeMonitor: workspace.id == currentWorkspaceId ? worktreeMonitor : nil,
                                     onOpenWorktreeInTab: workspace.id == currentWorkspaceId ? onOpenWorktreeInTab : nil,
                                     onOpenWorktreeInWindow: workspace.id == currentWorkspaceId ? onOpenWorktreeInWindow : nil,
+                                    onOpenWorktreeInSplit: workspace.id == currentWorkspaceId ? onOpenWorktreeInSplit : nil,
                                     onDeleteWorktree: workspace.id == currentWorkspaceId ? { path in
                                         if let monitor = worktreeMonitor {
                                             confirmDeleteWorktree(path: path, monitor: monitor)
@@ -351,7 +355,8 @@ struct WorkspaceSidebar: View {
                                 monitor: monitor,
                                 onOpenInTab: { path in onOpenWorktreeInTab?(path) },
                                 onOpenInWindow: { path in onOpenWorktreeInWindow?(path) },
-                                onDelete: { path, _ in confirmDeleteWorktree(path: path, monitor: monitor) }
+                                onDelete: { path, _ in confirmDeleteWorktree(path: path, monitor: monitor) },
+                                onOpenInSplit: onOpenWorktreeInSplit
                             )
                         }
                     }
@@ -482,7 +487,8 @@ struct WorkspaceSidebar: View {
                                                     monitor: monitor,
                                                     onOpenInTab: { path in onOpenWorktreeInTab?(path) },
                                                     onOpenInWindow: { path in onOpenWorktreeInWindow?(path) },
-                                                    onDelete: { path, _ in confirmDeleteWorktree(path: path, monitor: monitor) }
+                                                    onDelete: { path, _ in confirmDeleteWorktree(path: path, monitor: monitor) },
+                                                    onOpenInSplit: onOpenWorktreeInSplit
                                                 )
                                             }
                                         }
@@ -647,6 +653,7 @@ struct CollapsedWorkspaceIcon: View {
     var worktreeMonitor: GitWorktreeMonitor? = nil
     var onOpenWorktreeInTab: ((String) -> Void)? = nil
     var onOpenWorktreeInWindow: ((String) -> Void)? = nil
+    var onOpenWorktreeInSplit: ((String, SplitTree<Ghostty.SurfaceView>.NewDirection) -> Void)? = nil
     var onDeleteWorktree: ((String) -> Void)? = nil
 
     @State private var isHovering = false
@@ -722,6 +729,14 @@ struct CollapsedWorkspaceIcon: View {
                         Menu(wt.branch ?? "detached") {
                             Button(String(localized: "Open in New Tab")) { onOpenWorktreeInTab?(wt.path) }
                             Button(String(localized: "Open in New Window")) { onOpenWorktreeInWindow?(wt.path) }
+                            if onOpenWorktreeInSplit != nil {
+                                Menu(String(localized: "Open in New Pane")) {
+                                    Button(String(localized: "To the Right")) { onOpenWorktreeInSplit?(wt.path, .right) }
+                                    Button(String(localized: "To the Left"))  { onOpenWorktreeInSplit?(wt.path, .left) }
+                                    Button(String(localized: "Below"))        { onOpenWorktreeInSplit?(wt.path, .down) }
+                                    Button(String(localized: "Above"))        { onOpenWorktreeInSplit?(wt.path, .up) }
+                                }
+                            }
                             if !wt.isMain && !wt.isCurrent {
                                 Divider()
                                 Button(String(localized: "Delete Worktree"), role: .destructive) {

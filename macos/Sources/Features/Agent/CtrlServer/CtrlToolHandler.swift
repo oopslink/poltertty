@@ -38,8 +38,9 @@ final class CtrlToolHandler: Sendable {
         case "set_pane_annotation": return try await callSetPaneAnnotation(arguments: arguments)
         case "get_pane_annotation": return try await callGetPaneAnnotation(arguments: arguments)
         case "list_worktrees":      return try await callListWorktrees(arguments: arguments)
-        case "create_worktree":     return try await callCreateWorktree(arguments: arguments)
-        case "get_git_status":      return try await callGetGitStatus(arguments: arguments)
+        case "create_worktree":          return try await callCreateWorktree(arguments: arguments)
+        case "open_worktree_in_split":   return try await callOpenWorktreeInSplit(arguments: arguments)
+        case "get_git_status":           return try await callGetGitStatus(arguments: arguments)
         case "click_window":          return try await callClickWindow(arguments: arguments)
         case "test_fullscreen_diff":  return try await callTestFullscreenDiff(arguments: arguments)
         case "git_panel_state":       return try await callGitPanelState(arguments: arguments)
@@ -379,6 +380,56 @@ final class CtrlToolHandler: Sendable {
             throw RPCError(code: -32603, message: "create_worktree: serialization failed")
         }
         return str
+    }
+
+    // MARK: - open_worktree_in_split
+
+    private func callOpenWorktreeInSplit(arguments: [String: Any]) async throws -> String {
+        guard let worktreePath = arguments["worktreePath"] as? String, !worktreePath.isEmpty else {
+            throw RPCError(code: -32602, message: "open_worktree_in_split: missing required parameter 'worktreePath'")
+        }
+        guard let dirStr = arguments["direction"] as? String,
+              let direction = Self.parseDirection(dirStr) else {
+            throw RPCError(code: -32602, message: "open_worktree_in_split: missing or invalid direction (left|right|up|down)")
+        }
+
+        let newPaneId: UUID = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                let tc: TerminalController?
+                let surface: Ghostty.SurfaceView?
+
+                if let paneIdStr = arguments["paneId"] as? String,
+                   let paneId = UUID(uuidString: paneIdStr) {
+                    tc = Self.tcContaining(paneId: paneId)
+                    guard let foundTC = tc else {
+                        cont.resume(throwing: RPCError(code: -32603, message: "open_worktree_in_split: pane not found"))
+                        return
+                    }
+                    foundTC.switchToTab(containing: paneId)
+                    surface = foundTC.findSurface(id: paneId)
+                } else {
+                    let window = (NSApp.keyWindow as? TerminalWindow)
+                        ?? NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
+                    tc = window?.terminalController
+                    surface = tc?.focusedSurface
+                }
+
+                guard let resolvedTC = tc, let resolvedSurface = surface else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "open_worktree_in_split: no surface available"))
+                    return
+                }
+
+                var config = Ghostty.SurfaceConfiguration()
+                config.workingDirectory = worktreePath
+
+                guard let newView = resolvedTC.newSplit(at: resolvedSurface, direction: direction, baseConfig: config) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "open_worktree_in_split: split failed"))
+                    return
+                }
+                cont.resume(returning: newView.id)
+            }
+        }
+        return #"{"newPaneId":"\#(newPaneId.uuidString)"}"#
     }
 
     // MARK: - get_git_status

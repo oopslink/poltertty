@@ -7,6 +7,7 @@ struct WorktreeListView: View {
     let onOpenInTab: (String) -> Void
     let onOpenInWindow: (String) -> Void
     let onDelete: (String, Bool) -> Void  // path, force
+    var onOpenInSplit: ((String, SplitTree<Ghostty.SurfaceView>.NewDirection) -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 1) {
@@ -16,7 +17,8 @@ struct WorktreeListView: View {
                     monitor: monitor,
                     onOpenInTab: onOpenInTab,
                     onOpenInWindow: onOpenInWindow,
-                    onDelete: onDelete
+                    onDelete: onDelete,
+                    onOpenInSplit: onOpenInSplit
                 )
             }
         }
@@ -32,6 +34,7 @@ private struct WorktreeRow: View {
     let onOpenInTab: (String) -> Void
     let onOpenInWindow: (String) -> Void
     let onDelete: (String, Bool) -> Void
+    var onOpenInSplit: ((String, SplitTree<Ghostty.SurfaceView>.NewDirection) -> Void)? = nil
 
     @State private var isHovering = false
     @State private var dirtyCount: Int = 0
@@ -105,6 +108,22 @@ private struct WorktreeRow: View {
             if worktree.exists {
                 Button(String(localized: "Open in New Tab")) { onOpenInTab(worktree.path) }
                 Button(String(localized: "Open in New Window")) { onOpenInWindow(worktree.path) }
+                if onOpenInSplit != nil {
+                    Menu(String(localized: "Open in New Pane")) {
+                        Button(String(localized: "To the Right")) {
+                            onOpenInSplit?(worktree.path, .right)
+                        }
+                        Button(String(localized: "To the Left")) {
+                            onOpenInSplit?(worktree.path, .left)
+                        }
+                        Button(String(localized: "Below")) {
+                            onOpenInSplit?(worktree.path, .down)
+                        }
+                        Button(String(localized: "Above")) {
+                            onOpenInSplit?(worktree.path, .up)
+                        }
+                    }
+                }
                 Divider()
                 Button(String(localized: "Reveal in Finder")) {
                     NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: worktree.path)
