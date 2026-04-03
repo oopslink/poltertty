@@ -1649,6 +1649,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 },
                 onOpenWorktreeInWindow: { [weak self] path in
                     self?.openNewWindow(cdTo: path)
+                },
+                onOpenWorktreeInSplit: { [weak self] path, direction in
+                    self?.openInSplit(path: path, direction: direction)
                 }
             )
         }
@@ -2643,5 +2646,12 @@ extension TerminalController {
             withParent: self.window,
             workspaceId: self.workspaceId
         )
+    }
+
+    func openInSplit(path: String, direction: SplitTree<Ghostty.SurfaceView>.NewDirection) {
+        guard let surface = focusedSurface else { return }
+        var config = Ghostty.SurfaceConfiguration()
+        config.workingDirectory = path
+        _ = newSplit(at: surface, direction: direction, baseConfig: config)
     }
 }
