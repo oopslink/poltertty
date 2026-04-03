@@ -54,27 +54,13 @@ Phase 3 ──── Layout-as-Code · Quick Terminal 融合 · Popup Overlay �
 
 ---
 
-### 1.3 Workspace ↔ Git Worktree 绑定
-
-**价值**：多 Agent 并行工作流的基础设施——每个 Agent 在独立 worktree，Poltertty 提供跨 worktree 的统一视图，这是 lazygit 无法覆盖的场景。
-
-**功能范围**：
-- Workspace 创建时新增"绑定 Git Worktree"选项：选择已有 worktree 或新建
-- 侧边栏 Workspace 条目右侧显示 branch 名 + dirty 状态指示点（红点 = 有未提交修改）
-- Git Panel 新增"所有 Workspace 变更汇总"标签页：一行一个 worktree，展示变更文件数与 branch
-- 切换 Workspace 时，yazi（1.2 落地后）自动 cd 到该 worktree 根目录
-
-**成功标准**：同时运行三个 AI Agent 于三个 worktree，Poltertty 侧边栏能一眼看出哪个有变更、哪个 branch 落后于 main。
-
----
-
-### 1.4 侧边栏 Workspace 元数据增强
+### 1.3 侧边栏 Workspace 元数据增强
 
 **价值**：cmux 调研中最受用户好评的功能（侧边栏信息密度）——不切换到对应 Workspace，仅看侧边栏就能感知每个 Workspace 的运行状态。当前 Poltertty 侧边栏仅显示 Workspace 名称，信息密度严重不足。
 
 **功能范围**：
 - **监听端口列表**：扫描各 Workspace 前台进程占用的 TCP 端口，以小徽标形式展示（如 `:3000` `:8080`）；点击端口标签可在浏览器或新 tab 打开
-- **PR 状态徽标**：若 Workspace 绑定了 Git Worktree（1.3 落地后），通过 `gh pr status` 查询当前 branch 的 PR 编号与状态（Open / Draft / Merged），显示在 branch 名旁
+- **PR 状态徽标**：通过 `gh pr status` 查询当前 workspace rootDir 的 branch PR 编号与状态（Open / Draft / Merged），显示在 workspace 条目旁
 - **Agent 活跃指示**：若该 Workspace 有注册的 Agent session（2.1 落地后），显示小 bot 图标 + 当前状态色
 - **未读通知角标**：结合 2.1 通知系统，有未读通知的 Workspace 显示蓝色圆点
 
@@ -83,7 +69,7 @@ Phase 3 ──── Layout-as-Code · Quick Terminal 融合 · Popup Overlay �
 - PR 状态：后台线程异步调用 `gh` CLI，缓存结果（60 秒 TTL），避免阻塞 UI
 - UI 布局：Workspace 条目高度微增，元数据以小字号横排，不遮挡核心操作区
 
-**依赖**：1.3 Worktree 绑定（PR 状态需要绑定 branch），2.1 通知系统（未读角标）
+**依赖**：2.1 通知系统（未读角标）
 
 **成功标准**：侧边栏中 5 个 Workspace 并列时，不点击任何条目，能看出哪个有 agent 在跑、哪个服务在 :3000 上、哪个 branch 有未合并 PR。
 
@@ -151,6 +137,51 @@ Phase 3 ──── Layout-as-Code · Quick Terminal 融合 · Popup Overlay �
 **技术路径**：`/hooks/prepare-session` 订阅阶段注册上述 hook 类型；CtrlAPIRecord 扩展字段；CtrlAPIMonitorPanel 新增 Timeline 视图。
 
 **成功标准**：不打开任何外部工具，能在 Monitor Panel 中看到 agent 执行了哪些工具、每步耗时多少、上下文何时被压缩、哪些操作被权限拦截。
+
+---
+
+### 2.5 Agent Browser（内嵌浏览器面板）
+
+**价值**：AI Agent 工作流中最常见的盲区——Agent 需要与 localhost 开发服务器、Web UI 交互，但终端里看不到浏览器状态。cmux 深度调研验证此功能对 AI-first 开发者高价值：无需 Playwright/Puppeteer 即可做 Web 自动化，且 DOM 快照 + 短引用的 API 设计对 LLM 极友好。
+
+**功能范围**：
+
+**一期：浏览器面板 UI**
+- 侧边栏新增浏览器 pane 入口，在终端旁以分割面板方式嵌入 WKWebView
+- 工具栏：地址栏、前进/后退/刷新、开发者工具快捷键
+- 与 Workspace 绑定：切换 Workspace 时浏览器面板跟随保留
+- 快捷键打开/关闭/聚焦浏览器面板
+
+**二期：Scripting API（Agent 自动化）**
+- Ctrl API 新增 `browser.*` 方法族，供 Agent 通过 Socket 或 CLI 控制浏览器
+- 核心 API：
+
+| API | 功能 |
+|-----|------|
+| `browser.snapshot` | 获取 ARIA 可访问性树快照，元素自动编号（e1/e2/e3...） |
+| `browser.navigate` | 导航到 URL |
+| `browser.click` / `browser.fill` | 点击元素 / 填充表单（支持快照引用或 CSS 选择器） |
+| `browser.eval` | 执行任意 JavaScript |
+| `browser.wait` | 等待选择器/URL/加载状态/文本出现 |
+| `browser.screenshot` | 截图（返回文件路径或 base64） |
+| `browser.get.text` | 获取元素文本内容 |
+| `browser.open_split` | 在当前终端旁打开浏览器面板并导航 |
+
+- CLI 接口：`poltertty browser <surface> <action> [args]`
+
+**技术方案**：
+- 浏览器引擎：**WKWebView**（macOS 原生，非 Electron，非系统浏览器调用）
+- 面板类型：新增 `BrowserPanel`，与 `TerminalPanel`/`YaziPanel` 并列
+- Snapshot 实现：通过注入 JavaScript 遍历 DOM，生成 ARIA 树 + CSS 选择器映射表
+- 与现有 Ctrl API Socket 复用同一传输层（见 2.2）
+
+**参考实现**：cmux 的 `BrowserPanel.swift`（WKWebView 管理）+ `TerminalController.swift`（browser.* API 实现），两者同为 Ghostty fork，架构完全兼容。注意 cmux 采用 GPL-3.0，实现需独立开发。
+
+**依赖**：2.2 Ctrl API（Socket 传输层）；一期 UI 可独立先行
+
+**成功标准**：
+- 一期：侧边栏点击入口，终端旁出现 WKWebView 浏览器面板，支持手动浏览
+- 二期：Agent 通过 `poltertty browser <surface> snapshot` 获取 DOM 快照，通过 `click`/`fill` 操作 localhost 上的 Web 表单，通过 `screenshot` 截图验证结果——全程无需离开终端环境
 
 ---
 
@@ -259,17 +290,16 @@ Cmd+Shift+P → 空 shell popup（临时命令）
 ## 依赖关系
 
 ```
-1.2 Yazi 集成
-    └── 1.3 Worktree 绑定（yazi cd 跟随需要 1.2 先落地）
-            ├── 1.4 侧边栏元数据增强（PR 状态需要 branch 绑定）
-            └── 2.1 Agent 调度台（跨 worktree 状态需要 1.3 数据）
-                    └── 1.4 未读角标（需要 2.1 通知系统）
-
 1.1 Session 持久化（独立，可并行）
+1.2 Yazi 集成（独立，已完成）
+
+2.1 Agent 调度台
+    └── 1.3 侧边栏元数据增强（未读角标需要 2.1 通知系统）
 
 2.2 Ctrl API 扩展（与 2.1 并行，互为前提）
 2.3 Agent 可观测性（依赖 2.2 的 hook 接收基础，可与 2.1 并行）
 2.4 OSC 通知序列（独立，可与 2.1 并行；通知合并到 2.1 的队列）
+2.5 Agent Browser（一期 UI 独立；二期 Scripting API 依赖 2.2 的 Socket 传输层）
 
 3.1 Layout-as-Code（依赖 1.1 的序列化方案）
 3.2 Quick Terminal 融合（依赖 2.1 的 Agents 面板）
