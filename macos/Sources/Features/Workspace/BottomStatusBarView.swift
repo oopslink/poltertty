@@ -98,6 +98,8 @@ struct BottomStatusBarView: View {
     @StateObject private var paneGitVM = PaneGitStatusViewModel()
     @EnvironmentObject var tabBarVM: TabBarViewModel
     @EnvironmentObject private var paneSelectorVM: PaneSelectorViewModel
+    @Environment(\.workspaceId) private var currentWorkspaceId
+    @Environment(\.browserPanelVisible) private var browserPanelVisible
     @State private var showAnnotationPopover: Bool = false
     let pwd: String
     let isFocused: Bool
@@ -135,6 +137,19 @@ struct BottomStatusBarView: View {
                     .help("Attach tmux session")
                 }
                 AgentButtonView(surfaceId: surfaceId)
+                Button(action: {
+                    guard let wsId = currentWorkspaceId else { return }
+                    NotificationCenter.default.post(
+                        name: .toggleBrowserPanel,
+                        object: wsId
+                    )
+                }) {
+                    Image(systemName: "globe")
+                        .font(.system(size: 11))
+                        .foregroundStyle(browserPanelVisible ? Color.accentColor : Color.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Toggle browser panel (⌥⌘B)")
                 Button(action: { showAnnotationPopover = true }) {
                     Image(systemName: "tag")
                         .font(.system(size: 11))

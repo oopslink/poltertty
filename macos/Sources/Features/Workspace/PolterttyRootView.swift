@@ -8,6 +8,7 @@ extension Notification.Name {
     static let workspaceSidebarNavigateUp = Notification.Name("poltertty.workspaceSidebarNavigateUp")
     static let workspaceSidebarNavigateDown = Notification.Name("poltertty.workspaceSidebarNavigateDown")
     static let toggleFileBrowser = Notification.Name("poltertty.toggleFileBrowser")
+    static let toggleBrowserPanel = Notification.Name("poltertty.toggleBrowserPanel")
     static let fileBrowserOpenInTerminal = Notification.Name("poltertty.fileBrowserOpenInTerminal")
     static let toggleAgentMonitor = Notification.Name("poltertty.toggleAgentMonitor")
     static let launchAgentFromSidebar = Notification.Name("poltertty.launchAgentFromSidebar")
@@ -58,6 +59,11 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var panelExpanded: Bool = false
     @State private var yaziPanelWidth: CGFloat = 260
     @GestureState private var panelWidthDelta: CGFloat = 0
+
+    @StateObject private var browserStore = BrowserSurfaceStore()
+    @State private var browserPanelVisible: Bool = false
+    @State private var browserPanelWidth: CGFloat = 400
+    @GestureState private var browserWidthDelta: CGFloat = 0
 
     @ObservedObject private var agentMonitorVM: AgentMonitorViewModel
     @ObservedObject var tabBarViewModel: TabBarViewModel
@@ -127,6 +133,10 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
     private var effectivePanelWidth: CGFloat {
         max(160, min(600, yaziPanelWidth + panelWidthDelta))
+    }
+
+    private var effectiveBrowserPanelWidth: CGFloat {
+        max(200, min(800, browserPanelWidth + browserWidthDelta))
     }
 
     private var currentWorkspaceRootDir: String {
@@ -223,6 +233,17 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         terminalAreaView
                     }
 
+                    // Browser Panel (right side)
+                    if browserPanelVisible {
+                        browserPanelDivider
+                        BrowserPanelView(
+                            workspaceId: workspaceId,
+                            browserStore: browserStore,
+                            onClose: { browserPanelVisible = false }
+                        )
+                        .frame(width: effectiveBrowserPanelWidth)
+                    }
+
                     // Notification Center Panel
                     if notificationCenterVisible {
                         Divider()
@@ -254,7 +275,19 @@ struct PolterttyRootView<TerminalContent: View>: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: agentMonitorVM.selectedItems.isEmpty)
                 }
                 .environment(\.showStatusBar, showStatusBar)
+                .environment(\.workspaceId, workspaceId)
+                .environment(\.browserPanelVisible, browserPanelVisible)
             }
+
+            // Hidden keyboard shortcut for browser panel
+            Button("") {
+                if startupMode == .terminal {
+                    browserPanelVisible.toggle()
+                }
+            }
+            .keyboardShortcut("b", modifiers: [.option, .command])
+            .opacity(0)
+            .frame(width: 0, height: 0)
 
             // Quick switcher overlay (always available in terminal mode)
             if quickSwitcherVisible {
@@ -286,6 +319,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
             if let wsId = workspaceId, let ws = WorkspaceManager.shared.workspace(for: wsId) {
                 panelVisible = ws.panelVisible
                 yaziPanelWidth = ws.panelWidth
+                browserPanelVisible = ws.browserPanelVisible
+                browserPanelWidth = ws.browserPanelWidth
             }
             WorkspaceManager.shared.yaziSurfaceStore = yaziStore
         }
@@ -307,6 +342,10 @@ struct PolterttyRootView<TerminalContent: View>: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleFileBrowser)) { _ in
             panelVisible.toggle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleBrowserPanel)) { notification in
+            guard (notification.object as? UUID) == workspaceId else { return }
+            browserPanelVisible.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleNotificationCenter)) { _ in
             notificationCenterVisible.toggle()
@@ -371,6 +410,18 @@ struct PolterttyRootView<TerminalContent: View>: View {
             guard let wsId = workspaceId else { return }
             guard var ws = WorkspaceManager.shared.workspace(for: wsId) else { return }
             ws.panelWidth = newValue
+            WorkspaceManager.shared.update(ws)
+        }
+        .onChange(of: browserPanelVisible) { newValue in
+            guard let wsId = workspaceId else { return }
+            guard var ws = WorkspaceManager.shared.workspace(for: wsId) else { return }
+            ws.browserPanelVisible = newValue
+            WorkspaceManager.shared.update(ws)
+        }
+        .onChange(of: browserPanelWidth) { newValue in
+            guard let wsId = workspaceId else { return }
+            guard var ws = WorkspaceManager.shared.workspace(for: wsId) else { return }
+            ws.browserPanelWidth = newValue
             WorkspaceManager.shared.update(ws)
         }
         // 删除所有 workspace 后保持 terminal 模式（不跳 onboarding），用户可通过侧边栏重新创建
@@ -446,6 +497,30 @@ struct PolterttyRootView<TerminalContent: View>: View {
                     }
                     .onEnded { value in
                         yaziPanelWidth = max(160, min(600, yaziPanelWidth + value.translation.width))
+                    }
+            )
+    }
+
+    private var browserPanelDivider: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor))
+            .frame(width: 1)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle().inset(by: -4))
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.resizeLeftRight.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .updating($browserWidthDelta) { value, state, _ in
+                        state = -value.translation.width
+                    }
+                    .onEnded { value in
+                        browserPanelWidth = max(200, min(800, browserPanelWidth - value.translation.width))
                     }
             )
     }

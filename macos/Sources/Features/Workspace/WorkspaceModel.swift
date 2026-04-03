@@ -17,6 +17,8 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
     var isTemporary: Bool
     var panelVisible: Bool = false
     var panelWidth: CGFloat = 260
+    var browserPanelVisible: Bool = false
+    var browserPanelWidth: CGFloat = 400
     var groupId: UUID?    // nil = 未分组
     var groupOrder: Int   // workspace 在所属区域内的排列顺序
 
@@ -35,6 +37,8 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
         // raw value 保留旧 JSON key，实现向后兼容
         case panelVisible = "fileBrowserVisible"
         case panelWidth = "fileBrowserWidth"
+        case browserPanelVisible = "browserPanelVisible"
+        case browserPanelWidth = "browserPanelWidth"
         case groupId
         case groupOrder
     }
@@ -70,6 +74,8 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
         isTemporary = try container.decodeIfPresent(Bool.self, forKey: .isTemporary) ?? false
         panelVisible = try container.decodeIfPresent(Bool.self, forKey: .panelVisible) ?? false
         panelWidth = try container.decodeIfPresent(CGFloat.self, forKey: .panelWidth) ?? 260
+        browserPanelVisible = try container.decodeIfPresent(Bool.self, forKey: .browserPanelVisible) ?? false
+        browserPanelWidth = try container.decodeIfPresent(CGFloat.self, forKey: .browserPanelWidth) ?? 400
         groupId    = try container.decodeIfPresent(UUID.self, forKey: .groupId)
         groupOrder = try container.decodeIfPresent(Int.self, forKey: .groupOrder) ?? 0
     }

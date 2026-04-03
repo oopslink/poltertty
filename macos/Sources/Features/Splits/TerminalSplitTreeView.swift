@@ -446,3 +446,29 @@ extension EnvironmentValues {
         set { self[ShowStatusBarKey.self] = newValue }
     }
 }
+
+// MARK: - WorkspaceId Environment Key
+
+struct WorkspaceIdKey: EnvironmentKey {
+    static let defaultValue: UUID? = nil
+}
+
+extension EnvironmentValues {
+    var workspaceId: UUID? {
+        get { self[WorkspaceIdKey.self] }
+        set { self[WorkspaceIdKey.self] = newValue }
+    }
+}
+
+// MARK: - BrowserPanelVisible Environment Key
+
+struct BrowserPanelVisibleKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+extension EnvironmentValues {
+    var browserPanelVisible: Bool {
+        get { self[BrowserPanelVisibleKey.self] }
+        set { self[BrowserPanelVisibleKey.self] = newValue }
+    }
+}
