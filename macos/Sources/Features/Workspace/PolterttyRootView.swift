@@ -37,6 +37,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
     var worktreeMonitor: GitWorktreeMonitor? = nil
     var onOpenWorktreeInTab: ((String) -> Void)? = nil
     var onOpenWorktreeInWindow: ((String) -> Void)? = nil
+    var onOpenWorktreeInSplit: ((String, SplitTree<Ghostty.SurfaceView>.NewDirection) -> Void)? = nil
 
     @State private var sidebarVisible: Bool = PolterttyConfig.shared.sidebarVisible
     @State private var sidebarCollapsed: Bool = UserDefaults.standard.bool(forKey: "poltertty.sidebarCollapsed")
@@ -81,7 +82,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
         windowProvider: @escaping () -> NSWindow? = { nil },
         worktreeMonitor: GitWorktreeMonitor? = nil,
         onOpenWorktreeInTab: ((String) -> Void)? = nil,
-        onOpenWorktreeInWindow: ((String) -> Void)? = nil
+        onOpenWorktreeInWindow: ((String) -> Void)? = nil,
+        onOpenWorktreeInSplit: ((String, SplitTree<Ghostty.SurfaceView>.NewDirection) -> Void)? = nil
     ) {
         self.ghostty = ghostty
         self.workspaceId = workspaceId
@@ -100,6 +102,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
         self.worktreeMonitor = worktreeMonitor
         self.onOpenWorktreeInTab = onOpenWorktreeInTab
         self.onOpenWorktreeInWindow = onOpenWorktreeInWindow
+        self.onOpenWorktreeInSplit = onOpenWorktreeInSplit
 
         if let wsId = workspaceId {
             self._agentMonitorVM = ObservedObject(
@@ -184,7 +187,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
                             isCollapsed: $sidebarCollapsed,
                             worktreeMonitor: worktreeMonitor,
                             onOpenWorktreeInTab: onOpenWorktreeInTab,
-                            onOpenWorktreeInWindow: onOpenWorktreeInWindow
+                            onOpenWorktreeInWindow: onOpenWorktreeInWindow,
+                            onOpenWorktreeInSplit: onOpenWorktreeInSplit
                         )
                         .frame(width: effectiveSidebarWidth)
 
