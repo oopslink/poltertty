@@ -69,10 +69,11 @@ final class WorkspaceToolbarDelegate: NSObject, NSToolbarDelegate {
             onCloseTab: onCloseTab,
             onSwitchTab: onSwitchTab
         )
-        let hosting = NSHostingView(rootView: barView)
+        let hosting = NonDraggableHostingView(rootView: barView)
         // 低 hugging = 愿意拉伸填满 toolbar；低 compression = 可被压缩
         hosting.setContentHuggingPriority(.defaultLow, for: .horizontal)
         hosting.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        hosting.frame = NSRect(x: 0, y: 0, width: widthTracker.availableWidth, height: 28)
 
         // 观察实际渲染宽度，传给 SwiftUI 计算可见 tab 数
         hosting.postsFrameChangedNotifications = true
@@ -92,6 +93,8 @@ final class WorkspaceToolbarDelegate: NSObject, NSToolbarDelegate {
         item.view = hosting
         item.isBordered = false
         item.visibilityPriority = .user
+        item.minSize = NSSize(width: 1, height: 28)
+        item.maxSize = NSSize(width: 10_000, height: 28)
         return item
     }
 }
@@ -174,6 +177,7 @@ struct WorkspaceBarView: View {
                     .frame(width: 0.5, height: 14)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 28)
     }
 
