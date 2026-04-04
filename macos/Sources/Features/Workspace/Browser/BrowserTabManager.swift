@@ -14,12 +14,19 @@ final class BrowserTabManager: ObservableObject {
         self.webViewFactory = webViewFactory
     }
 
+    // MARK: - Private Helpers
+
+    private func makeWebView() -> WKWebView {
+        let wv = webViewFactory()
+        wv.allowsBackForwardNavigationGestures = true
+        return wv
+    }
+
     // MARK: - Public API
 
     @discardableResult
     func newTab(url: URL? = nil) -> UUID {
-        let wv = webViewFactory()
-        wv.allowsBackForwardNavigationGestures = true
+        let wv = makeWebView()
         var tab = BrowserTab(webView: wv)
         tab.url = url
         if let url {
@@ -57,9 +64,12 @@ final class BrowserTabManager: ObservableObject {
     // MARK: - Restore
 
     func loadSnapshot(_ snapshots: [BrowserTabSnapshot], activeId: UUID?) {
+        // 清空旧 tabs，释放 WebView delegate
+        for tab in tabs { tab.webView.navigationDelegate = nil }
+        tabs.removeAll()
+
         for snap in snapshots {
-            let wv = webViewFactory()
-            wv.allowsBackForwardNavigationGestures = true
+            let wv = makeWebView()
             let tab = BrowserTab(id: snap.id, title: snap.title, url: snap.url, webView: wv)
             if let url = snap.url {
                 wv.load(URLRequest(url: url))

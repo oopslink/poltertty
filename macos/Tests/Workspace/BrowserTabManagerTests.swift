@@ -21,9 +21,8 @@ struct BrowserTabManagerTests {
     @Test func newTabWithURLSetsURL() {
         let mgr = BrowserTabManager()
         let url = URL(string: "https://example.com")!
-        let id = mgr.newTab(url: url)
+        mgr.newTab(url: url)
         #expect(mgr.tabs[0].url == url)
-        _ = id
     }
 
     @Test func secondNewTabFocusesNewTab() {
@@ -38,11 +37,13 @@ struct BrowserTabManagerTests {
 
     @Test func closeTabRemovesIt() {
         let mgr = BrowserTabManager()
-        _ = mgr.newTab()            // 先有一个 tab，再新建一个
-        let id = mgr.newTab()       // 关闭这个非最后一个 tab
-        mgr.closeTab(id: id)
+        let id1 = mgr.newTab()
+        _ = mgr.newTab()        // id2 成为 active
+        // 关闭非 active 的 id1，active 不应改变
+        mgr.closeTab(id: id1)
         #expect(mgr.tabs.count == 1)
-        #expect(!mgr.tabs.contains(where: { $0.id == id }))  // 确认已移除
+        #expect(!mgr.tabs.contains(where: { $0.id == id1 }))
+        #expect(mgr.activeTabId != id1)  // active 未被改变
     }
 
     @Test func closeActiveTabSwitchesToLeftNeighbor() {
@@ -80,10 +81,9 @@ struct BrowserTabManagerTests {
     @Test func focusTabUpdatesActiveId() {
         let mgr = BrowserTabManager()
         let id1 = mgr.newTab()
-        let id2 = mgr.newTab()
+        _ = mgr.newTab()
         mgr.focusTab(id: id1)
         #expect(mgr.activeTabId == id1)
-        _ = id2
     }
 
     @Test func focusUnknownIdIsNoOp() {
