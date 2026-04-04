@@ -102,4 +102,75 @@ struct BrowserTabManagerTests {
         mgr.focusTab(id: id1)
         #expect(mgr.activeTab?.id == id1)
     }
+
+    // MARK: - Snapshot / Restore
+
+    @Test func currentSnapshotReturnsAllTabs() {
+        let mgr = BrowserTabManager()
+        let url = URL(string: "https://example.com")!
+        let id = mgr.newTab(url: url)
+        mgr.updateTab(id: id, title: "Example", url: url)
+        let snaps = mgr.currentSnapshot()
+        #expect(snaps.count == 1)
+        #expect(snaps[0].id == id)
+        #expect(snaps[0].url == url)
+        #expect(snaps[0].title == "Example")
+    }
+
+    @Test func currentSnapshotCapturesAllTabs() {
+        let mgr = BrowserTabManager()
+        _ = mgr.newTab()
+        _ = mgr.newTab()
+        _ = mgr.newTab()
+        let snaps = mgr.currentSnapshot()
+        #expect(snaps.count == 3)
+    }
+
+    @Test func prepareRestoreSetsPromptFlagWhenSnapshotsExist() {
+        let mgr = BrowserTabManager()
+        let snap = BrowserTabSnapshot(id: UUID(), url: URL(string: "https://a.com"), title: "A")
+        mgr.prepareRestore(snapshots: [snap])
+        #expect(mgr.showRestorePrompt == true)
+        #expect(mgr.tabs.isEmpty)   // prepareRestore 不创建 tab
+    }
+
+    @Test func prepareRestoreDoesNothingForEmptySnapshots() {
+        let mgr = BrowserTabManager()
+        mgr.prepareRestore(snapshots: [])
+        #expect(mgr.showRestorePrompt == false)
+    }
+
+    @Test func loadSnapshotCreatesTabs() {
+        let mgr = BrowserTabManager()
+        let id1 = UUID()
+        let id2 = UUID()
+        let snaps = [
+            BrowserTabSnapshot(id: id1, url: URL(string: "https://a.com"), title: "A"),
+            BrowserTabSnapshot(id: id2, url: nil, title: "B"),
+        ]
+        mgr.loadSnapshot(snaps, activeId: id2)
+        #expect(mgr.tabs.count == 2)
+        #expect(mgr.tabs[0].id == id1)
+        #expect(mgr.tabs[1].id == id2)
+        #expect(mgr.activeTabId == id2)
+        #expect(mgr.showRestorePrompt == false)
+    }
+
+    @Test func loadSnapshotFallsBackToFirstTabIfActiveIdUnknown() {
+        let mgr = BrowserTabManager()
+        let snap = BrowserTabSnapshot(id: UUID(), url: nil, title: "X")
+        mgr.loadSnapshot([snap], activeId: UUID())  // 不存在的 activeId
+        #expect(mgr.activeTabId == snap.id)
+    }
+
+    @Test func loadSnapshotClearsExistingTabs() {
+        let mgr = BrowserTabManager()
+        _ = mgr.newTab()  // 先有一个 tab
+        let snapId = UUID()
+        let snap = BrowserTabSnapshot(id: snapId, url: nil, title: "Restored")
+        mgr.loadSnapshot([snap], activeId: snapId)
+        // 旧 tab 应被清除，只剩 restore 的 tab
+        #expect(mgr.tabs.count == 1)
+        #expect(mgr.tabs[0].id == snapId)
+    }
 }
