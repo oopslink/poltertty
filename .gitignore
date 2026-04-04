@@ -39,3 +39,4 @@ macos/macos/
 
 # Bundled tools download cache
 .bundled-tools-cache/
+.playwright-mcp/
