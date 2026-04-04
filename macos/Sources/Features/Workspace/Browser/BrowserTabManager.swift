@@ -10,7 +10,7 @@ final class BrowserTabManager: ObservableObject {
 
     private let webViewFactory: () -> WKWebView
 
-    init(webViewFactory: @escaping () -> WKWebView = { WKWebView() }) {
+    init(webViewFactory: @escaping @MainActor () -> WKWebView = { WKWebView() }) {
         self.webViewFactory = webViewFactory
     }
 
