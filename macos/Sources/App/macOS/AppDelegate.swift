@@ -478,6 +478,18 @@ class AppDelegate: NSObject,
         let manager = WorkspaceManager.shared
         // Destroy all temporary workspaces BEFORE saving snapshots
         manager.destroyAllTemporary()
+        // 退出前保存每个 Workspace 的 browser tab 快照
+        if let browserStore = manager.browserSurfaceStore {
+            for wsId in manager.allWorkspaceIds() {
+                if let mgr = browserStore.managers[wsId],
+                   var ws = manager.workspace(for: wsId) {
+                    ws.browserTabSnapshots = mgr.currentSnapshot()
+                    ws.browserActiveTabId  = mgr.activeTabId
+                    manager.update(ws)
+                }
+            }
+        }
+
         for (id, weakWindow) in manager.activeWindows {
             if let window = weakWindow.window {
                 manager.saveSnapshot(for: id, window: window, sidebarWidth: CGFloat(PolterttyConfig.shared.sidebarWidth), sidebarVisible: PolterttyConfig.shared.sidebarVisible)

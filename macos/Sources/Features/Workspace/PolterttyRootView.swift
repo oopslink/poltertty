@@ -419,6 +419,11 @@ struct PolterttyRootView<TerminalContent: View>: View {
             guard let wsId = workspaceId else { return }
             guard var ws = WorkspaceManager.shared.workspace(for: wsId) else { return }
             ws.browserPanelVisible = newValue
+            // Browser Panel 关闭时保存 tab 快照，供下次打开时恢复
+            if !newValue, let mgr = browserStore.managers[wsId] {
+                ws.browserTabSnapshots = mgr.currentSnapshot()
+                ws.browserActiveTabId  = mgr.activeTabId
+            }
             WorkspaceManager.shared.update(ws)
         }
         .onChange(of: browserPanelWidth) { newValue in
