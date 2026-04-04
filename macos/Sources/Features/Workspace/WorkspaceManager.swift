@@ -144,6 +144,7 @@ class WorkspaceManager: ObservableObject {
         for id in tempIds {
             activeWindows.removeValue(forKey: id)
             yaziSurfaceStore?.removeSurface(for: id)
+            browserSurfaceStore?.removeManager(for: id)
         }
         workspaces.removeAll { $0.isTemporary }
     }
@@ -180,6 +181,7 @@ class WorkspaceManager: ObservableObject {
         workspaces.removeAll { $0.id == id }
         activeWindows.removeValue(forKey: id)
         yaziSurfaceStore?.removeSurface(for: id)
+        browserSurfaceStore?.removeManager(for: id)
         let dirPath = workspaceDir(for: id)
         try? FileManager.default.removeItem(atPath: dirPath)
         let legacyPath = legacySnapshotPath(for: id)
