@@ -78,6 +78,10 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// toolbar item 的 leading 约束，全屏时动态调整
     private var toolbarLeadingConstraint: NSLayoutConstraint?
     private var closeButtonObservation: NSKeyValueObservation?
+    private weak var workspaceToolbarItemViewer: NSView?
+    private weak var workspaceToolbarHostingView: NSView?
+    private var isRetryingWorkspaceToolbarExpansion = false
+    private var workspaceToolbarFullscreenObserversInstalled = false
 
     /// Per-tab surface trees: tabId → SplitTree (supports splits within each tab)
     private var tabSurfaceTrees: [UUID: SplitTree<Ghostty.SurfaceView>] = [:]
@@ -1725,11 +1729,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             window.toolbarStyle = .unifiedCompact
             window.titleVisibility = .hidden
 
-            // toolbar item 默认按 intrinsicContentSize 定宽，需要用 auto layout 强制填满。
-            // 延迟一帧，等 toolbar view hierarchy 构建完成后再操作。
-            DispatchQueue.main.async { [weak self] in
-                self?.expandWorkspaceToolbarItem()
-            }
+            ensureWorkspaceToolbarExpanded()
         }
 
         // Set window title for onboarding/restore modes
@@ -1877,53 +1877,78 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
     }
 
+    private func ensureWorkspaceToolbarExpanded(attempt: Int = 0, maxAttempts: Int = 8) {
+        guard workspaceId != nil else { return }
+
+        if expandWorkspaceToolbarItem() {
+            isRetryingWorkspaceToolbarExpansion = false
+            return
+        }
+
+        guard attempt < maxAttempts, !isRetryingWorkspaceToolbarExpansion else { return }
+        isRetryingWorkspaceToolbarExpansion = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            self?.isRetryingWorkspaceToolbarExpansion = false
+            self?.ensureWorkspaceToolbarExpanded(attempt: attempt + 1, maxAttempts: maxAttempts)
+        }
+    }
+
     /// toolbar item 默认按 intrinsicContentSize 定宽，无法自动填满 toolbar。
     /// 参考 TitlebarTabsTahoeTerminalWindow 的做法，找到 NSToolbarView 后
     /// 用 auto layout 约束把 item viewer 拉满整个 toolbar 宽度。
-    private func expandWorkspaceToolbarItem() {
+    @discardableResult
+    private func expandWorkspaceToolbarItem() -> Bool {
         guard let window,
               let terminalWindow = window as? TerminalWindow,
               let titlebarContainer = terminalWindow.titlebarContainer,
               let toolbarView = titlebarContainer.firstDescendant(withClassName: "NSToolbarView")
-        else { return }
+        else { return false }
 
         // 找到 NSToolbarItemViewer（toolbar item 的容器）
         guard let itemViewer = toolbarView.subviews.first(where: {
             $0.className == "NSToolbarItemViewer"
-        }) else { return }
+        }) else { return false }
 
-        // 让 item viewer 填满 toolbar
         let isFullScreen = window.styleMask.contains(.fullScreen)
-        let leading = itemViewer.leadingAnchor.constraint(
-            equalTo: toolbarView.leadingAnchor,
-            constant: isFullScreen ? 0 : 78
-        )
-        self.toolbarLeadingConstraint = leading
+        if workspaceToolbarItemViewer !== itemViewer {
+            // 让 item viewer 填满 toolbar
+            let leading = itemViewer.leadingAnchor.constraint(
+                equalTo: toolbarView.leadingAnchor,
+                constant: isFullScreen ? 0 : 78
+            )
+            self.toolbarLeadingConstraint = leading
 
-        itemViewer.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            leading,
-            itemViewer.trailingAnchor.constraint(equalTo: toolbarView.trailingAnchor),
-            itemViewer.topAnchor.constraint(equalTo: toolbarView.topAnchor),
-            itemViewer.bottomAnchor.constraint(equalTo: toolbarView.bottomAnchor),
-        ])
+            itemViewer.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                leading,
+                itemViewer.trailingAnchor.constraint(equalTo: toolbarView.trailingAnchor),
+                itemViewer.topAnchor.constraint(equalTo: toolbarView.topAnchor),
+                itemViewer.bottomAnchor.constraint(equalTo: toolbarView.bottomAnchor),
+            ])
+            workspaceToolbarItemViewer = itemViewer
+        } else {
+            toolbarLeadingConstraint?.constant = isFullScreen ? 0 : 78
+        }
 
         // 监听全屏切换，动态调整左边距
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(onFullScreenChange),
-            name: NSWindow.didEnterFullScreenNotification,
-            object: window
-        )
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(onFullScreenChange),
-            name: NSWindow.didExitFullScreenNotification,
-            object: window
-        )
+        if !workspaceToolbarFullscreenObserversInstalled {
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(onFullScreenChange),
+                name: NSWindow.didEnterFullScreenNotification,
+                object: window
+            )
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(onFullScreenChange),
+                name: NSWindow.didExitFullScreenNotification,
+                object: window
+            )
+            workspaceToolbarFullscreenObserversInstalled = true
+        }
 
         // 同时让 hosting view 填满 item viewer
-        if let hostingView = itemViewer.subviews.first {
+        if let hostingView = itemViewer.subviews.first, workspaceToolbarHostingView !== hostingView {
             hostingView.translatesAutoresizingMaskIntoConstraints = false
             NSLayoutConstraint.activate([
                 hostingView.leadingAnchor.constraint(equalTo: itemViewer.leadingAnchor),
@@ -1931,7 +1956,10 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
                 hostingView.topAnchor.constraint(equalTo: itemViewer.topAnchor),
                 hostingView.bottomAnchor.constraint(equalTo: itemViewer.bottomAnchor),
             ])
+            workspaceToolbarHostingView = hostingView
         }
+
+        return true
     }
 
     override func windowWillClose(_ notification: Notification) {
@@ -2020,6 +2048,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
     override func windowDidResize(_ notification: Notification) {
         super.windowDidResize(notification)
+
+        ensureWorkspaceToolbarExpanded(maxAttempts: 1)
 
         // Whenever we resize save our last position and size for the next start.
         LastWindowPosition.shared.save(window)
