@@ -325,6 +325,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
                 browserPanelWidth = ws.browserPanelWidth
             }
             WorkspaceManager.shared.yaziSurfaceStore = yaziStore
+            WorkspaceManager.shared.browserSurfaceStore = browserStore
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleWorkspaceSidebar)) { notification in
             guard notification.object as? NSWindow == windowProvider() else { return }

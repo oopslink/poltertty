@@ -14,6 +14,9 @@ class WorkspaceManager: ObservableObject {
     /// PolterttyRootView 创建 yazi store 后注入此引用（用于 delete 时清理 surface）
     weak var yaziSurfaceStore: YaziSurfaceStore?
 
+    /// PolterttyRootView 创建 browserStore 后注入此引用（供 CtrlToolHandler Agent API 使用）
+    weak var browserSurfaceStore: BrowserSurfaceStore?
+
     /// Only formal (non-temporary) workspaces
     var formalWorkspaces: [WorkspaceModel] {
         workspaces.filter { !$0.isTemporary }
@@ -209,6 +212,11 @@ class WorkspaceManager: ObservableObject {
     /// 返回所有注册了活跃窗口的 workspace ID（@MainActor 安全）
     func allWorkspaceIds() -> [UUID] {
         activeWindows.keys.filter { activeWindows[$0]?.window != nil }
+    }
+
+    /// 返回当前 key window 对应的 workspace ID。
+    func activeWorkspaceId() -> UUID? {
+        activeWindows.first { $0.value.window?.isKeyWindow == true }?.key
     }
 
     func workspaceId(for window: NSWindow) -> UUID? {
