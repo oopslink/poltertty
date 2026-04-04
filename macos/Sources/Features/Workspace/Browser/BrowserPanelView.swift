@@ -5,6 +5,8 @@ import WebKit
 struct BrowserPanelView: View {
     let workspaceId: UUID?
     @ObservedObject var browserStore: BrowserSurfaceStore
+    var snapshotsForRestore: [BrowserTabSnapshot]
+    var activeSnapshotId: UUID?
     var onClose: () -> Void
 
     @State private var currentURL: URL? = nil
@@ -14,21 +16,47 @@ struct BrowserPanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let wsId = workspaceId {
-                let wv = browserStore.webView(for: wsId)
+                let mgr = browserStore.manager(
+                    for: wsId,
+                    snapshots: snapshotsForRestore.isEmpty ? nil : snapshotsForRestore
+                )
+
+                // ── Toolbar with Tab Strip ──
                 BrowserPanelToolbar(
-                    webView: wv,
-                    canGoBack: canGoBack,
-                    canGoForward: canGoForward,
+                    manager: mgr,
                     currentURL: $currentURL,
                     onClose: onClose
                 )
+
                 Divider()
-                BrowserWebView(
-                    webView: wv,
-                    currentURL: $currentURL,
-                    canGoBack: $canGoBack,
-                    canGoForward: $canGoForward
-                )
+
+                // ── Restore Banner ──
+                if mgr.showRestorePrompt {
+                    BrowserRestoreBanner(
+                        tabCount: snapshotsForRestore.count,
+                        onRestore: {
+                            mgr.loadSnapshot(snapshotsForRestore, activeId: activeSnapshotId)
+                        },
+                        onDismiss: {
+                            mgr.showRestorePrompt = false
+                            if mgr.tabs.isEmpty { mgr.newTab() }
+                        }
+                    )
+                    Divider()
+                }
+
+                // ── Active WebView ──
+                if let activeTab = mgr.activeTab {
+                    BrowserWebView(
+                        webView: activeTab.webView,
+                        currentURL: $currentURL,
+                        canGoBack: $canGoBack,
+                        canGoForward: $canGoForward
+                    )
+                } else {
+                    Spacer()
+                }
+
             } else {
                 noWorkspaceView
             }

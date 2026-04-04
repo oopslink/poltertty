@@ -239,6 +239,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         BrowserPanelView(
                             workspaceId: workspaceId,
                             browserStore: browserStore,
+                            snapshotsForRestore: WorkspaceManager.shared.workspace(for: workspaceId ?? UUID())?.browserTabSnapshots ?? [],
+                            activeSnapshotId: WorkspaceManager.shared.workspace(for: workspaceId ?? UUID())?.browserActiveTabId,
                             onClose: { browserPanelVisible = false }
                         )
                         .frame(width: effectiveBrowserPanelWidth)
