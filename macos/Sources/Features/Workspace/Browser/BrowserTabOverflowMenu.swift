@@ -13,18 +13,13 @@ struct BrowserTabOverflowMenu: View {
                 Button {
                     onSelect(tab.id)
                 } label: {
-                    HStack {
-                        if tab.id == activeTabId {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 9))
-                        }
-                        Text(tab.title.isEmpty ? "New Tab" : tab.title)
-                        Spacer()
-                        if let url = tab.url {
-                            Text(url.host ?? "")
-                                .foregroundStyle(.secondary)
-                                .font(.system(size: 10))
-                        }
+                    let isActive = tab.id == activeTabId
+                    let prefix = isActive ? "✓ " : ""
+                    let title = tab.title.isEmpty ? "New Tab" : tab.title
+                    if let host = tab.url?.host {
+                        Text("\(prefix)\(title)  \(host)")
+                    } else {
+                        Text("\(prefix)\(title)")
                     }
                 }
             }
