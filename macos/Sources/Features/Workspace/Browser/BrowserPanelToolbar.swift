@@ -15,6 +15,8 @@ struct BrowserPanelToolbar: View {
     @State private var addressInput: String = ""
     @FocusState private var isEditingAddress: Bool
     @State private var availableTabWidth: CGFloat = 200
+    @State private var editingTabId: UUID? = nil
+    @State private var editingTitle: String = ""
 
     var body: some View {
         HStack(spacing: 0) {
@@ -143,12 +145,27 @@ struct BrowserPanelToolbar: View {
     @ViewBuilder
     private func tabButton(tab: BrowserTab) -> some View {
         let isActive = tab.id == manager.activeTabId
+        let isEditing = editingTabId == tab.id
+
         HStack(spacing: 3) {
-            Text(tab.title.isEmpty ? "New Tab" : tab.title)
-                .font(.system(size: 10))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .foregroundStyle(isActive ? Color.primary : Color.secondary)
+            if isEditing {
+                TextField("", text: $editingTitle)
+                    .font(.system(size: 10))
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(Color.primary)
+                    .onSubmit { commitRename(tab: tab) }
+                    .onExitCommand { cancelRename() }
+                    // 自动获取焦点
+                    .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        NSApp.keyWindow?.makeFirstResponder(nil)
+                    }}
+            } else {
+                Text(tab.title.isEmpty ? "New Tab" : tab.title)
+                    .font(.system(size: 10))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundStyle(isActive ? Color.primary : Color.secondary)
+            }
 
             Button {
                 manager.closeTab(id: tab.id)
@@ -178,6 +195,23 @@ struct BrowserPanelToolbar: View {
         )
         .contentShape(Rectangle())
         .onTapGesture { manager.focusTab(id: tab.id) }
+        .onTapGesture(count: 2) { beginRename(tab: tab) }
+    }
+
+    private func beginRename(tab: BrowserTab) {
+        manager.focusTab(id: tab.id)
+        editingTitle = tab.title.isEmpty ? "New Tab" : tab.title
+        editingTabId = tab.id
+    }
+
+    private func commitRename(tab: BrowserTab) {
+        let name = editingTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        manager.updateTab(id: tab.id, title: name.isEmpty ? "New Tab" : name, url: nil)
+        editingTabId = nil
+    }
+
+    private func cancelRename() {
+        editingTabId = nil
     }
 
     // MARK: - 溢出计算
