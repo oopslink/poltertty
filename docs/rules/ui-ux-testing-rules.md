@@ -604,6 +604,218 @@ echo "✅ 检查 tab 是否在 titlebar 右侧（非紧贴 workspace 名称）"
 
 ---
 
+## 11. 侧边栏 Workspace 元数据测试
+
+### 设计稿参考
+
+`.superpowers/brainstorm/42210-1775360708/sidebar-metadata-design.png`
+
+### 11.1 测试数据准备
+
+```bash
+# 启动一个本地服务（模拟监听端口）
+python3 -m http.server 9731 &
+MOCK_SERVER_PID=$!
+
+# 启动 App
+make dev
+APP_PATH=$(find .build/DerivedData -name "Poltertty.app" -path "*/Debug/Poltertty.app" | head -1)
+open "$APP_PATH"
+sleep 3
+
+PORT=$(lsof -i -n -P 2>/dev/null | grep ghostty | grep LISTEN | awk '{print $9}' | sed 's/.*://' | head -1)
+echo "Ctrl API Port: $PORT"
+```
+
+### 11.2 展开状态截图与检查（方案 A）
+
+```bash
+# 确保侧边栏展开
+osascript << 'OSEOF'
+tell application "System Events"
+    tell process "ghostty"
+        set frontmost to true
+        delay 0.5
+        click menu item "Toggle Sidebar" of menu "Workspace" of menu bar 1
+    end tell
+end tell
+OSEOF
+sleep 0.8
+
+screencapture -x /tmp/sidebar_expanded_metadata.png
+
+# 裁切侧边栏区域（展开状态约 x=0~220，全高）
+python3 << 'PYEOF'
+from PIL import Image
+img = Image.open("/tmp/sidebar_expanded_metadata.png")
+w, h = img.size
+print(f"Screenshot: {w}x{h}")
+# 侧边栏区域（Retina 2x，展开宽度约 360px）
+sidebar = img.crop((0, 60, 380, h - 60))
+sidebar.save("/tmp/sidebar_expanded_crop.png")
+print("Saved: /tmp/sidebar_expanded_crop.png")
+PYEOF
+```
+
+**展开状态（方案 A）检查清单：**
+
+- [ ] 端口徽标格式为 `:PORT`（如 `:9731`），monospaced 字体
+- [ ] 端口徽标颜色：蓝色系底色（rgba 约 23,51,95,0.18），蓝色文字
+- [ ] 端口徽标可点击，hover 时有 tooltip `在 Browser Panel 打开 http://localhost:PORT`
+- [ ] 超过 3 个端口时显示前 3 个 + `+N` 文字
+- [ ] PR Open 徽标：绿色系，格式 `#N Open`
+- [ ] PR Draft 徽标：灰色系，格式 `#N Draft`
+- [ ] PR Merged 徽标：紫色系，格式 `#N Merged`
+- [ ] 无 PR 时 PR 位置完全留空（不显示空占位）
+- [ ] Agent Working 徽标：黄色脉冲点 + `Working`，点有闪烁动画
+- [ ] Agent Idle 徽标：灰色静态点 + `Idle`
+- [ ] 无 Agent 时不显示 Agent 徽标
+- [ ] **无任何元数据时**：徽标行完全不渲染，workspace 行高与无数据时一致（不留空行）
+- [ ] 徽标行在 rootDir 路径行正下方，间距与设计稿一致（约 3pt）
+
+### 11.3 折叠状态截图与检查（方案 X）
+
+```bash
+# 切换到折叠状态
+osascript << 'OSEOF'
+tell application "System Events"
+    tell process "ghostty"
+        set frontmost to true
+        delay 0.5
+        click menu item "Toggle Sidebar" of menu "Workspace" of menu bar 1
+    end tell
+end tell
+OSEOF
+sleep 0.5
+
+# 再次切换：让侧边栏折叠（若当前为展开则先收起，再展开折叠态）
+# 注意：折叠按钮在侧边栏内，通过 Ctrl API 截图验证
+screencapture -x /tmp/sidebar_collapsed_metadata.png
+
+python3 << 'PYEOF'
+from PIL import Image
+img = Image.open("/tmp/sidebar_collapsed_metadata.png")
+w, h = img.size
+print(f"Screenshot: {w}x{h}")
+# 折叠状态侧边栏约 x=0~100（Retina 2x 约 104px）
+sidebar = img.crop((0, 60, 110, h - 60))
+sidebar.save("/tmp/sidebar_collapsed_crop.png")
+print("Saved: /tmp/sidebar_collapsed_crop.png")
+PYEOF
+```
+
+**折叠状态（方案 X）检查清单：**
+
+- [ ] 图标下方有三点行，高度约 8pt，三点水平间距约 4pt
+- [ ] 左点（端口）：蓝色（有端口）/ 透明（无端口），hover tooltip 显示端口列表如 `:3000 :8080`
+- [ ] 中点（Agent）：黄色脉冲（Working）/ 灰色（Idle）/ 透明（None）
+- [ ] 右点（PR）：绿色（Open）/ 灰色（Draft）/ 紫色（Merged）/ 透明（无 PR）
+- [ ] 已有的红色未读通知角标（右上角）不受影响，不与三点行重叠
+- [ ] 无任何元数据时三点行所有点透明（点行区域高度仍占位，图标不跳动）
+
+### 11.4 交互测试：端口点击打开 Browser Panel
+
+```bash
+# 用 click_window 模拟点击端口徽标（需先通过截图确认坐标）
+PORT_CTRL=$(lsof -i -n -P 2>/dev/null | grep ghostty | grep LISTEN | awk '{print $9}' | sed 's/.*://' | head -1)
+
+# 截图获取端口徽标位置（展开侧边栏）
+osascript -e 'tell application "System Events" to tell process "ghostty" to set frontmost to true'
+sleep 0.8
+screencapture -x /tmp/before_port_click.png
+
+# 点击端口徽标（坐标需根据实际截图调整，端口徽标约在 sidebar 第一个 workspace 行的 y ≈ 200）
+curl -s -X POST http://localhost:$PORT_CTRL/v1/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"click_window","arguments":{"x":65,"y":200}}}' > /dev/null
+sleep 0.8
+screencapture -x /tmp/after_port_click.png
+```
+
+**Browser Panel 打开检查：**
+
+- [ ] 点击端口徽标后，Browser Panel 自动出现（`browserPanelVisible` 变为 true）
+- [ ] Browser Panel 中打开了新 tab，URL 为 `http://localhost:PORT`
+- [ ] 若 Browser Panel 已打开，新 tab 追加到现有 tab 列表
+
+### 11.5 生成测试报告
+
+测试完成后将截图收集到 `docs/tests/YYYY-MM-DD/` 并生成 Markdown 报告：
+
+```bash
+DATE=$(date +%Y-%m-%d)
+mkdir -p docs/tests/$DATE
+
+cp /tmp/sidebar_expanded_crop.png   docs/tests/$DATE/sidebar-expanded.png
+cp /tmp/sidebar_collapsed_crop.png  docs/tests/$DATE/sidebar-collapsed.png
+cp /tmp/before_port_click.png       docs/tests/$DATE/before-port-click.png
+cp /tmp/after_port_click.png        docs/tests/$DATE/after-port-click.png
+```
+
+报告文件路径：`docs/tests/YYYY-MM-DD/sidebar-metadata-report.md`
+
+报告格式：
+
+```markdown
+# 侧边栏元数据 UI/UX 测试报告
+
+**日期**：YYYY-MM-DD  
+**构建**：Debug / `make dev`  
+**设计稿**：`.superpowers/brainstorm/42210-1775360708/sidebar-metadata-design.png`
+
+## 测试环境
+
+- macOS 版本：
+- 分辨率：（screencapture 输出尺寸）
+- 测试数据：python3 -m http.server 9731（端口 :9731 模拟）
+
+## 展开状态（方案 A）
+
+| 检查项 | 结果 | 备注 |
+|--------|------|------|
+| 端口徽标格式 `:PORT` | ✅/❌ | |
+| 端口徽标色彩（蓝色系） | ✅/❌ | |
+| PR Open 绿色 `#N Open` | ✅/❌ | |
+| PR Draft 灰色 `#N Draft` | ✅/❌ | |
+| 无元数据时徽标行不渲染 | ✅/❌ | |
+| Agent Working 脉冲动画 | ✅/❌ | |
+| 行高与设计稿一致 | ✅/❌ | |
+
+截图：`sidebar-expanded.png`  
+设计稿对照：见 `.superpowers/brainstorm/42210-1775360708/sidebar-metadata-design.png` 方案 A 区域
+
+## 折叠状态（方案 X）
+
+| 检查项 | 结果 | 备注 |
+|--------|------|------|
+| 三点行高度 8pt / 间距 4pt | ✅/❌ | |
+| 左点蓝色（有端口）/ 透明（无端口） | ✅/❌ | |
+| 中点黄色脉冲（Working） | ✅/❌ | |
+| 右点绿色（PR Open） | ✅/❌ | |
+| 未读角标不受影响 | ✅/❌ | |
+
+截图：`sidebar-collapsed.png`
+
+## 交互：端口点击
+
+| 检查项 | 结果 | 备注 |
+|--------|------|------|
+| 点击端口 → Browser Panel 打开 | ✅/❌ | |
+| 新 tab URL = http://localhost:PORT | ✅/❌ | |
+
+截图：`before-port-click.png` / `after-port-click.png`
+
+## 与设计稿差异
+
+（列出与设计稿不一致的地方，每条说明是否需要修正）
+
+## 结论
+
+**通过 / 需修正**
+```
+
+---
+
 ## 8. 旧测试脚本示例（Git 面板）
 
 ```bash
