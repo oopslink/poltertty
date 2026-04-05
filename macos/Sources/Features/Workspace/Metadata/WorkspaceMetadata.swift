@@ -3,7 +3,7 @@ import Foundation
 struct WorkspaceMetadata: Equatable {
     var listeningPorts: [Int] = []
     var prStatus: PRStatus? = nil
-    var agentState: AgentState = .none
+    var agentState: WorkspaceAgentState = .none
 }
 
 enum PRStatus: Equatable {
@@ -20,7 +20,7 @@ enum PRStatus: Equatable {
     }
 }
 
-enum AgentState: Equatable {
+enum WorkspaceAgentState: Equatable {
     case none     // 无 session
     case idle     // session 存在但全部不再存活
     case working  // 至少一个 session isAlive
