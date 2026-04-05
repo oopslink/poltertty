@@ -67,6 +67,9 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var browserPanelWidth: CGFloat = 400
     @GestureState private var browserWidthDelta: CGFloat = 0
 
+    // 无 workspace 时作为面板的临时标识符（仅限当前会话，不持久化）
+    @State private var standaloneId = UUID()
+
     @ObservedObject private var agentMonitorVM: AgentMonitorViewModel
     @ObservedObject var tabBarViewModel: TabBarViewModel
     let workspaceAccentColor: Color
@@ -143,7 +146,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
     private var currentWorkspaceRootDir: String {
         guard let wsId = workspaceId,
-              let ws = WorkspaceManager.shared.workspace(for: wsId) else { return "" }
+              let ws = WorkspaceManager.shared.workspace(for: wsId) else { return NSHomeDirectory() }
         return ws.rootDirExpanded
     }
 
@@ -210,7 +213,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
                     // Yazi 文件管理面板
                     if panelVisible {
                         YaziPanelView(
-                            workspaceId: workspaceId,
+                            workspaceId: workspaceId ?? standaloneId,
                             ghostty: ghostty,
                             yaziStore: yaziStore,
                             rootDir: currentWorkspaceRootDir,
@@ -245,7 +248,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
                                 browserPanelDivider
                             }
                             BrowserPanelView(
-                                workspaceId: workspaceId,
+                                workspaceId: workspaceId ?? standaloneId,
                                 browserStore: browserStore,
                                 snapshotsForRestore: WorkspaceManager.shared.workspace(for: workspaceId ?? UUID())?.browserTabSnapshots ?? [],
                                 activeSnapshotId: WorkspaceManager.shared.workspace(for: workspaceId ?? UUID())?.browserActiveTabId,
