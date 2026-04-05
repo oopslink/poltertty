@@ -9,6 +9,7 @@ extension Notification.Name {
     static let workspaceSidebarNavigateDown = Notification.Name("poltertty.workspaceSidebarNavigateDown")
     static let toggleFileBrowser = Notification.Name("poltertty.toggleFileBrowser")
     static let toggleBrowserPanel = Notification.Name("poltertty.toggleBrowserPanel")
+    static let openURLInBrowserPanel = Notification.Name("poltertty.openURLInBrowserPanel")
     static let fileBrowserOpenInTerminal = Notification.Name("poltertty.fileBrowserOpenInTerminal")
     static let toggleAgentMonitor = Notification.Name("poltertty.toggleAgentMonitor")
     static let launchAgentFromSidebar = Notification.Name("poltertty.launchAgentFromSidebar")
@@ -326,6 +327,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
             }
             WorkspaceManager.shared.yaziSurfaceStore = yaziStore
             WorkspaceManager.shared.browserSurfaceStore = browserStore
+            WorkspaceMetadataStore.shared.start()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleWorkspaceSidebar)) { notification in
             guard notification.object as? NSWindow == windowProvider() else { return }
@@ -349,6 +351,14 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .onReceive(NotificationCenter.default.publisher(for: .toggleBrowserPanel)) { notification in
             guard (notification.object as? UUID) == workspaceId else { return }
             browserPanelVisible.toggle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openURLInBrowserPanel)) { notification in
+            guard let url = notification.userInfo?["url"] as? URL,
+                  let wsId = notification.userInfo?["workspaceId"] as? UUID,
+                  wsId == workspaceId else { return }
+            browserPanelVisible = true
+            let mgr = browserStore.manager(for: wsId)
+            mgr.newTab(url: url)
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleNotificationCenter)) { _ in
             notificationCenterVisible.toggle()

@@ -5,6 +5,7 @@ import SwiftUI
 struct WorkspaceSidebar: View {
     @ObservedObject var manager = WorkspaceManager.shared
     @ObservedObject var notificationStore = AgentNotificationStore.shared
+    @ObservedObject private var metadataStore = WorkspaceMetadataStore.shared
     let currentWorkspaceId: UUID?
     let onSwitch: (UUID) -> Void
     let onClose: (UUID) -> Void
@@ -193,7 +194,8 @@ struct WorkspaceSidebar: View {
                                     if let monitor = worktreeMonitor {
                                         confirmDeleteWorktree(path: path, monitor: monitor)
                                     }
-                                } : nil
+                                } : nil,
+                                metadata: metadataStore.metadata[workspace.id] ?? WorkspaceMetadata()
                             )
                         }
 
@@ -242,7 +244,8 @@ struct WorkspaceSidebar: View {
                                                 if let monitor = worktreeMonitor {
                                                     confirmDeleteWorktree(path: path, monitor: monitor)
                                                 }
-                                            } : nil
+                                            } : nil,
+                                            metadata: metadataStore.metadata[workspace.id] ?? WorkspaceMetadata()
                                         )
                                     }
                                 }
@@ -271,7 +274,8 @@ struct WorkspaceSidebar: View {
                                         if let monitor = worktreeMonitor {
                                             confirmDeleteWorktree(path: path, monitor: monitor)
                                         }
-                                    } : nil
+                                    } : nil,
+                                    metadata: metadataStore.metadata[workspace.id] ?? WorkspaceMetadata()
                                 )
                             }
                         }
@@ -321,7 +325,18 @@ struct WorkspaceSidebar: View {
                     },
                     onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) },
                     availableGroups: manager.groups,
-                    onShowCreateForm: workspace.id == currentWorkspaceId ? { showWorktreeCreateForm = true } : nil
+                    onShowCreateForm: workspace.id == currentWorkspaceId ? { showWorktreeCreateForm = true } : nil,
+                    metadata: metadataStore.metadata[workspace.id] ?? WorkspaceMetadata(),
+                    onOpenPort: { port in
+                        NotificationCenter.default.post(
+                            name: .openURLInBrowserPanel,
+                            object: nil,
+                            userInfo: [
+                                "url": URL(string: "http://localhost:\(port)")!,
+                                "workspaceId": workspace.id
+                            ]
+                        )
+                    }
                 )
                 if workspace.id == currentWorkspaceId,
                    let monitor = worktreeMonitor,
@@ -452,7 +467,18 @@ struct WorkspaceSidebar: View {
                                         },
                                         onNewGroup: { showCreateGroupAlert(movingWorkspace: workspace) },
                                         availableGroups: manager.groups,
-                                        onShowCreateForm: workspace.id == currentWorkspaceId ? { showWorktreeCreateForm = true } : nil
+                                        onShowCreateForm: workspace.id == currentWorkspaceId ? { showWorktreeCreateForm = true } : nil,
+                                        metadata: metadataStore.metadata[workspace.id] ?? WorkspaceMetadata(),
+                                        onOpenPort: { port in
+                                            NotificationCenter.default.post(
+                                                name: .openURLInBrowserPanel,
+                                                object: nil,
+                                                userInfo: [
+                                                    "url": URL(string: "http://localhost:\(port)")!,
+                                                    "workspaceId": workspace.id
+                                                ]
+                                            )
+                                        }
                                     )
                                     .padding(.leading, 8)
                                     if workspace.id == currentWorkspaceId,
@@ -528,8 +554,19 @@ struct WorkspaceSidebar: View {
                                     onClose: { onClose(workspace.id) },
                                     onDelete: { pendingDeleteWorkspace = workspace; showDeleteAlert = true },
                                     onConvert: { onConvert(workspace) },
-                                    onEdit: { editingWorkspace = workspace }
+                                    onEdit: { editingWorkspace = workspace },
                                     // No onMoveToGroup/onNewGroup for Temporary workspaces
+                                    metadata: metadataStore.metadata[workspace.id] ?? WorkspaceMetadata(),
+                                    onOpenPort: { port in
+                                        NotificationCenter.default.post(
+                                            name: .openURLInBrowserPanel,
+                                            object: nil,
+                                            userInfo: [
+                                                "url": URL(string: "http://localhost:\(port)")!,
+                                                "workspaceId": workspace.id
+                                            ]
+                                        )
+                                    }
                                 )
                             }
                         }
