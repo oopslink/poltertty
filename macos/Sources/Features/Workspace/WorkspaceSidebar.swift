@@ -655,6 +655,7 @@ struct CollapsedWorkspaceIcon: View {
     var onOpenWorktreeInWindow: ((String) -> Void)? = nil
     var onOpenWorktreeInSplit: ((String, SplitTree<Ghostty.SurfaceView>.NewDirection) -> Void)? = nil
     var onDeleteWorktree: ((String) -> Void)? = nil
+    var metadata: WorkspaceMetadata = WorkspaceMetadata()
 
     @State private var isHovering = false
 
@@ -692,37 +693,38 @@ struct CollapsedWorkspaceIcon: View {
     }
 
     var body: some View {
-        Button(action: onTap) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(iconFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(isActive ? .white.opacity(0.9) : .clear, lineWidth: 2)
-                    )
-                    .shadow(color: isActive ? workspace.color.opacity(0.5) : .clear, radius: 4)
+        VStack(spacing: 3) {
+            Button(action: onTap) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(iconFill)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(isActive ? .white.opacity(0.9) : .clear, lineWidth: 2)
+                        )
+                        .shadow(color: isActive ? workspace.color.opacity(0.5) : .clear, radius: 4)
 
-                Text(workspace.icon)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundColor(iconTextColor)
-            }
-            .frame(width: 32, height: 32)
-            .overlay(alignment: .topTrailing) {
-                if unreadCount > 0 {
-                    Text("\(min(unreadCount, 99))")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(Color.red))
-                        .offset(x: 4, y: -4)
+                    Text(workspace.icon)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundColor(iconTextColor)
+                }
+                .frame(width: 32, height: 32)
+                .overlay(alignment: .topTrailing) {
+                    if unreadCount > 0 {
+                        Text("\(min(unreadCount, 99))")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.red))
+                            .offset(x: 4, y: -4)
+                    }
                 }
             }
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
-        .help(tooltipText)
-        .contextMenu {
+            .buttonStyle(.plain)
+            .onHover { isHovering = $0 }
+            .help(tooltipText)
+            .contextMenu {
             if let monitor = worktreeMonitor, monitor.worktrees.count > 1 {
                 Menu("Worktrees") {
                     ForEach(monitor.worktrees) { wt in
@@ -770,6 +772,9 @@ struct CollapsedWorkspaceIcon: View {
             Button("Delete Workspace", role: .destructive) { onDelete() }
         }
         .onTapGesture(count: 2) {}  // prevent double-tap from passing through to blank area handler
+
+            CollapsedMetadataDots(metadata: metadata)
+        }
     }
 }
 
@@ -790,6 +795,8 @@ struct ExpandedWorkspaceItem: View {
     var onNewGroup: (() -> Void)? = nil
     var availableGroups: [WorkspaceGroup] = []
     var onShowCreateForm: (() -> Void)? = nil
+    var metadata: WorkspaceMetadata = WorkspaceMetadata()
+    var onOpenPort: ((Int) -> Void)? = nil
 
     @State private var isHovering = false
     @State private var isPressed = false
@@ -845,6 +852,10 @@ struct ExpandedWorkspaceItem: View {
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(.secondary.opacity(0.6))
                     .lineLimit(1)
+
+                if !metadata.listeningPorts.isEmpty || metadata.prStatus != nil || metadata.agentState != .none {
+                    WorkspaceMetadataBadgeRow(metadata: metadata, onOpenPort: onOpenPort)
+                }
             }
 
             Spacer()
@@ -905,6 +916,213 @@ struct ExpandedWorkspaceItem: View {
         .onTapGesture(count: 2) {}  // prevent double-tap from passing through to blank area handler
     }
 
+}
+
+// MARK: - Collapsed Metadata Dots
+
+private struct CollapsedMetadataDots: View {
+    let metadata: WorkspaceMetadata
+    @State private var pulseOpacity: Double = 1.0
+
+    private var hasPort: Bool { !metadata.listeningPorts.isEmpty }
+    private var portTooltip: String {
+        metadata.listeningPorts.prefix(3).map { ":\($0)" }.joined(separator: " ")
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            // 左点：端口（蓝）
+            Circle()
+                .fill(hasPort ? Color(red: 0.58, green: 0.77, blue: 0.99) : Color.clear)
+                .frame(width: 5, height: 5)
+                .help(hasPort ? portTooltip : "")
+
+            // 中点：Agent（黄闪=working，灰=idle，透明=none）
+            agentDot
+
+            // 右点：PR（绿=open，灰=draft，透明=none）
+            prDot
+        }
+        .frame(height: 8)
+        .onAppear {
+            if metadata.agentState == .working { pulseOpacity = 0.2 }
+        }
+    }
+
+    private var agentDot: some View {
+        let color: Color
+        switch metadata.agentState {
+        case .working: color = Color(red: 0.99, green: 0.82, blue: 0.30)
+        case .idle:    color = Color(nsColor: .tertiaryLabelColor)
+        case .none:    color = .clear
+        }
+        return Circle()
+            .fill(color)
+            .frame(width: 5, height: 5)
+            .opacity(metadata.agentState == .working ? pulseOpacity : 1.0)
+            .animation(
+                metadata.agentState == .working
+                    ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
+                    : .default,
+                value: pulseOpacity
+            )
+            .help(metadata.agentState == .none ? "" : (metadata.agentState == .working ? "Agent Working" : "Agent Idle"))
+    }
+
+    private var prDot: some View {
+        let color: Color
+        let tooltip: String
+        switch metadata.prStatus {
+        case .open:    color = Color(red: 0.53, green: 0.94, blue: 0.67); tooltip = "PR Open"
+        case .draft:   color = Color(nsColor: .tertiaryLabelColor); tooltip = "PR Draft"
+        case .merged:  color = Color(red: 0.77, green: 0.71, blue: 0.99); tooltip = "PR Merged"
+        case .none:    color = .clear; tooltip = ""
+        }
+        return Circle()
+            .fill(color)
+            .frame(width: 5, height: 5)
+            .help(tooltip)
+    }
+}
+
+// MARK: - Metadata Badge Row
+
+private struct WorkspaceMetadataBadgeRow: View {
+    let metadata: WorkspaceMetadata
+    var onOpenPort: ((Int) -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 3) {
+            // 端口徽标（最多 3 个 + "+N"）
+            let ports = metadata.listeningPorts
+            let displayPorts = Array(ports.prefix(3))
+            let overflow = ports.count - displayPorts.count
+            ForEach(displayPorts, id: \.self) { port in
+                Button(action: { onOpenPort?(port) }) {
+                    Text(":\(port)")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Color(red: 0.58, green: 0.77, blue: 0.99))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color(red: 0.23, green: 0.51, blue: 0.95).opacity(0.18))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .stroke(Color(red: 0.23, green: 0.51, blue: 0.95).opacity(0.25), lineWidth: 0.5)
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("在 Browser Panel 打开 http://localhost:\(port)")
+            }
+            if overflow > 0 {
+                Text("+\(overflow)")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
+            // PR 状态徽标
+            if let pr = metadata.prStatus {
+                PRBadgeView(status: pr)
+            }
+
+            // Agent 状态徽标
+            if metadata.agentState != .none {
+                AgentStateBadgeView(state: metadata.agentState)
+            }
+        }
+    }
+}
+
+private struct PRBadgeView: View {
+    let status: PRStatus
+
+    private var textColor: Color {
+        switch status {
+        case .open:   return Color(red: 0.53, green: 0.94, blue: 0.67)
+        case .draft:  return Color(nsColor: .tertiaryLabelColor)
+        case .merged: return Color(red: 0.77, green: 0.71, blue: 0.99)
+        }
+    }
+    private var bgColor: Color {
+        switch status {
+        case .open:   return Color(red: 0.13, green: 0.77, blue: 0.37).opacity(0.14)
+        case .draft:  return Color.primary.opacity(0.07)
+        case .merged: return Color(red: 0.55, green: 0.36, blue: 0.97).opacity(0.14)
+        }
+    }
+    private var borderColor: Color {
+        switch status {
+        case .open:   return Color(red: 0.13, green: 0.77, blue: 0.37).opacity(0.22)
+        case .draft:  return Color.primary.opacity(0.12)
+        case .merged: return Color(red: 0.55, green: 0.36, blue: 0.97).opacity(0.22)
+        }
+    }
+
+    var body: some View {
+        Text(status.displayText)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(textColor)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(bgColor)
+                    .overlay(RoundedRectangle(cornerRadius: 3).stroke(borderColor, lineWidth: 0.5))
+            )
+    }
+}
+
+private struct AgentStateBadgeView: View {
+    let state: WorkspaceAgentState
+    @State private var pulseOpacity: Double = 1.0
+
+    private var dotColor: Color {
+        state == .working ? Color(red: 0.99, green: 0.82, blue: 0.30) : Color(nsColor: .tertiaryLabelColor)
+    }
+    private var textColor: Color {
+        state == .working ? Color(red: 0.99, green: 0.85, blue: 0.42) : Color(nsColor: .secondaryLabelColor)
+    }
+    private var bgColor: Color {
+        state == .working
+            ? Color(red: 0.96, green: 0.62, blue: 0.04).opacity(0.14)
+            : Color.primary.opacity(0.07)
+    }
+    private var borderColor: Color {
+        state == .working
+            ? Color(red: 0.96, green: 0.62, blue: 0.04).opacity(0.22)
+            : Color.primary.opacity(0.12)
+    }
+    private var label: String { state == .working ? "Working" : "Idle" }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(dotColor)
+                .frame(width: 5, height: 5)
+                .opacity(state == .working ? pulseOpacity : 1.0)
+                .animation(
+                    state == .working
+                        ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
+                        : .default,
+                    value: pulseOpacity
+                )
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(textColor)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 1)
+        .background(
+            RoundedRectangle(cornerRadius: 3)
+                .fill(bgColor)
+                .overlay(RoundedRectangle(cornerRadius: 3).stroke(borderColor, lineWidth: 0.5))
+        )
+        .onAppear {
+            if state == .working { pulseOpacity = 0.25 }
+        }
+    }
 }
 
 // MARK: - Group Header Row
