@@ -145,27 +145,13 @@ struct BrowserPanelToolbar: View {
     @ViewBuilder
     private func tabButton(tab: BrowserTab) -> some View {
         let isActive = tab.id == manager.activeTabId
-        let isEditing = editingTabId == tab.id
 
         HStack(spacing: 3) {
-            if isEditing {
-                TextField("", text: $editingTitle)
-                    .font(.system(size: 10))
-                    .textFieldStyle(.plain)
-                    .foregroundStyle(Color.primary)
-                    .onSubmit { commitRename(tab: tab) }
-                    .onExitCommand { cancelRename() }
-                    // 自动获取焦点
-                    .onAppear { DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        NSApp.keyWindow?.makeFirstResponder(nil)
-                    }}
-            } else {
-                Text(tab.title.isEmpty ? "New Tab" : tab.title)
-                    .font(.system(size: 10))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .foregroundStyle(isActive ? Color.primary : Color.secondary)
-            }
+            Text(tab.title.isEmpty ? "New Tab" : tab.title)
+                .font(.system(size: 10))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .foregroundStyle(isActive ? Color.primary : Color.secondary)
 
             Button {
                 manager.closeTab(id: tab.id)
@@ -195,7 +181,21 @@ struct BrowserPanelToolbar: View {
         )
         .contentShape(Rectangle())
         .onTapGesture { manager.focusTab(id: tab.id) }
-        .onTapGesture(count: 2) { beginRename(tab: tab) }
+        .popover(isPresented: Binding(
+            get: { editingTabId == tab.id },
+            set: { if !$0 { cancelRename() } }
+        )) {
+            RenamePopover(
+                title: $editingTitle,
+                onCommit: { commitRename(tab: tab) },
+                onCancel: { cancelRename() }
+            )
+        }
+        .contextMenu {
+            Button("Rename") { beginRename(tab: tab) }
+            Divider()
+            Button("Close Tab") { manager.closeTab(id: tab.id) }
+        }
     }
 
     private func beginRename(tab: BrowserTab) {
@@ -257,5 +257,35 @@ struct BrowserPanelToolbar: View {
         let urlString = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
         guard let url = URL(string: urlString) else { return }
         manager.activeTab?.webView.load(URLRequest(url: url))
+    }
+}
+
+// MARK: - RenamePopover
+
+private struct RenamePopover: View {
+    @Binding var title: String
+    var onCommit: () -> Void
+    var onCancel: () -> Void
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            TextField("Tab name", text: $title)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12))
+                .focused($focused)
+                .onSubmit { onCommit() }
+                .onExitCommand { onCancel() }
+                .frame(width: 160)
+            Button("OK") { onCommit() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+        }
+        .padding(8)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                focused = true
+            }
+        }
     }
 }
