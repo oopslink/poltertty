@@ -10,6 +10,8 @@ private let fixedControlsWidth: CGFloat = 200
 struct BrowserPanelToolbar: View {
     @ObservedObject var manager: BrowserTabManager
     @Binding var currentURL: URL?
+    var isExpanded: Bool = false
+    var onToggleExpand: () -> Void = {}
     var onClose: () -> Void
 
     @State private var addressInput: String = ""
@@ -97,6 +99,16 @@ struct BrowserPanelToolbar: View {
                     if editing { addressInput = currentURL?.absoluteString ?? "" }
                 }
                 .onAppear { addressInput = currentURL?.absoluteString ?? "" }
+
+            // ── Expand / Collapse ──
+            Button { onToggleExpand() } label: {
+                Image(systemName: isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help(isExpanded ? "Collapse" : "Expand")
 
             // ── Close Panel ──
             Button { onClose() } label: {
@@ -259,7 +271,11 @@ struct BrowserPanelToolbar: View {
         guard !trimmed.isEmpty else { return }
         let urlString = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
         guard let url = URL(string: urlString) else { return }
-        manager.activeTab?.webView.load(URLRequest(url: url))
+        if manager.activeTab != nil {
+            manager.activeTab?.webView.load(URLRequest(url: url))
+        } else {
+            manager.newTab(url: url)
+        }
     }
 }
 

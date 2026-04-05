@@ -87,10 +87,12 @@ struct BrowserWebView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            print("[Browser] didFailProvisionalNavigation: \(error)")
             DispatchQueue.main.async { [weak self] in self?.onNavigationUpdate?() }
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            print("[Browser] didFail: \(error)")
             DispatchQueue.main.async { [weak self] in self?.onNavigationUpdate?() }
         }
     }

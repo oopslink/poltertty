@@ -7,64 +7,27 @@ struct BrowserPanelView: View {
     @ObservedObject var browserStore: BrowserSurfaceStore
     var snapshotsForRestore: [BrowserTabSnapshot]
     var activeSnapshotId: UUID?
+    var isExpanded: Bool = false
+    var onToggleExpand: () -> Void = {}
     var onClose: () -> Void
 
-    @State private var currentURL: URL? = nil
-    @State private var canGoBack: Bool = false
-    @State private var canGoForward: Bool = false
-
     var body: some View {
-        VStack(spacing: 0) {
-            if let wsId = workspaceId {
-                let mgr = browserStore.manager(
-                    for: wsId,
-                    snapshots: snapshotsForRestore.isEmpty ? nil : snapshotsForRestore
-                )
-
-                // ── Toolbar with Tab Strip ──
-                BrowserPanelToolbar(
-                    manager: mgr,
-                    currentURL: $currentURL,
-                    onClose: onClose
-                )
-
-                Divider()
-
-                // ── Restore Banner ──
-                if mgr.showRestorePrompt {
-                    BrowserRestoreBanner(
-                        tabCount: snapshotsForRestore.count,
-                        onRestore: {
-                            mgr.loadSnapshot(snapshotsForRestore, activeId: activeSnapshotId)
-                        },
-                        onDismiss: {
-                            mgr.showRestorePrompt = false
-                            if mgr.tabs.isEmpty { mgr.newTab() }
-                        }
-                    )
-                    Divider()
-                }
-
-                // ── Active WebView ──
-                if let activeTab = mgr.activeTab {
-                    BrowserWebView(
-                        webView: activeTab.webView,
-                        currentURL: $currentURL,
-                        canGoBack: $canGoBack,
-                        canGoForward: $canGoForward,
-                        onTitleUpdate: { title, url in
-                            mgr.updateTab(id: activeTab.id, title: title, url: url)
-                        }
-                    )
-                } else {
-                    Spacer()
-                }
-
-            } else {
-                noWorkspaceView
-            }
+        if let wsId = workspaceId {
+            let mgr = browserStore.manager(
+                for: wsId,
+                snapshots: snapshotsForRestore.isEmpty ? nil : snapshotsForRestore
+            )
+            BrowserPanelContent(
+                manager: mgr,
+                snapshotsForRestore: snapshotsForRestore,
+                activeSnapshotId: activeSnapshotId,
+                isExpanded: isExpanded,
+                onToggleExpand: onToggleExpand,
+                onClose: onClose
+            )
+        } else {
+            noWorkspaceView
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var noWorkspaceView: some View {
@@ -79,5 +42,65 @@ struct BrowserPanelView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// 独立子 view，@ObservedObject 观察 manager，确保 showRestorePrompt 等状态变化时正确重渲染。
+private struct BrowserPanelContent: View {
+    @ObservedObject var manager: BrowserTabManager
+    var snapshotsForRestore: [BrowserTabSnapshot]
+    var activeSnapshotId: UUID?
+    var isExpanded: Bool = false
+    var onToggleExpand: () -> Void = {}
+    var onClose: () -> Void
+
+    @State private var currentURL: URL? = nil
+    @State private var canGoBack: Bool = false
+    @State private var canGoForward: Bool = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // ── Toolbar with Tab Strip ──
+            BrowserPanelToolbar(
+                manager: manager,
+                currentURL: $currentURL,
+                isExpanded: isExpanded,
+                onToggleExpand: onToggleExpand,
+                onClose: onClose
+            )
+
+            Divider()
+
+            // ── Restore Banner ──
+            if manager.showRestorePrompt {
+                BrowserRestoreBanner(
+                    tabCount: snapshotsForRestore.count,
+                    onRestore: {
+                        manager.loadSnapshot(snapshotsForRestore, activeId: activeSnapshotId)
+                    },
+                    onDismiss: {
+                        manager.showRestorePrompt = false
+                        if manager.tabs.isEmpty { manager.newTab() }
+                    }
+                )
+                Divider()
+            }
+
+            // ── Active WebView ──
+            if let activeTab = manager.activeTab {
+                BrowserWebView(
+                    webView: activeTab.webView,
+                    currentURL: $currentURL,
+                    canGoBack: $canGoBack,
+                    canGoForward: $canGoForward,
+                    onTitleUpdate: { title, url in
+                        manager.updateTab(id: activeTab.id, title: title, url: url)
+                    }
+                )
+            } else {
+                Spacer()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
