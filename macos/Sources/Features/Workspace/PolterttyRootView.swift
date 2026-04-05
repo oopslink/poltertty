@@ -63,6 +63,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
     @StateObject private var browserStore = BrowserSurfaceStore()
     @State private var browserPanelVisible: Bool = false
+    @State private var browserPanelExpanded: Bool = false
     @State private var browserPanelWidth: CGFloat = 400
     @GestureState private var browserWidthDelta: CGFloat = 0
 
@@ -227,25 +228,42 @@ struct PolterttyRootView<TerminalContent: View>: View {
 
                         // 终端始终保留在视图树中（防止进程被销毁），展开时宽度压缩为 0
                         terminalAreaView
-                            .frame(width: panelExpanded ? 0 : nil)
-                            .opacity(panelExpanded ? 0 : 1)
+                            .frame(width: (panelExpanded || browserPanelExpanded) ? 0 : nil)
+                            .opacity((panelExpanded || browserPanelExpanded) ? 0 : 1)
                             .clipped()
                     } else {
                         terminalAreaView
+                            .frame(width: browserPanelExpanded ? 0 : nil)
+                            .opacity(browserPanelExpanded ? 0 : 1)
+                            .clipped()
                     }
 
                     // Browser Panel (right side, 向左展开)
                     if browserPanelVisible {
                         HStack(spacing: 0) {
-                            browserPanelDivider
+                            if !browserPanelExpanded {
+                                browserPanelDivider
+                            }
                             BrowserPanelView(
                                 workspaceId: workspaceId,
                                 browserStore: browserStore,
                                 snapshotsForRestore: WorkspaceManager.shared.workspace(for: workspaceId ?? UUID())?.browserTabSnapshots ?? [],
                                 activeSnapshotId: WorkspaceManager.shared.workspace(for: workspaceId ?? UUID())?.browserActiveTabId,
-                                onClose: { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { browserPanelVisible = false } }
+                                isExpanded: browserPanelExpanded,
+                                onToggleExpand: {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                        browserPanelExpanded.toggle()
+                                    }
+                                },
+                                onClose: {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                        browserPanelExpanded = false
+                                        browserPanelVisible = false
+                                    }
+                                }
                             )
-                            .frame(width: effectiveBrowserPanelWidth)
+                            .frame(width: browserPanelExpanded ? nil : effectiveBrowserPanelWidth)
+                            .frame(maxWidth: browserPanelExpanded ? .infinity : effectiveBrowserPanelWidth)
                         }
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
@@ -294,6 +312,18 @@ struct PolterttyRootView<TerminalContent: View>: View {
                 }
             }
             .keyboardShortcut("b", modifiers: [.option, .command])
+            .opacity(0)
+            .frame(width: 0, height: 0)
+
+            // Hidden keyboard shortcut for browser panel expand (⌥⇧⌘B)
+            Button("") {
+                if startupMode == .terminal && browserPanelVisible {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        browserPanelExpanded.toggle()
+                    }
+                }
+            }
+            .keyboardShortcut("b", modifiers: [.option, .command, .shift])
             .opacity(0)
             .frame(width: 0, height: 0)
 
@@ -435,6 +465,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
             WorkspaceManager.shared.update(ws)
         }
         .onChange(of: browserPanelVisible) { newValue in
+            if !newValue { browserPanelExpanded = false }
             guard let wsId = workspaceId else { return }
             guard var ws = WorkspaceManager.shared.workspace(for: wsId) else { return }
             ws.browserPanelVisible = newValue

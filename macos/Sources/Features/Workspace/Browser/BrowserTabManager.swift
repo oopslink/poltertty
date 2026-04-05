@@ -19,6 +19,10 @@ final class BrowserTabManager: ObservableObject {
     private func makeWebView() -> WKWebView {
         let wv = webViewFactory()
         wv.allowsBackForwardNavigationGestures = true
+        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
+        if #available(macOS 13.3, *) {
+            wv.isInspectable = true
+        }
         return wv
     }
 
