@@ -239,6 +239,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         BrowserPanelView(
                             workspaceId: workspaceId,
                             browserStore: browserStore,
+                            snapshotsForRestore: WorkspaceManager.shared.workspace(for: workspaceId ?? UUID())?.browserTabSnapshots ?? [],
+                            activeSnapshotId: WorkspaceManager.shared.workspace(for: workspaceId ?? UUID())?.browserActiveTabId,
                             onClose: { browserPanelVisible = false }
                         )
                         .frame(width: effectiveBrowserPanelWidth)
@@ -323,6 +325,7 @@ struct PolterttyRootView<TerminalContent: View>: View {
                 browserPanelWidth = ws.browserPanelWidth
             }
             WorkspaceManager.shared.yaziSurfaceStore = yaziStore
+            WorkspaceManager.shared.browserSurfaceStore = browserStore
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleWorkspaceSidebar)) { notification in
             guard notification.object as? NSWindow == windowProvider() else { return }
@@ -416,6 +419,11 @@ struct PolterttyRootView<TerminalContent: View>: View {
             guard let wsId = workspaceId else { return }
             guard var ws = WorkspaceManager.shared.workspace(for: wsId) else { return }
             ws.browserPanelVisible = newValue
+            // Browser Panel 关闭时保存 tab 快照，供下次打开时恢复
+            if !newValue, let mgr = browserStore.managers[wsId] {
+                ws.browserTabSnapshots = mgr.currentSnapshot()
+                ws.browserActiveTabId  = mgr.activeTabId
+            }
             WorkspaceManager.shared.update(ws)
         }
         .onChange(of: browserPanelWidth) { newValue in

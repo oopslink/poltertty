@@ -48,6 +48,10 @@ final class CtrlToolHandler: Sendable {
         case "show_agent_dashboard":  return try await callShowAgentDashboard()
         case "show_file_browser":     return try await callShowFileBrowser(arguments: arguments)
         case "show_git_panel":        return try await callShowGitPanel(arguments: arguments)
+        case "browser_new_tab":        return try await callBrowserNewTab(arguments: arguments)
+        case "browser_close_tab":      return try await callBrowserCloseTab(arguments: arguments)
+        case "browser_focus_tab":      return try await callBrowserFocusTab(arguments: arguments)
+        case "browser_list_tabs":      return try await callBrowserListTabs(arguments: arguments)
         case "show_agent_monitor":    return try await callShowAgentMonitor(arguments: arguments)
         case "send_key":              return try await callSendKey(arguments: arguments)
         default:
@@ -794,5 +798,98 @@ final class CtrlToolHandler: Sendable {
         case "down":  return .down
         default:      return nil
         }
+    }
+
+    // MARK: - Browser Tab API
+
+    /// browser_new_tab — 在指定（或 active）workspace 的 Browser Panel 新建 tab。
+    /// 参数: workspaceId (optional), url (optional)
+    /// 返回: { "tabId": "uuid" }
+    private func callBrowserNewTab(arguments: [String: Any]) async throws -> String {
+        let tabId: UUID = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let store = WorkspaceManager.shared.browserSurfaceStore else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_new_tab: browserStore not available"))
+                    return
+                }
+                let wsId = Self.resolveBrowserWorkspaceId(arguments)
+                let mgr = store.manager(for: wsId)
+                let url = (arguments["url"] as? String).flatMap { URL(string: $0) }
+                let id = mgr.newTab(url: url)
+                cont.resume(returning: id)
+            }
+        }
+        return #"{"tabId":"\#(tabId.uuidString)"}"#
+    }
+
+    /// browser_close_tab — 关闭指定 tab。
+    /// 参数: tabId (required), workspaceId (optional)
+    private func callBrowserCloseTab(arguments: [String: Any]) async throws -> String {
+        guard let tabIdStr = arguments["tabId"] as? String,
+              let tabId = UUID(uuidString: tabIdStr) else {
+            throw RPCError(code: -32602, message: "browser_close_tab: missing or invalid tabId")
+        }
+        await MainActor.run {
+            guard let store = WorkspaceManager.shared.browserSurfaceStore else { return }
+            let wsId = Self.resolveBrowserWorkspaceId(arguments)
+            store.manager(for: wsId).closeTab(id: tabId)
+        }
+        return #"{"ok":true}"#
+    }
+
+    /// browser_focus_tab — 将指定 tab 设为 active。
+    /// 参数: tabId (required), workspaceId (optional)
+    private func callBrowserFocusTab(arguments: [String: Any]) async throws -> String {
+        guard let tabIdStr = arguments["tabId"] as? String,
+              let tabId = UUID(uuidString: tabIdStr) else {
+            throw RPCError(code: -32602, message: "browser_focus_tab: missing or invalid tabId")
+        }
+        await MainActor.run {
+            guard let store = WorkspaceManager.shared.browserSurfaceStore else { return }
+            let wsId = Self.resolveBrowserWorkspaceId(arguments)
+            store.manager(for: wsId).focusTab(id: tabId)
+        }
+        return #"{"ok":true}"#
+    }
+
+    /// browser_list_tabs — 列出指定 workspace 的所有 browser tab。
+    /// 参数: workspaceId (optional)
+    /// 返回: [{ tabId, title, url, active }]
+    private func callBrowserListTabs(arguments: [String: Any]) async throws -> String {
+        let result: String = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let store = WorkspaceManager.shared.browserSurfaceStore else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_list_tabs: browserStore not available"))
+                    return
+                }
+                let wsId = Self.resolveBrowserWorkspaceId(arguments)
+                let mgr = store.manager(for: wsId)
+                let arr: [[String: Any]] = mgr.tabs.map { tab in
+                    var d: [String: Any] = [
+                        "tabId":  tab.id.uuidString,
+                        "title":  tab.title,
+                        "active": tab.id == mgr.activeTabId
+                    ]
+                    if let url = tab.url { d["url"] = url.absoluteString }
+                    return d
+                }
+                guard let data = try? JSONSerialization.data(withJSONObject: arr),
+                      let str = String(data: data, encoding: .utf8) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_list_tabs: serialization failed"))
+                    return
+                }
+                cont.resume(returning: str)
+            }
+        }
+        return result
+    }
+
+    /// workspaceId 参数存在时直接使用，否则返回 active workspace ID。
+    @MainActor
+    private static func resolveBrowserWorkspaceId(_ arguments: [String: Any]) -> UUID {
+        if let str = arguments["workspaceId"] as? String, let id = UUID(uuidString: str) {
+            return id
+        }
+        return WorkspaceManager.shared.activeWorkspaceId() ?? UUID()
     }
 }
