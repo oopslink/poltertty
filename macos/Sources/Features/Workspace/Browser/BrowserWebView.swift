@@ -85,5 +85,13 @@ struct BrowserWebView: NSViewRepresentable {
                 self?.onTitleUpdate?()
             }
         }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            DispatchQueue.main.async { [weak self] in self?.onNavigationUpdate?() }
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            DispatchQueue.main.async { [weak self] in self?.onNavigationUpdate?() }
+        }
     }
 }

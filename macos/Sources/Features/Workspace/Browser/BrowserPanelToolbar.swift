@@ -14,22 +14,14 @@ struct BrowserPanelToolbar: View {
 
     @State private var addressInput: String = ""
     @FocusState private var isEditingAddress: Bool
-    @State private var availableTabWidth: CGFloat = 200
+    @State private var availableTabWidth: CGFloat = 400
     @State private var editingTabId: UUID? = nil
     @State private var editingTitle: String = ""
 
     var body: some View {
         HStack(spacing: 0) {
-            // ── Tab Strip（弹性）──
+            // ── Tab Strip（左对齐，自然宽度）──
             tabStrip
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear { availableTabWidth = geo.size.width }
-                            .onChange(of: geo.size.width) { availableTabWidth = $0 }
-                    }
-                )
-                .frame(maxWidth: .infinity)
 
             // ── New Tab Button ──
             Button {
@@ -94,7 +86,8 @@ struct BrowserPanelToolbar: View {
                     RoundedRectangle(cornerRadius: 4)
                         .stroke(isEditingAddress ? Color.accentColor : Color.clear, lineWidth: 1)
                 )
-                .frame(minWidth: 60, maxWidth: .infinity)
+                .frame(minWidth: 80, maxWidth: .infinity)
+                .layoutPriority(1)
                 .onChange(of: currentURL) { newURL in
                     if !isEditingAddress {
                         addressInput = newURL?.absoluteString ?? ""
@@ -117,7 +110,17 @@ struct BrowserPanelToolbar: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(
+            GeometryReader { geo in
+                Color(nsColor: .windowBackgroundColor)
+                    .onAppear {
+                        availableTabWidth = max(minTabWidth * 2, geo.size.width - fixedControlsWidth - 12)
+                    }
+                    .onChange(of: geo.size.width) { w in
+                        availableTabWidth = max(minTabWidth * 2, w - fixedControlsWidth - 12)
+                    }
+            }
+        )
     }
 
     // MARK: - Tab Strip
