@@ -234,17 +234,20 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         terminalAreaView
                     }
 
-                    // Browser Panel (right side)
+                    // Browser Panel (right side, 向左展开)
                     if browserPanelVisible {
-                        browserPanelDivider
-                        BrowserPanelView(
-                            workspaceId: workspaceId,
-                            browserStore: browserStore,
-                            snapshotsForRestore: WorkspaceManager.shared.workspace(for: workspaceId ?? UUID())?.browserTabSnapshots ?? [],
-                            activeSnapshotId: WorkspaceManager.shared.workspace(for: workspaceId ?? UUID())?.browserActiveTabId,
-                            onClose: { browserPanelVisible = false }
-                        )
-                        .frame(width: effectiveBrowserPanelWidth)
+                        HStack(spacing: 0) {
+                            browserPanelDivider
+                            BrowserPanelView(
+                                workspaceId: workspaceId,
+                                browserStore: browserStore,
+                                snapshotsForRestore: WorkspaceManager.shared.workspace(for: workspaceId ?? UUID())?.browserTabSnapshots ?? [],
+                                activeSnapshotId: WorkspaceManager.shared.workspace(for: workspaceId ?? UUID())?.browserActiveTabId,
+                                onClose: { withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { browserPanelVisible = false } }
+                            )
+                            .frame(width: effectiveBrowserPanelWidth)
+                        }
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
 
                     // Notification Center Panel
@@ -285,7 +288,9 @@ struct PolterttyRootView<TerminalContent: View>: View {
             // Hidden keyboard shortcut for browser panel
             Button("") {
                 if startupMode == .terminal {
-                    browserPanelVisible.toggle()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        browserPanelVisible.toggle()
+                    }
                 }
             }
             .keyboardShortcut("b", modifiers: [.option, .command])
@@ -350,13 +355,17 @@ struct PolterttyRootView<TerminalContent: View>: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleBrowserPanel)) { notification in
             guard (notification.object as? UUID) == workspaceId else { return }
-            browserPanelVisible.toggle()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                browserPanelVisible.toggle()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openURLInBrowserPanel)) { notification in
             guard let url = notification.userInfo?["url"] as? URL,
                   let wsId = notification.userInfo?["workspaceId"] as? UUID,
                   wsId == workspaceId else { return }
-            browserPanelVisible = true
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                browserPanelVisible = true
+            }
             let mgr = browserStore.manager(for: wsId)
             mgr.newTab(url: url)
         }
