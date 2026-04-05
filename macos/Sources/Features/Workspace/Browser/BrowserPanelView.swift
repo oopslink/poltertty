@@ -51,7 +51,10 @@ struct BrowserPanelView: View {
                         webView: activeTab.webView,
                         currentURL: $currentURL,
                         canGoBack: $canGoBack,
-                        canGoForward: $canGoForward
+                        canGoForward: $canGoForward,
+                        onTitleUpdate: { title, url in
+                            mgr.updateTab(id: activeTab.id, title: title, url: url)
+                        }
                     )
                 } else {
                     Spacer()

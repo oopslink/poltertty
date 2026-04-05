@@ -10,6 +10,8 @@ struct BrowserWebView: NSViewRepresentable {
     @Binding var currentURL: URL?
     @Binding var canGoBack: Bool
     @Binding var canGoForward: Bool
+    /// 页面标题或 URL 更新时回调，供调用方同步 tab 标题
+    var onTitleUpdate: ((String, URL?) -> Void)?
 
     func makeNSView(context: Context) -> WKWebView {
         webView.navigationDelegate = context.coordinator
@@ -26,6 +28,11 @@ struct BrowserWebView: NSViewRepresentable {
             self.canGoBack = wv.canGoBack
             self.canGoForward = wv.canGoForward
         }
+        context.coordinator.onTitleUpdate = { [weak nsView] in
+            guard let wv = nsView else { return }
+            let title = wv.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            self.onTitleUpdate?(title.isEmpty ? "New Tab" : title, wv.url)
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -34,6 +41,7 @@ struct BrowserWebView: NSViewRepresentable {
 
     class Coordinator: NSObject, WKNavigationDelegate {
         var onNavigationUpdate: (() -> Void)?
+        var onTitleUpdate: (() -> Void)?
 
         func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
             DispatchQueue.main.async { [weak webView, weak self] in
@@ -46,6 +54,7 @@ struct BrowserWebView: NSViewRepresentable {
             DispatchQueue.main.async { [weak webView, weak self] in
                 guard webView != nil else { return }
                 self?.onNavigationUpdate?()
+                self?.onTitleUpdate?()
             }
         }
     }
