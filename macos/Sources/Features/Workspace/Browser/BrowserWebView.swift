@@ -12,6 +12,10 @@ struct BrowserWebView: NSViewRepresentable {
     @Binding var canGoForward: Bool
     /// 页面标题或 URL 更新时回调，供调用方同步 tab 标题
     var onTitleUpdate: ((String, URL?) -> Void)?
+    /// target="_blank" 链接点击时，URL 已知，直接新建 tab 并加载
+    var onOpenNewTab: ((URL) -> Void)?
+    /// window.open() 等场景，URL 未知，WebKit 提供已创建的 WKWebView
+    var onOpenNewWebView: ((WKWebView) -> Void)?
 
     func makeNSView(context: Context) -> NSView {
         let container = NSView()
@@ -36,6 +40,8 @@ struct BrowserWebView: NSViewRepresentable {
             let title = self.webView.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             self.onTitleUpdate?(title.isEmpty ? "New Tab" : title, self.webView.url)
         }
+        context.coordinator.onOpenNewTab = self.onOpenNewTab
+        context.coordinator.onOpenNewWebView = self.onOpenNewWebView
         context.coordinator.observeTitle(of: webView)
     }
 
@@ -48,6 +54,7 @@ struct BrowserWebView: NSViewRepresentable {
     private func attach(_ webView: WKWebView, to container: NSView, coordinator: Coordinator) {
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.navigationDelegate = coordinator
+        webView.uiDelegate = coordinator
         container.addSubview(webView)
         NSLayoutConstraint.activate([
             webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
@@ -57,9 +64,11 @@ struct BrowserWebView: NSViewRepresentable {
         ])
     }
 
-    class Coordinator: NSObject, WKNavigationDelegate {
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var onNavigationUpdate: (() -> Void)?
         var onTitleUpdate: (() -> Void)?
+        var onOpenNewTab: ((URL) -> Void)?
+        var onOpenNewWebView: ((WKWebView) -> Void)?
 
         private var titleObservation: NSKeyValueObservation?
         private weak var observedWebView: WKWebView?
@@ -94,6 +103,27 @@ struct BrowserWebView: NSViewRepresentable {
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
             print("[Browser] didFail: \(error)")
             DispatchQueue.main.async { [weak self] in self?.onNavigationUpdate?() }
+        }
+
+        // MARK: - WKUIDelegate（处理 target="_blank" 和 window.open）
+
+        func webView(
+            _ webView: WKWebView,
+            createWebViewWith configuration: WKWebViewConfiguration,
+            for navigationAction: WKNavigationAction,
+            windowFeatures: WKWindowFeatures
+        ) -> WKWebView? {
+            if let url = navigationAction.request.url {
+                // URL 已知：直接通知上层新建 tab 并加载
+                DispatchQueue.main.async { [weak self] in self?.onOpenNewTab?(url) }
+                return nil
+            }
+            // URL 未知（如 window.open() 后再由 JS 导航）：
+            // 返回一个使用相同 configuration 的新 WKWebView，WebKit 负责导航；
+            // 上层将其纳入 tab 管理。
+            let newWebView = WKWebView(frame: .zero, configuration: configuration)
+            DispatchQueue.main.async { [weak self] in self?.onOpenNewWebView?(newWebView) }
+            return newWebView
         }
     }
 }

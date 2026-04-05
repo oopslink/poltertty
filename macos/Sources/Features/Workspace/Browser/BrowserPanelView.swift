@@ -95,6 +95,12 @@ private struct BrowserPanelContent: View {
                     canGoForward: $canGoForward,
                     onTitleUpdate: { title, url in
                         manager.updateTab(id: activeTab.id, title: title, url: url)
+                    },
+                    onOpenNewTab: { url in
+                        manager.newTab(url: url)
+                    },
+                    onOpenNewWebView: { newWebView in
+                        manager.newTab(existingWebView: newWebView)
                     }
                 )
             } else {

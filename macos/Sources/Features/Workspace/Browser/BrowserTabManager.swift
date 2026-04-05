@@ -41,6 +41,20 @@ final class BrowserTabManager: ObservableObject {
         return tab.id
     }
 
+    /// 接受一个已存在的 WKWebView（如来自 window.open 的 createWebView 回调）
+    @discardableResult
+    func newTab(existingWebView wv: WKWebView) -> UUID {
+        wv.allowsBackForwardNavigationGestures = true
+        wv.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15"
+        if #available(macOS 13.3, *) {
+            wv.isInspectable = true
+        }
+        let tab = BrowserTab(webView: wv)
+        tabs.append(tab)
+        activeTabId = tab.id
+        return tab.id
+    }
+
     func closeTab(id: UUID) {
         guard let idx = tabs.firstIndex(where: { $0.id == id }) else { return }
         let wasActive = activeTabId == id
