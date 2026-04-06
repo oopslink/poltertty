@@ -195,6 +195,7 @@ struct BrowserPanelToolbar: View {
                 )
         )
         .contentShape(Rectangle())
+        .help(tab.title.isEmpty ? "New Tab" : tab.title)
         .onTapGesture { manager.focusTab(id: tab.id) }
         .popover(isPresented: Binding(
             get: { editingTabId == tab.id },

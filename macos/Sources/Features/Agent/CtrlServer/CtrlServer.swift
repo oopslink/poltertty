@@ -596,6 +596,58 @@ final class CtrlServer {
                 "inputSchema": ["type": "object", "properties": [String: Any]()]
             ],
             [
+                "name": "browser_navigate",
+                "description": "Navigate a browser tab to a URL. Navigates the active tab by default.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "url": ["type": "string", "description": "URL to navigate to (e.g. https://localhost:3000)"],
+                        "tabId": ["type": "string", "description": "Browser tab UUID (optional; defaults to active tab)"],
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                    ],
+                    "required": ["url"]
+                ]
+            ],
+            [
+                "name": "browser_snapshot",
+                "description": "Get an accessibility snapshot of the browser page. Returns numbered element refs (e1, e2, ...) for use with browser_click and browser_fill.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "tabId": ["type": "string", "description": "Browser tab UUID (optional; defaults to active tab)"],
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                    ]
+                ]
+            ],
+            [
+                "name": "browser_click",
+                "description": "Click an element in the browser. Use a ref from browser_snapshot (e.g. 'e3') or a CSS selector.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "ref": ["type": "string", "description": "Element ref from browser_snapshot (e.g. 'e3')"],
+                        "selector": ["type": "string", "description": "CSS selector (alternative to ref)"],
+                        "tabId": ["type": "string", "description": "Browser tab UUID (optional; defaults to active tab)"],
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                    ]
+                ]
+            ],
+            [
+                "name": "browser_fill",
+                "description": "Fill an input field in the browser. Clears existing value and dispatches input/change events for React compatibility. Use a ref from browser_snapshot (e.g. 'e1') or a CSS selector.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "ref": ["type": "string", "description": "Element ref from browser_snapshot (e.g. 'e1')"],
+                        "selector": ["type": "string", "description": "CSS selector (alternative to ref)"],
+                        "value": ["type": "string", "description": "Value to fill"],
+                        "tabId": ["type": "string", "description": "Browser tab UUID (optional; defaults to active tab)"],
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                    ],
+                    "required": ["value"]
+                ]
+            ],
+            [
                 "name": "send_key",
                 "description": "Send a keyboard key event to a pane via the full key-handling pipeline. Supports: enter, escape, tab, backspace, up, down, left, right, ctrl+c, ctrl+u, ctrl+d, ctrl+l, etc.",
                 "inputSchema": [

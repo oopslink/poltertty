@@ -2,6 +2,7 @@
 import Foundation
 import AppKit
 import OSLog
+import WebKit
 
 /// MCP tool 实现。callTool() 为 async throws，内部用 CheckedContinuation 桥接到 @MainActor。
 final class CtrlToolHandler: Sendable {
@@ -52,6 +53,10 @@ final class CtrlToolHandler: Sendable {
         case "browser_close_tab":      return try await callBrowserCloseTab(arguments: arguments)
         case "browser_focus_tab":      return try await callBrowserFocusTab(arguments: arguments)
         case "browser_list_tabs":      return try await callBrowserListTabs(arguments: arguments)
+        case "browser_navigate":       return try await callBrowserNavigate(arguments: arguments)
+        case "browser_snapshot":       return try await callBrowserSnapshot(arguments: arguments)
+        case "browser_click":          return try await callBrowserClick(arguments: arguments)
+        case "browser_fill":           return try await callBrowserFill(arguments: arguments)
         case "show_agent_monitor":    return try await callShowAgentMonitor(arguments: arguments)
         case "send_key":              return try await callSendKey(arguments: arguments)
         default:
@@ -882,6 +887,255 @@ final class CtrlToolHandler: Sendable {
             }
         }
         return result
+    }
+
+    // MARK: - Browser Agent API
+
+    // MARK: - Browser Snapshot JS
+
+    private static let snapshotJS = """
+    (function() {
+      var selectors = [
+        'a[href]', 'button', 'input', 'select', 'textarea',
+        '[role="button"]', '[role="link"]', '[role="combobox"]',
+        '[role="textbox"]', '[role="checkbox"]', '[role="radio"]',
+        '[contenteditable="true"]'
+      ];
+      var seen = new Set();
+      var elements = [];
+      selectors.forEach(function(sel) {
+        document.querySelectorAll(sel).forEach(function(el) {
+          if (seen.has(el)) return;
+          var r = el.getBoundingClientRect();
+          if (r.width === 0 && r.height === 0 && el.tagName !== 'INPUT') return;
+          seen.add(el);
+          elements.push(el);
+        });
+      });
+      window.__polterttyRefs = {};
+      var result = elements.map(function(el, i) {
+        var ref = 'e' + (i + 1);
+        window.__polterttyRefs[ref] = el;
+        var info = { ref: ref, tag: el.tagName.toLowerCase() };
+        if (el.type) info.type = el.type;
+        var text = (el.innerText || el.textContent || '').trim().slice(0, 80);
+        if (text) info.text = text;
+        if (el.placeholder) info.placeholder = el.placeholder;
+        var role = el.getAttribute('role');
+        if (role) info.role = role;
+        if (el.name) info.name = el.name;
+        if (el.id) info.id = el.id;
+        if (el.href) info.href = el.href;
+        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+          info.value = el.value;
+        }
+        return info;
+      });
+      return JSON.stringify({
+        elements: result,
+        url: window.location.href,
+        title: document.title
+      });
+    })();
+    """
+
+    /// 生成通过 ref 或 selector 查找元素的 JS 前缀代码（IIFE 头部）
+    private static func elementLookupJS(ref: String?, selector: String?) -> String {
+        if let ref {
+            let safeRef = ref.replacingOccurrences(of: "\"", with: "\\\"")
+            return """
+            (function() {
+              var el = window.__polterttyRefs && window.__polterttyRefs["\(safeRef)"];
+              if (!el) return JSON.stringify({error: "ref \(safeRef) not found, re-run browser_snapshot"});
+            """
+        } else if let selector {
+            let safe = selector
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            return """
+            (function() {
+              var el = document.querySelector("\(safe)");
+              if (!el) return JSON.stringify({error: "selector not found: \(safe)"});
+            """
+        } else {
+            return "(function() { return JSON.stringify({error: 'ref or selector required'}); })();"
+        }
+    }
+
+    /// browser_navigate — 导航到 URL。
+    /// 参数: url (required), tabId (optional), workspaceId (optional)
+    private func callBrowserNavigate(arguments: [String: Any]) async throws -> String {
+        guard let urlStr = arguments["url"] as? String,
+              let url = URL(string: urlStr) else {
+            throw RPCError(code: -32602, message: "browser_navigate: missing or invalid url")
+        }
+        let _: Void = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let store = WorkspaceManager.shared.browserSurfaceStore else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_navigate: browserStore not available"))
+                    return
+                }
+                let wsId = Self.resolveBrowserWorkspaceId(arguments)
+                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_navigate: no active tab"))
+                    return
+                }
+                webView.load(URLRequest(url: url))
+                cont.resume(returning: ())
+            }
+        }
+        return #"{"ok":true}"#
+    }
+
+    /// browser_snapshot — 获取页面可交互元素快照，返回带编号引用的 JSON。
+    /// 参数: tabId (optional), workspaceId (optional)
+    private func callBrowserSnapshot(arguments: [String: Any]) async throws -> String {
+        let result: String = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let store = WorkspaceManager.shared.browserSurfaceStore else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_snapshot: browserStore not available"))
+                    return
+                }
+                let wsId = Self.resolveBrowserWorkspaceId(arguments)
+                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_snapshot: no active tab"))
+                    return
+                }
+                webView.evaluateJavaScript(Self.snapshotJS) { value, error in
+                    if let error {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_snapshot: js error: \(error.localizedDescription)"))
+                        return
+                    }
+                    guard let json = value as? String else {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_snapshot: unexpected js return type"))
+                        return
+                    }
+                    cont.resume(returning: json)
+                }
+            }
+        }
+        return result
+    }
+
+    /// browser_click — 点击元素。
+    /// 参数: ref 或 selector (至少一个), tabId (optional), workspaceId (optional)
+    private func callBrowserClick(arguments: [String: Any]) async throws -> String {
+        let ref = arguments["ref"] as? String
+        let selector = arguments["selector"] as? String
+        guard ref != nil || selector != nil else {
+            throw RPCError(code: -32602, message: "browser_click: ref or selector required")
+        }
+        let prefix = Self.elementLookupJS(ref: ref, selector: selector)
+        let js = prefix + "\n  el.click();\n  return JSON.stringify({ok: true});\n})();"
+        let result: String = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let store = WorkspaceManager.shared.browserSurfaceStore else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_click: browserStore not available"))
+                    return
+                }
+                let wsId = Self.resolveBrowserWorkspaceId(arguments)
+                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_click: no active tab"))
+                    return
+                }
+                webView.evaluateJavaScript(js) { value, error in
+                    if let error {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_click: js error: \(error.localizedDescription)"))
+                        return
+                    }
+                    guard let json = value as? String else {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_click: unexpected js return type"))
+                        return
+                    }
+                    if json.contains("\"error\"") {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_click: \(json)"))
+                        return
+                    }
+                    cont.resume(returning: json)
+                }
+            }
+        }
+        return result
+    }
+
+    /// browser_fill — 填充输入框。兼容 React 的 native input setter + 事件触发。
+    /// 参数: ref 或 selector (至少一个), value (required), tabId (optional), workspaceId (optional)
+    private func callBrowserFill(arguments: [String: Any]) async throws -> String {
+        let ref = arguments["ref"] as? String
+        let selector = arguments["selector"] as? String
+        guard ref != nil || selector != nil else {
+            throw RPCError(code: -32602, message: "browser_fill: ref or selector required")
+        }
+        guard let value = arguments["value"] as? String else {
+            throw RPCError(code: -32602, message: "browser_fill: missing value")
+        }
+        let safeValue = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\r")
+        let prefix = Self.elementLookupJS(ref: ref, selector: selector)
+        let js = prefix + """
+        \n  var proto = el.tagName === 'TEXTAREA'
+            ? window.HTMLTextAreaElement.prototype
+            : window.HTMLInputElement.prototype;
+          var desc = Object.getOwnPropertyDescriptor(proto, 'value');
+          if (desc && desc.set) {
+            desc.set.call(el, "\(safeValue)");
+          } else {
+            el.value = "\(safeValue)";
+          }
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          return JSON.stringify({ok: true});
+        })();
+        """
+        let result: String = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let store = WorkspaceManager.shared.browserSurfaceStore else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_fill: browserStore not available"))
+                    return
+                }
+                let wsId = Self.resolveBrowserWorkspaceId(arguments)
+                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_fill: no active tab"))
+                    return
+                }
+                webView.evaluateJavaScript(js) { value, error in
+                    if let error {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_fill: js error: \(error.localizedDescription)"))
+                        return
+                    }
+                    guard let json = value as? String else {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_fill: unexpected js return type"))
+                        return
+                    }
+                    if json.contains("\"error\"") {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_fill: \(json)"))
+                        return
+                    }
+                    cont.resume(returning: json)
+                }
+            }
+        }
+        return result
+    }
+
+    /// 解析 tabId 参数，找到对应 WKWebView。
+    /// - 传入有效 tabId：使用指定 tab
+    /// - 未传入或无效：使用 active tab
+    @MainActor
+    private static func resolveBrowserTab(
+        _ arguments: [String: Any],
+        store: BrowserSurfaceStore,
+        wsId: UUID
+    ) -> WKWebView? {
+        let mgr = store.manager(for: wsId)
+        if let tabIdStr = arguments["tabId"] as? String,
+           let tabId = UUID(uuidString: tabIdStr) {
+            return mgr.tabs.first(where: { $0.id == tabId })?.webView
+        }
+        return mgr.activeTab?.webView
     }
 
     /// workspaceId 参数存在时直接使用，否则返回 active workspace ID。
