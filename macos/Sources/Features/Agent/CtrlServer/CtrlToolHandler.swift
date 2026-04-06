@@ -1222,6 +1222,49 @@ final class CtrlToolHandler: Sendable {
         }
         return #"{"ok":true}"#
     }
-    private func callSetAgentLabel(arguments: [String: Any]) async throws -> String { return #"{"ok":true}"# }
+    // MARK: - set_agent_label
+
+    private func callSetAgentLabel(arguments: [String: Any]) async throws -> String {
+        guard let sessionId = arguments["sessionId"] as? String, !sessionId.isEmpty else {
+            throw RPCError(code: -32602, message: "set_agent_label: missing required parameter 'sessionId'")
+        }
+        guard let label = arguments["label"] as? String else {
+            throw RPCError(code: -32602, message: "set_agent_label: missing required parameter 'label'")
+        }
+
+        // 可选 state 参数校验
+        let newState: AgentState?
+        if let stateStr = arguments["state"] as? String {
+            switch stateStr {
+            case "working": newState = .working
+            case "idle":    newState = .idle
+            case "done":    newState = .done(exitCode: 0)
+            default:
+                throw RPCError(code: -32602, message: "set_agent_label: invalid state '\(stateStr)', allowed: working | idle | done")
+            }
+        } else {
+            newState = nil
+        }
+
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            Task { @MainActor in
+                let agentManager = AgentService.shared.sessionManager
+                guard agentManager.session(forClaudeSessionId: sessionId) != nil else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "set_agent_label: session not found for sessionId '\(sessionId)'"))
+                    return
+                }
+                agentManager.updateFromClaudeSession(sessionId) { session in
+                    session.customLabel = label
+                    if let state = newState { session.state = state }
+                }
+                // 取出更新后的 surfaceId，emit SSE
+                if let surfaceId = agentManager.sessions.first(where: { $0.value.claudeSessionId == sessionId })?.key {
+                    agentManager.emitAgentStatus(surfaceId: surfaceId)
+                }
+                cont.resume()
+            }
+        }
+        return #"{"ok":true}"#
+    }
     private func callGetWorkspaceState(arguments: [String: Any]) async throws -> String { return #"{"ok":true}"# }
 }

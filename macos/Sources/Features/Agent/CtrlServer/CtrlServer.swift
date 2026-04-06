@@ -716,6 +716,20 @@ final class CtrlServer {
                     "required": ["path"]
                 ]
             ]
+            ,
+            [
+                "name": "set_agent_label",
+                "description": "Set a custom label and optional state for an agent session, visible in the Agent Dashboard",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "sessionId": ["type": "string", "description": "Claude session ID (CLAUDE_SESSION_ID env var)"],
+                        "label":     ["type": "string", "description": "Custom display label for this session"],
+                        "state":     ["type": "string", "enum": ["working", "idle", "done"], "description": "Optional state override"]
+                    ],
+                    "required": ["sessionId", "label"]
+                ]
+            ]
         ]
         #if DEBUG
         tools.append(contentsOf: [
