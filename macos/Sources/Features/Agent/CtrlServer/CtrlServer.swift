@@ -689,6 +689,20 @@ final class CtrlServer {
                     "required": ["key"]
                 ]
             ]
+            ,
+            [
+                "name": "notify",
+                "description": "Send a notification to the in-app notification panel of the specified or active workspace",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "title":       ["type": "string", "description": "Notification title (required)"],
+                        "body":        ["type": "string", "description": "Notification body text (optional)"],
+                        "workspaceId": ["type": "string", "description": "UUID of the target workspace (optional, defaults to active workspace)"]
+                    ],
+                    "required": ["title"]
+                ]
+            ]
         ]
         #if DEBUG
         tools.append(contentsOf: [

@@ -57,6 +57,10 @@ final class CtrlToolHandler: Sendable {
         case "browser_snapshot":       return try await callBrowserSnapshot(arguments: arguments)
         case "browser_click":          return try await callBrowserClick(arguments: arguments)
         case "browser_fill":           return try await callBrowserFill(arguments: arguments)
+        case "notify":               return try await callNotify(arguments: arguments)
+        case "open_in_file_browser": return try await callOpenInFileBrowser(arguments: arguments)
+        case "set_agent_label":      return try await callSetAgentLabel(arguments: arguments)
+        case "get_workspace_state":  return try await callGetWorkspaceState(arguments: arguments)
         case "show_agent_monitor":    return try await callShowAgentMonitor(arguments: arguments)
         case "send_key":              return try await callSendKey(arguments: arguments)
         default:
@@ -1146,4 +1150,43 @@ final class CtrlToolHandler: Sendable {
         }
         return WorkspaceManager.shared.activeWorkspaceId() ?? UUID()
     }
+
+    // MARK: - notify
+
+    private func callNotify(arguments: [String: Any]) async throws -> String {
+        guard let title = arguments["title"] as? String, !title.isEmpty else {
+            throw RPCError(code: -32602, message: "notify: missing required parameter 'title'")
+        }
+        let body = arguments["body"] as? String
+
+        let workspaceId: UUID? = await MainActor.run {
+            if let wsIdStr = arguments["workspaceId"] as? String,
+               let wsId = UUID(uuidString: wsIdStr) {
+                return wsId
+            }
+            return WorkspaceManager.shared.activeWorkspaceId()
+        }
+
+        await MainActor.run {
+            AgentNotificationStore.shared.insert(AgentNotification(
+                id: UUID(),
+                timestamp: Date(),
+                workspaceId: workspaceId,
+                surfaceId: nil,
+                agentDefinitionId: "ctrl-api",
+                sessionId: nil,
+                type: .info,
+                title: title,
+                body: body,
+                priority: .normal
+            ))
+        }
+        return #"{"ok":true}"#
+    }
+
+    // MARK: - Stubs (will be replaced in Task 7/8/9)
+
+    private func callOpenInFileBrowser(arguments: [String: Any]) async throws -> String { return #"{"ok":true}"# }
+    private func callSetAgentLabel(arguments: [String: Any]) async throws -> String { return #"{"ok":true}"# }
+    private func callGetWorkspaceState(arguments: [String: Any]) async throws -> String { return #"{"ok":true}"# }
 }
