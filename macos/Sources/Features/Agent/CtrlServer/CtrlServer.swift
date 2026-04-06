@@ -703,6 +703,19 @@ final class CtrlServer {
                     "required": ["title"]
                 ]
             ]
+            ,
+            [
+                "name": "open_in_file_browser",
+                "description": "Navigate the file browser (yazi) to the specified path; opens the file browser panel if not already open",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "path":        ["type": "string", "description": "Target directory or file path (~ supported)"],
+                        "workspaceId": ["type": "string", "description": "UUID of the target workspace (optional, defaults to active workspace)"]
+                    ],
+                    "required": ["path"]
+                ]
+            ]
         ]
         #if DEBUG
         tools.append(contentsOf: [

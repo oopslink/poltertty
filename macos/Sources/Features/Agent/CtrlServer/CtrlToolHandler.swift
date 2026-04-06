@@ -1186,7 +1186,42 @@ final class CtrlToolHandler: Sendable {
 
     // MARK: - Stubs (will be replaced in Task 7/8/9)
 
-    private func callOpenInFileBrowser(arguments: [String: Any]) async throws -> String { return #"{"ok":true}"# }
+    // MARK: - open_in_file_browser
+
+    private func callOpenInFileBrowser(arguments: [String: Any]) async throws -> String {
+        guard let rawPath = arguments["path"] as? String, !rawPath.isEmpty else {
+            throw RPCError(code: -32602, message: "open_in_file_browser: missing required parameter 'path'")
+        }
+        let path = (rawPath as NSString).expandingTildeInPath
+
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            Task { @MainActor in
+                let workspaceId: UUID
+                if let wsIdStr = arguments["workspaceId"] as? String,
+                   let wsId = UUID(uuidString: wsIdStr) {
+                    workspaceId = wsId
+                } else if let active = WorkspaceManager.shared.activeWorkspaceId() {
+                    workspaceId = active
+                } else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "open_in_file_browser: no active workspace"))
+                    return
+                }
+
+                // 若文件浏览器未打开，先打开它
+                let yaziStore = WorkspaceManager.shared.yaziSurfaceStore
+                if yaziStore?.hasSurface(for: workspaceId) == false {
+                    NotificationCenter.default.post(name: .toggleFileBrowser, object: nil)
+                }
+
+                // 等一个 RunLoop tick，给 yazi surface 初始化时间
+                DispatchQueue.main.async {
+                    WorkspaceManager.shared.yaziSurfaceStore?.cdToDirectory(workspaceId, path: path)
+                    cont.resume()
+                }
+            }
+        }
+        return #"{"ok":true}"#
+    }
     private func callSetAgentLabel(arguments: [String: Any]) async throws -> String { return #"{"ok":true}"# }
     private func callGetWorkspaceState(arguments: [String: Any]) async throws -> String { return #"{"ok":true}"# }
 }
