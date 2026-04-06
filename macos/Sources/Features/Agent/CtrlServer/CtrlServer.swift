@@ -1,4 +1,5 @@
 // macos/Sources/Features/Agent/CtrlServer/CtrlServer.swift
+import AppKit
 import Foundation
 import Network
 import OSLog
@@ -17,6 +18,9 @@ final class CtrlServer {
     /// 活跃 SSE 连接及其心跳 timer。所有访问均在 queue 上。
     private var sseConnections: [ObjectIdentifier: (conn: NWConnection, timer: DispatchSourceTimer)] = [:]
     private let queue = DispatchQueue(label: "com.poltertty.CtrlServer", qos: .utility)
+    /// 上次 emit workspace_switched 时的 workspaceId，用于去重
+    private var lastActiveWorkspaceId: UUID? = nil
+    private var windowObserver: NSObjectProtocol? = nil
     private let sessionManager: AgentSessionManager
     private let decoder = JSONDecoder()
 
@@ -73,6 +77,22 @@ final class CtrlServer {
         self.listener = listener
         self.port = assignedPort
         Self.logger.info("CtrlServer listening on port \(assignedPort)")
+
+        // MARK: workspace_switched 观察
+        windowObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self,
+                  let window = notification.object as? NSWindow,
+                  let newId = WorkspaceManager.shared.workspaceId(for: window),
+                  newId != self.lastActiveWorkspaceId
+            else { return }
+            let prev = self.lastActiveWorkspaceId
+            self.lastActiveWorkspaceId = newId
+            Task { await EventBus.shared.emit(.workspaceSwitched(workspaceId: newId, previousWorkspaceId: prev)) }
+        }
     }
 
     func stop() {
