@@ -31,6 +31,12 @@ class PopupOverlayManager {
     init(ghostty: Ghostty.App, parentWindow: NSWindow) {
         self.ghostty = ghostty
         self.parentWindow = parentWindow
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(parentWindowDidResize(_:)),
+            name: NSWindow.didResizeNotification,
+            object: parentWindow
+        )
     }
 
     deinit {
@@ -39,6 +45,23 @@ class PopupOverlayManager {
         }
         if let token = lazygitExitObserver {
             NotificationCenter.default.removeObserver(token)
+        }
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didResizeNotification, object: parentWindow)
+    }
+
+    // MARK: - Window Resize
+
+    @objc private func parentWindowDidResize(_ notification: Notification) {
+        guard let parent = parentWindow else { return }
+        let contentRect = parent.contentLayoutRect
+        let popupWidth  = contentRect.width  * 0.8
+        let popupHeight = contentRect.height * 0.7
+        let originX = parent.frame.origin.x + contentRect.origin.x + (contentRect.width  - popupWidth)  / 2
+        let originY = parent.frame.origin.y + contentRect.origin.y + (contentRect.height - popupHeight) / 2
+        let newFrame = NSRect(x: originX, y: originY, width: popupWidth, height: popupHeight)
+
+        [shellPopupWindow, lazygitPopupWindow].compactMap { $0 }.filter { $0.isVisible }.forEach { popup in
+            popup.setFrame(newFrame, display: true)
         }
     }
 
