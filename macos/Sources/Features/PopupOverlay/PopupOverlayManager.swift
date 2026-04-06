@@ -29,6 +29,9 @@ class PopupOverlayManager {
     private var shellExitObserver: (any NSObjectProtocol)?
     private var lazygitExitObserver: (any NSObjectProtocol)?
 
+    /// Local event monitor，用于捕获 ESC 键以关闭 shell popup
+    private var escapeEventMonitor: Any?
+
     init(ghostty: Ghostty.App, parentWindow: NSWindow, workspaceId: UUID? = nil) {
         self.ghostty = ghostty
         self.parentWindow = parentWindow
@@ -39,6 +42,7 @@ class PopupOverlayManager {
             name: NSWindow.didResizeNotification,
             object: parentWindow
         )
+        setupEscapeMonitor()
     }
 
     deinit {
@@ -48,7 +52,29 @@ class PopupOverlayManager {
         if let token = lazygitExitObserver {
             NotificationCenter.default.removeObserver(token)
         }
+        if let monitor = escapeEventMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
         NotificationCenter.default.removeObserver(self, name: NSWindow.didResizeNotification, object: parentWindow)
+    }
+
+    /// 安装 local event monitor，当 shell popup 可见时拦截 ESC 键
+    private func setupEscapeMonitor() {
+        escapeEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            // keyCode 53 = Escape
+            guard event.keyCode == 53 else { return event }
+            // 仅当 shell popup 可见时拦截（lazygit 的 ESC 透传给进程）
+            if self.isVisible(self.shellPopupWindow), let popupWin = self.shellPopupWindow {
+                // popup 窗口或父窗口是 key window 时均拦截
+                let keyWin = NSApp.keyWindow
+                if keyWin === popupWin || keyWin === self.parentWindow {
+                    self.dismiss(popupWin)
+                    return nil  // 吞掉事件，不传给 SurfaceView
+                }
+            }
+            return event
+        }
     }
 
     // MARK: - Window Resize
