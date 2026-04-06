@@ -1270,16 +1270,14 @@ final class CtrlToolHandler: Sendable {
 
     private func callGetWorkspaceState(arguments: [String: Any]) async throws -> String {
         // 1. 解析 workspaceId
-        let workspaceId: UUID = try await withCheckedThrowingContinuation { cont in
-            Task { @MainActor in
-                if let wsIdStr = arguments["workspaceId"] as? String,
-                   let wsId = UUID(uuidString: wsIdStr) {
-                    cont.resume(returning: wsId)
-                } else if let active = WorkspaceManager.shared.activeWorkspaceId() {
-                    cont.resume(returning: active)
-                } else {
-                    cont.resume(throwing: RPCError(code: -32602, message: "get_workspace_state: no workspaceId provided and no active workspace"))
-                }
+        let workspaceId: UUID = try await MainActor.run {
+            if let wsIdStr = arguments["workspaceId"] as? String,
+               let wsId = UUID(uuidString: wsIdStr) {
+                return wsId
+            } else if let active = WorkspaceManager.shared.activeWorkspaceId() {
+                return active
+            } else {
+                throw RPCError(code: -32602, message: "get_workspace_state: no workspaceId provided and no active workspace")
             }
         }
 
