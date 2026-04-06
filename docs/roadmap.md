@@ -7,7 +7,7 @@
 ## 完成状态总览
 
 ```
-Phase 1 ──── Session 持久化 ✅ · Yazi 集成 ✅ · 侧边栏元数据增强
+Phase 1 ──── Session 持久化 ✅ · Yazi 集成 ✅ · 侧边栏元数据增强 ✅
 Phase 2 ──── Agent 调度台（大部分 ✅）· Ctrl API 扩展（大部分 ✅）· 可观测性 ✅ · OSC 通知序列
 Phase 3 ──── Layout-as-Code · Quick Terminal 融合 · Popup Overlay 窗口
 ```
@@ -28,22 +28,9 @@ Phase 3 ──── Layout-as-Code · Quick Terminal 融合 · Popup Overlay �
 
 ---
 
-### 1.3 侧边栏 Workspace 元数据增强
+### ✅ 1.3 侧边栏 Workspace 元数据增强
 
-**价值**：cmux 调研中最受用户好评的功能（侧边栏信息密度）——不切换到对应 Workspace，仅看侧边栏就能感知每个 Workspace 的运行状态。
-
-**功能范围**：
-- **监听端口列表**：扫描各 Workspace 前台进程占用的 TCP 端口，以小徽标形式展示（如 `:3000` `:8080`）；点击端口标签可在浏览器或新 tab 打开
-- **PR 状态徽标**：通过 `gh pr status` 查询当前 workspace rootDir 的 branch PR 编号与状态（Open / Draft / Merged），显示在 workspace 条目旁
-- **Agent 活跃指示**：若该 Workspace 有注册的 Agent session，显示小 bot 图标 + 当前状态色（`AgentNotificationStore` 的 `unreadCount` 已接入侧边栏，基础已具备）
-- **未读通知角标**：已实现（`AgentNotificationStore.unreadCount(for:)` 接入侧边栏）
-
-**技术路径**：
-- 端口扫描：`lsof -iTCP -sTCP:LISTEN -P` 解析前台进程 PID 对应的端口；每 5 秒轮询一次
-- PR 状态：后台线程异步调用 `gh` CLI，缓存结果（60 秒 TTL），避免阻塞 UI
-- UI 布局：Workspace 条目高度微增，元数据以小字号横排，不遮挡核心操作区
-
-**成功标准**：侧边栏中 5 个 Workspace 并列时，不点击任何条目，能看出哪个有 agent 在跑、哪个服务在 :3000 上、哪个 branch 有未合并 PR。
+已实现。侧边栏 Workspace 条目展示监听端口徽标（`:3000` `:8080`，点击可打开）、PR 状态徽标（Open/Draft/Merged）、Agent 活跃图标，未读通知角标已接入 `AgentNotificationStore`。不切换 Workspace 即可感知各实例运行状态。
 
 ---
 
