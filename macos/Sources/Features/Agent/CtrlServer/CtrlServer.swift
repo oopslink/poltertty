@@ -730,6 +730,17 @@ final class CtrlServer {
                     "required": ["sessionId", "label"]
                 ]
             ]
+            ,
+            [
+                "name": "get_workspace_state",
+                "description": "Get full state snapshot of a workspace: metadata, panes, agents, listening ports, PR status, and git branch",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workspaceId": ["type": "string", "description": "UUID of the target workspace (optional, defaults to active workspace)"]
+                    ]
+                ]
+            ]
         ]
         #if DEBUG
         tools.append(contentsOf: [

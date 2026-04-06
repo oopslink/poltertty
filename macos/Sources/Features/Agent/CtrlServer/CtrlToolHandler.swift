@@ -1266,5 +1266,135 @@ final class CtrlToolHandler: Sendable {
         }
         return #"{"ok":true}"#
     }
-    private func callGetWorkspaceState(arguments: [String: Any]) async throws -> String { return #"{"ok":true}"# }
+    // MARK: - get_workspace_state
+
+    private func callGetWorkspaceState(arguments: [String: Any]) async throws -> String {
+        // 1. 解析 workspaceId
+        let workspaceId: UUID = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                if let wsIdStr = arguments["workspaceId"] as? String,
+                   let wsId = UUID(uuidString: wsIdStr) {
+                    cont.resume(returning: wsId)
+                } else if let active = WorkspaceManager.shared.activeWorkspaceId() {
+                    cont.resume(returning: active)
+                } else {
+                    cont.resume(throwing: RPCError(code: -32602, message: "get_workspace_state: no workspaceId provided and no active workspace"))
+                }
+            }
+        }
+
+        // 2. 采集所有数据（@MainActor）
+        typealias Snapshot = (
+            name: String?,
+            rootDir: String?,
+            color: String?,
+            panes: [[String: Any]],
+            agents: [[String: Any]],
+            ports: [Int],
+            prStatus: PRStatus?
+        )
+        let snapshot: Snapshot = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let ws = WorkspaceManager.shared.workspace(for: workspaceId) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "get_workspace_state: workspace not found"))
+                    return
+                }
+
+                // panes
+                let panes: [[String: Any]]
+                if let tc = Self.tcForWorkspace(workspaceId) {
+                    panes = tc.listPanes().map { p in
+                        var d: [String: Any] = [
+                            "id": p.id.uuidString,
+                            "tabId": p.tabId.uuidString,
+                            "isActive": p.isActive,
+                            "tabIndex": p.tabIndex,
+                            "paneIndex": p.paneIndex
+                        ]
+                        if let title = p.title { d["title"] = title }
+                        if let annotation = p.annotation { d["annotation"] = annotation }
+                        return d
+                    }
+                } else {
+                    panes = []
+                }
+
+                // agents
+                let agentSessions = AgentService.shared.sessionManager.sessions.values
+                    .filter { $0.workspaceId == workspaceId }
+                    .sorted { $0.startedAt < $1.startedAt }
+
+                let formatter = ISO8601DateFormatter()
+                let agentsArr: [[String: Any]] = agentSessions.map { s in
+                    let stateStr: String
+                    switch s.state {
+                    case .launching: stateStr = "launching"
+                    case .working:   stateStr = "working"
+                    case .idle:      stateStr = "idle"
+                    case .done:      stateStr = "done"
+                    case .error:     stateStr = "error"
+                    }
+                    var d: [String: Any] = [
+                        "surfaceId": s.surfaceId.uuidString,
+                        "state": stateStr,
+                        "startedAt": formatter.string(from: s.startedAt)
+                    ]
+                    if let sid = s.claudeSessionId { d["sessionId"] = sid }
+                    if let model = s.model { d["model"] = model }
+                    if let label = s.customLabel { d["customLabel"] = label }
+                    return d
+                }
+
+                // metadata
+                let meta = WorkspaceMetadataStore.shared.metadata[workspaceId]
+
+                cont.resume(returning: (
+                    name: ws.name,
+                    rootDir: ws.rootDirExpanded,
+                    color: ws.colorHex,
+                    panes: panes,
+                    agents: agentsArr,
+                    ports: meta?.listeningPorts ?? [],
+                    prStatus: meta?.prStatus
+                ))
+            }
+        }
+
+        // 3. 组装结果（非 @MainActor，可直接 shell）
+        var result: [String: Any] = [
+            "workspaceId": workspaceId.uuidString,
+            "name": snapshot.name ?? "",
+            "rootDir": snapshot.rootDir ?? "",
+            "panes": snapshot.panes,
+            "agents": snapshot.agents
+        ]
+        if let color = snapshot.color { result["color"] = color }
+
+        if let rootDir = snapshot.rootDir {
+            let branchResult = CtrlShellRunner.git(["-C", rootDir, "branch", "--show-current"])
+            let branch = branchResult.trimmedStdout
+            if !branch.isEmpty { result["branch"] = branch }
+        }
+
+        if !snapshot.ports.isEmpty {
+            result["ports"] = snapshot.ports.map { ":\($0)" }
+        }
+
+        if let pr = snapshot.prStatus {
+            var prDict: [String: Any]
+            switch pr {
+            case .open(let n):   prDict = ["number": n, "state": "open"]
+            case .draft(let n):  prDict = ["number": n, "state": "draft"]
+            case .merged(let n): prDict = ["number": n, "state": "merged"]
+            }
+            if let branch = result["branch"] as? String { prDict["branch"] = branch }
+            result["prStatus"] = prDict
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: result),
+              let str = String(data: data, encoding: .utf8) else {
+            throw RPCError(code: -32603, message: "get_workspace_state: serialization failed")
+        }
+        return str
+    }
 }
