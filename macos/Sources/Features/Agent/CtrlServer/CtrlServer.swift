@@ -1,4 +1,5 @@
 // macos/Sources/Features/Agent/CtrlServer/CtrlServer.swift
+import AppKit
 import Foundation
 import Network
 import OSLog
@@ -17,6 +18,9 @@ final class CtrlServer {
     /// 活跃 SSE 连接及其心跳 timer。所有访问均在 queue 上。
     private var sseConnections: [ObjectIdentifier: (conn: NWConnection, timer: DispatchSourceTimer)] = [:]
     private let queue = DispatchQueue(label: "com.poltertty.CtrlServer", qos: .utility)
+    /// 上次 emit workspace_switched 时的 workspaceId，用于去重
+    private var lastActiveWorkspaceId: UUID? = nil
+    private var windowObserver: NSObjectProtocol? = nil
     private let sessionManager: AgentSessionManager
     private let decoder = JSONDecoder()
 
@@ -73,6 +77,22 @@ final class CtrlServer {
         self.listener = listener
         self.port = assignedPort
         Self.logger.info("CtrlServer listening on port \(assignedPort)")
+
+        // MARK: workspace_switched 观察
+        windowObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self,
+                  let window = notification.object as? NSWindow,
+                  let newId = WorkspaceManager.shared.workspaceId(for: window),
+                  newId != self.lastActiveWorkspaceId
+            else { return }
+            let prev = self.lastActiveWorkspaceId
+            self.lastActiveWorkspaceId = newId
+            Task { await EventBus.shared.emit(.workspaceSwitched(workspaceId: newId, previousWorkspaceId: prev)) }
+        }
     }
 
     func stop() {
@@ -385,6 +405,16 @@ final class CtrlServer {
         case .tabClosed(let tabId):
             method = "notifications/tab_closed"
             params["tabId"] = tabId.uuidString
+        case .agentStatusChanged(let sessionId, let state, let workspaceId, let customLabel):
+            method = "notifications/agent_status_changed"
+            params["sessionId"] = sessionId
+            params["state"] = state
+            params["workspaceId"] = workspaceId.uuidString
+            if let label = customLabel { params["customLabel"] = label }
+        case .workspaceSwitched(let workspaceId, let previousWorkspaceId):
+            method = "notifications/workspace_switched"
+            params["workspaceId"] = workspaceId.uuidString
+            if let prev = previousWorkspaceId { params["previousWorkspaceId"] = prev.uuidString }
         }
 
         let obj: [String: Any] = ["jsonrpc": "2.0", "method": method, "params": params]
@@ -657,6 +687,58 @@ final class CtrlServer {
                         "paneId": ["type": "string", "description": "Target pane UUID (optional; defaults to focused pane)"]
                     ],
                     "required": ["key"]
+                ]
+            ]
+            ,
+            [
+                "name": "notify",
+                "description": "Send a notification to the in-app notification panel of the specified or active workspace",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "title":       ["type": "string", "description": "Notification title (required)"],
+                        "body":        ["type": "string", "description": "Notification body text (optional)"],
+                        "workspaceId": ["type": "string", "description": "UUID of the target workspace (optional, defaults to active workspace)"]
+                    ],
+                    "required": ["title"]
+                ]
+            ]
+            ,
+            [
+                "name": "open_in_file_browser",
+                "description": "Navigate the file browser (yazi) to the specified path; opens the file browser panel if not already open",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "path":        ["type": "string", "description": "Target directory or file path (~ supported)"],
+                        "workspaceId": ["type": "string", "description": "UUID of the target workspace (optional, defaults to active workspace)"]
+                    ],
+                    "required": ["path"]
+                ]
+            ]
+            ,
+            [
+                "name": "set_agent_label",
+                "description": "Set a custom label and optional state for an agent session, visible in the Agent Dashboard",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "sessionId": ["type": "string", "description": "Claude session ID (CLAUDE_SESSION_ID env var)"],
+                        "label":     ["type": "string", "description": "Custom display label for this session"],
+                        "state":     ["type": "string", "enum": ["working", "idle", "done"], "description": "Optional state override"]
+                    ],
+                    "required": ["sessionId", "label"]
+                ]
+            ]
+            ,
+            [
+                "name": "get_workspace_state",
+                "description": "Get full state snapshot of a workspace: metadata, panes, agents, listening ports, PR status, and git branch",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workspaceId": ["type": "string", "description": "UUID of the target workspace (optional, defaults to active workspace)"]
+                    ]
                 ]
             ]
         ]

@@ -120,6 +120,8 @@
 | `notifications/pane_focused` | pane 获得焦点 | `{paneId}` |
 | `notifications/tab_created` | 新 tab 创建 | `{tabId, workspaceId}` |
 | `notifications/tab_closed` | tab 关闭 | `{tabId}` |
+| `notifications/agent_status_changed` | Agent 状态变更 | `{sessionId, state, workspaceId, customLabel?}` |
+| `notifications/workspace_switched` | 用户切换 Workspace | `{workspaceId, previousWorkspaceId?}` |
 
 ---
 

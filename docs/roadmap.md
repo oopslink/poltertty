@@ -56,21 +56,11 @@ Phase 3 ──── Layout-as-Code · Quick Terminal 融合 · Popup Overlay �
 
 ---
 
-### ✅（大部分）2.2 Ctrl API 扩展
+### ✅ 2.2 Ctrl API 扩展
 
-**已实现接口**：`ping`、`new_tab`、`send_text`、`list_panes`（含位置字段）、`focus_pane`、`split_pane`（支持 command 参数）、`list_worktrees`、`create_worktree`、`get_git_status`、`get_instance_info`（workspace name + rootDirectory）、`screenshot`
+**已实现接口（完整）**：`ping`、`new_tab`、`send_text`、`list_panes`、`focus_pane`、`split_pane`、`list_worktrees`、`create_worktree`、`get_git_status`、`get_instance_info`、`screenshot`、`open_workspace`（即 create_workspace）、`notify`、`open_in_file_browser`、`set_agent_label`、`get_workspace_state`
 
-**尚未实现**：
-
-| 接口 | 功能 |
-|------|------|
-| `create_workspace` | 创建新 Workspace，可指定名称、目录 |
-| `set_agent_label` | Agent 设置自身标签与状态（供调度台展示） |
-| `get_workspace_state` | 获取完整状态快照（布局 + 目录 + Agent 列表） |
-| `notify` | 向用户发送带标题的 macOS 通知 |
-| `open_in_file_browser` | 在 yazi pane 中定位到指定路径 |
-| SSE 事件：`agent_status_changed` | 订阅 Agent 状态变更推送 |
-| SSE 事件：`workspace_switched` | 订阅 Workspace 切换事件 |
+**已实现 SSE 事件**：`pane_created`、`pane_closed`、`pane_focused`、`tab_created`、`tab_closed`、`hook`、`agent_status_changed`、`workspace_switched`
 
 ---
 

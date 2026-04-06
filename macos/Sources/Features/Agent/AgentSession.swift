@@ -75,6 +75,8 @@ struct AgentSession: Identifiable {
     var compactEvents: [Date] = []
     /// 权限拒绝计数（PermissionDenied notification 触发）
     var deniedToolCount: Int = 0
+    /// Agent 通过 set_agent_label 工具设置的自定义标签
+    var customLabel: String? = nil
 
     /// 当前活跃的 subagent 数量
     var activeSubagentCount: Int {
