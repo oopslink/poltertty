@@ -13,6 +13,16 @@ actor EventBus {
         case paneFocused(paneId: UUID)
         case tabCreated(tabId: UUID, workspaceId: UUID)
         case tabClosed(tabId: UUID)
+        case agentStatusChanged(
+            sessionId: String,
+            state: String,
+            workspaceId: UUID,
+            customLabel: String?
+        )
+        case workspaceSwitched(
+            workspaceId: UUID,
+            previousWorkspaceId: UUID?
+        )
     }
 
     private var subscribers: [UUID: AsyncStream<Event>.Continuation] = [:]
