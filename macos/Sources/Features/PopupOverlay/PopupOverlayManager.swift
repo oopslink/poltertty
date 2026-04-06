@@ -149,18 +149,18 @@ class PopupOverlayManager {
         switch type {
         case .shell:
             if let existing = shellPopupWindow { return existing }
-            let win = makeWindow(surface: surface)
+            let win = makeWindow(surface: surface, type: type)
             shellPopupWindow = win
             return win
         case .lazygit:
             if let existing = lazygitPopupWindow { return existing }
-            let win = makeWindow(surface: surface)
+            let win = makeWindow(surface: surface, type: type)
             lazygitPopupWindow = win
             return win
         }
     }
 
-    private func makeWindow(surface: Ghostty.SurfaceView) -> PopupOverlayWindow {
+    private func makeWindow(surface: Ghostty.SurfaceView, type: PopupType) -> PopupOverlayWindow {
         let win = PopupOverlayWindow()
         // SurfaceWrapper 签名：SurfaceWrapper(surfaceView:)，需要注入 ghostty 环境对象
         let hostingView = NSHostingView(
@@ -168,6 +168,13 @@ class PopupOverlayManager {
                 .environmentObject(ghostty)
         )
         win.contentView = hostingView
+
+        if type == .shell {
+            win.onEscapePressed = { [weak self, weak win] in
+                guard let win else { return }
+                self?.dismiss(win)
+            }
+        }
         return win
     }
 
