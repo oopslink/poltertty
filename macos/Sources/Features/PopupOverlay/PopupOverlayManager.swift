@@ -25,9 +25,21 @@ class PopupOverlayManager {
     /// 打开 popup 前记录的 firstResponder，关闭时归还
     private weak var previousFirstResponder: NSResponder?
 
+    private var shellExitObserver: (any NSObjectProtocol)?
+    private var lazygitExitObserver: (any NSObjectProtocol)?
+
     init(ghostty: Ghostty.App, parentWindow: NSWindow) {
         self.ghostty = ghostty
         self.parentWindow = parentWindow
+    }
+
+    deinit {
+        if let token = shellExitObserver {
+            NotificationCenter.default.removeObserver(token)
+        }
+        if let token = lazygitExitObserver {
+            NotificationCenter.default.removeObserver(token)
+        }
     }
 
     // MARK: - Public API
@@ -101,12 +113,12 @@ class PopupOverlayManager {
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.1
             popup.animator().alphaValue = 0
-        } completionHandler: {
+        } completionHandler: { [weak self] in
             popup.orderOut(nil)
             popup.alphaValue = 1
-            self.parentWindow?.makeKeyAndOrderFront(nil)
-            if let prev = self.previousFirstResponder {
-                self.parentWindow?.makeFirstResponder(prev)
+            self?.parentWindow?.makeKeyAndOrderFront(nil)
+            if let prev = self?.previousFirstResponder {
+                self?.parentWindow?.makeFirstResponder(prev)
             }
         }
     }
@@ -115,7 +127,7 @@ class PopupOverlayManager {
         switch type {
         case .shell:
             if let existing = shellSurface { return existing }
-            var config = Ghostty.SurfaceConfiguration()
+            let config = Ghostty.SurfaceConfiguration()
             // command = nil → 使用默认 shell
             let surface = Ghostty.SurfaceView(ghostty.app!, baseConfig: config)
             shellSurface = surface
@@ -161,7 +173,7 @@ class PopupOverlayManager {
 
     private func observeExit(surface: Ghostty.SurfaceView, type: PopupType) {
         // ghosttyCloseSurface 在 libghostty 进程退出时（processAlive=false）发出
-        NotificationCenter.default.addObserver(
+        let token = NotificationCenter.default.addObserver(
             forName: Ghostty.Notification.ghosttyCloseSurface,
             object: surface,
             queue: .main
@@ -173,14 +185,26 @@ class PopupOverlayManager {
 
             switch type {
             case .shell:
+                if let token = self.shellExitObserver {
+                    NotificationCenter.default.removeObserver(token)
+                    self.shellExitObserver = nil
+                }
                 self.shellPopupWindow?.close()
                 self.shellPopupWindow = nil
                 self.shellSurface = nil
             case .lazygit:
+                if let token = self.lazygitExitObserver {
+                    NotificationCenter.default.removeObserver(token)
+                    self.lazygitExitObserver = nil
+                }
                 self.lazygitPopupWindow?.close()
                 self.lazygitPopupWindow = nil
                 self.lazygitSurface = nil
             }
+        }
+        switch type {
+        case .shell:    shellExitObserver = token
+        case .lazygit:  lazygitExitObserver = token
         }
     }
 }
