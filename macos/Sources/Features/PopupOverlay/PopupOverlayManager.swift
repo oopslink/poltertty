@@ -15,6 +15,7 @@ class PopupOverlayManager {
 
     private let ghostty: Ghostty.App
     private weak var parentWindow: NSWindow?
+    private let workspaceId: UUID?
 
     private var shellSurface: Ghostty.SurfaceView?
     private var lazygitSurface: Ghostty.SurfaceView?
@@ -28,9 +29,10 @@ class PopupOverlayManager {
     private var shellExitObserver: (any NSObjectProtocol)?
     private var lazygitExitObserver: (any NSObjectProtocol)?
 
-    init(ghostty: Ghostty.App, parentWindow: NSWindow) {
+    init(ghostty: Ghostty.App, parentWindow: NSWindow, workspaceId: UUID? = nil) {
         self.ghostty = ghostty
         self.parentWindow = parentWindow
+        self.workspaceId = workspaceId
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(parentWindowDidResize(_:)),
@@ -150,7 +152,8 @@ class PopupOverlayManager {
         switch type {
         case .shell:
             if let existing = shellSurface { return existing }
-            let config = Ghostty.SurfaceConfiguration()
+            var config = Ghostty.SurfaceConfiguration()
+            config.workspaceId = workspaceId
             // command = nil → 使用默认 shell
             let surface = Ghostty.SurfaceView(ghostty.app!, baseConfig: config)
             shellSurface = surface
@@ -160,6 +163,7 @@ class PopupOverlayManager {
         case .lazygit:
             if let existing = lazygitSurface { return existing }
             var config = Ghostty.SurfaceConfiguration()
+            config.workspaceId = workspaceId
             config.command = "lazygit"
             let surface = Ghostty.SurfaceView(ghostty.app!, baseConfig: config)
             lazygitSurface = surface

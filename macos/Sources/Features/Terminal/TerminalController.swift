@@ -1783,7 +1783,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         syncAppearance(.init(config))
 
         // 初始化 popup overlay manager
-        popupOverlayManager = PopupOverlayManager(ghostty: ghostty, parentWindow: window)
+        popupOverlayManager = PopupOverlayManager(ghostty: ghostty, parentWindow: window, workspaceId: workspaceId)
     }
 
     /// Setup correct window frame before showing the window

@@ -9,8 +9,6 @@ extension Notification.Name {
     static let workspaceSidebarNavigateDown = Notification.Name("poltertty.workspaceSidebarNavigateDown")
     static let toggleFileBrowser = Notification.Name("poltertty.toggleFileBrowser")
     static let toggleBrowserPanel = Notification.Name("poltertty.toggleBrowserPanel")
-    static let toggleShellPopup    = Notification.Name("poltertty.toggleShellPopup")
-    static let toggleLazygitPopup  = Notification.Name("poltertty.toggleLazygitPopup")
     static let openURLInBrowserPanel = Notification.Name("poltertty.openURLInBrowserPanel")
     static let fileBrowserOpenInTerminal = Notification.Name("poltertty.fileBrowserOpenInTerminal")
     static let toggleAgentMonitor = Notification.Name("poltertty.toggleAgentMonitor")

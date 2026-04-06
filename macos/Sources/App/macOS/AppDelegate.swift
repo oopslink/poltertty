@@ -1324,12 +1324,14 @@ class AppDelegate: NSObject,
     }
 
     @objc func toggleShellPopup(_ sender: Any?) {
-        guard let tc = NSApp.keyWindow?.windowController as? TerminalController else { return }
+        let targetWindow = NSApp.keyWindow?.parent ?? NSApp.keyWindow
+        guard let tc = targetWindow?.windowController as? TerminalController else { return }
         tc.toggleShellPopup(sender)
     }
 
     @objc func toggleLazygitPopup(_ sender: Any?) {
-        guard let tc = NSApp.keyWindow?.windowController as? TerminalController else { return }
+        let targetWindow = NSApp.keyWindow?.parent ?? NSApp.keyWindow
+        guard let tc = targetWindow?.windowController as? TerminalController else { return }
         tc.toggleLazygitPopup(sender)
     }
 
