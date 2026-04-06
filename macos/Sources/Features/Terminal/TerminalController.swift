@@ -82,6 +82,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// Per-tab surface trees: tabId → SplitTree (supports splits within each tab)
     private var tabSurfaceTrees: [UUID: SplitTree<Ghostty.SurfaceView>] = [:]
 
+    /// Popup overlay manager（shell + lazygit popup）
+    private var popupOverlayManager: PopupOverlayManager?
+
     init(_ ghostty: Ghostty.App,
          withBaseConfig base: Ghostty.SurfaceConfiguration? = nil,
          withSurfaceTree tree: SplitTree<Ghostty.SurfaceView>? = nil,
@@ -1778,6 +1781,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // apply this based on the root config but change it later based on surface
         // config (see focused surface change callback).
         syncAppearance(.init(config))
+
+        // 初始化 popup overlay manager
+        popupOverlayManager = PopupOverlayManager(ghostty: ghostty, parentWindow: window, workspaceId: workspaceId)
     }
 
     /// Setup correct window frame before showing the window
@@ -1950,6 +1956,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             )
         }
 
+        popupOverlayManager?.dismissAll()
         super.windowWillClose(notification)
         self.relabelTabs()
 
@@ -2579,6 +2586,14 @@ extension TerminalController {
         guard let targetView = findSurface(id: surfaceId) else { return }
         guard let surfaceModel = targetView.surfaceModel else { return }
         surfaceModel.sendText(text)
+    }
+
+    @objc func toggleShellPopup(_ sender: Any?) {
+        popupOverlayManager?.toggle(.shell)
+    }
+
+    @objc func toggleLazygitPopup(_ sender: Any?) {
+        popupOverlayManager?.toggle(.lazygit)
     }
 
     /// 启动 Agent 菜单（Cmd+Shift+A 触发）

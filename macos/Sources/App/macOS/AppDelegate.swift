@@ -1214,6 +1214,22 @@ class AppDelegate: NSObject,
         toggleFileBrowser.keyEquivalentModifierMask = [.command, .option]
         workspaceMenu.addItem(toggleFileBrowser)
 
+        let shellPopupItem = NSMenuItem(
+            title: "Toggle Shell Popup",
+            action: #selector(toggleShellPopup(_:)),
+            keyEquivalent: "i"
+        )
+        shellPopupItem.keyEquivalentModifierMask = [.command, .option]
+        workspaceMenu.addItem(shellPopupItem)
+
+        let lazygitPopupItem = NSMenuItem(
+            title: "Toggle Lazygit Popup",
+            action: #selector(toggleLazygitPopup(_:)),
+            keyEquivalent: "g"
+        )
+        lazygitPopupItem.keyEquivalentModifierMask = [.command, .option]
+        workspaceMenu.addItem(lazygitPopupItem)
+
         let workspaceMenuItem = NSMenuItem(title: "Workspace", action: nil, keyEquivalent: "")
         workspaceMenuItem.submenu = workspaceMenu
 
@@ -1305,6 +1321,18 @@ class AppDelegate: NSObject,
 
     @objc func toggleFileBrowser(_ sender: Any?) {
         NotificationCenter.default.post(name: .toggleFileBrowser, object: nil)
+    }
+
+    @objc func toggleShellPopup(_ sender: Any?) {
+        let targetWindow = NSApp.keyWindow?.parent ?? NSApp.keyWindow
+        guard let tc = targetWindow?.windowController as? TerminalController else { return }
+        tc.toggleShellPopup(sender)
+    }
+
+    @objc func toggleLazygitPopup(_ sender: Any?) {
+        let targetWindow = NSApp.keyWindow?.parent ?? NSApp.keyWindow
+        guard let tc = targetWindow?.windowController as? TerminalController else { return }
+        tc.toggleLazygitPopup(sender)
     }
 
     @objc func toggleAgentMonitor(_ sender: Any?) {
