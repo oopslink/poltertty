@@ -385,6 +385,16 @@ final class CtrlServer {
         case .tabClosed(let tabId):
             method = "notifications/tab_closed"
             params["tabId"] = tabId.uuidString
+        case .agentStatusChanged(let sessionId, let state, let workspaceId, let customLabel):
+            method = "notifications/agent_status_changed"
+            params["sessionId"] = sessionId
+            params["state"] = state
+            params["workspaceId"] = workspaceId.uuidString
+            if let label = customLabel { params["customLabel"] = label }
+        case .workspaceSwitched(let workspaceId, let previousWorkspaceId):
+            method = "notifications/workspace_switched"
+            params["workspaceId"] = workspaceId.uuidString
+            if let prev = previousWorkspaceId { params["previousWorkspaceId"] = prev.uuidString }
         }
 
         let obj: [String: Any] = ["jsonrpc": "2.0", "method": method, "params": params]
