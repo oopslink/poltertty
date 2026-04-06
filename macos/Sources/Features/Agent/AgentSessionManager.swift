@@ -41,6 +41,7 @@ final class AgentSessionManager: ObservableObject {
     func updateState(_ state: AgentState, surfaceId: UUID) {
         sessions[surfaceId]?.state = state
         sessions[surfaceId]?.lastEventAt = Date()
+        emitAgentStatus(surfaceId: surfaceId)
     }
 
     func bindClaudeSession(surfaceId: UUID, claudeSessionId: String) {
@@ -308,6 +309,29 @@ final class AgentSessionManager: ObservableObject {
             updateFromClaudeSession(sid) { $0.compactEvents.append(Date()) }
         default:
             break
+        }
+    }
+
+    // MARK: - SSE 事件
+
+    /// 根据 surfaceId 找到对应 session，向 EventBus emit agentStatusChanged 事件。
+    func emitAgentStatus(surfaceId: UUID) {
+        guard let session = sessions[surfaceId] else { return }
+        let stateStr: String
+        switch session.state {
+        case .launching:       stateStr = "launching"
+        case .working:         stateStr = "working"
+        case .idle:            stateStr = "idle"
+        case .done:            stateStr = "done"
+        case .error:           stateStr = "error"
+        }
+        Task {
+            await EventBus.shared.emit(.agentStatusChanged(
+                sessionId: session.claudeSessionId ?? surfaceId.uuidString,
+                state: stateStr,
+                workspaceId: session.workspaceId,
+                customLabel: session.customLabel
+            ))
         }
     }
 

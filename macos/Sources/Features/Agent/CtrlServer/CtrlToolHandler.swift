@@ -57,6 +57,10 @@ final class CtrlToolHandler: Sendable {
         case "browser_snapshot":       return try await callBrowserSnapshot(arguments: arguments)
         case "browser_click":          return try await callBrowserClick(arguments: arguments)
         case "browser_fill":           return try await callBrowserFill(arguments: arguments)
+        case "notify":               return try await callNotify(arguments: arguments)
+        case "open_in_file_browser": return try await callOpenInFileBrowser(arguments: arguments)
+        case "set_agent_label":      return try await callSetAgentLabel(arguments: arguments)
+        case "get_workspace_state":  return try await callGetWorkspaceState(arguments: arguments)
         case "show_agent_monitor":    return try await callShowAgentMonitor(arguments: arguments)
         case "send_key":              return try await callSendKey(arguments: arguments)
         default:
@@ -1145,5 +1149,250 @@ final class CtrlToolHandler: Sendable {
             return id
         }
         return WorkspaceManager.shared.activeWorkspaceId() ?? UUID()
+    }
+
+    // MARK: - notify
+
+    private func callNotify(arguments: [String: Any]) async throws -> String {
+        guard let title = arguments["title"] as? String, !title.isEmpty else {
+            throw RPCError(code: -32602, message: "notify: missing required parameter 'title'")
+        }
+        let body = arguments["body"] as? String
+
+        let workspaceId: UUID? = await MainActor.run {
+            if let wsIdStr = arguments["workspaceId"] as? String,
+               let wsId = UUID(uuidString: wsIdStr) {
+                return wsId
+            }
+            return WorkspaceManager.shared.activeWorkspaceId()
+        }
+
+        await MainActor.run {
+            AgentNotificationStore.shared.insert(AgentNotification(
+                id: UUID(),
+                timestamp: Date(),
+                workspaceId: workspaceId,
+                surfaceId: nil,
+                agentDefinitionId: "ctrl-api",
+                sessionId: nil,
+                type: .info,
+                title: title,
+                body: body,
+                priority: .normal
+            ))
+        }
+        return #"{"ok":true}"#
+    }
+
+    // MARK: - Stubs (will be replaced in Task 7/8/9)
+
+    // MARK: - open_in_file_browser
+
+    private func callOpenInFileBrowser(arguments: [String: Any]) async throws -> String {
+        guard let rawPath = arguments["path"] as? String, !rawPath.isEmpty else {
+            throw RPCError(code: -32602, message: "open_in_file_browser: missing required parameter 'path'")
+        }
+        let path = (rawPath as NSString).expandingTildeInPath
+
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            Task { @MainActor in
+                let workspaceId: UUID
+                if let wsIdStr = arguments["workspaceId"] as? String,
+                   let wsId = UUID(uuidString: wsIdStr) {
+                    workspaceId = wsId
+                } else if let active = WorkspaceManager.shared.activeWorkspaceId() {
+                    workspaceId = active
+                } else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "open_in_file_browser: no active workspace"))
+                    return
+                }
+
+                // 若文件浏览器未打开，先打开它
+                let yaziStore = WorkspaceManager.shared.yaziSurfaceStore
+                if yaziStore?.hasSurface(for: workspaceId) == false {
+                    NotificationCenter.default.post(name: .toggleFileBrowser, object: nil)
+                }
+
+                // 等一个 RunLoop tick，给 yazi surface 初始化时间
+                DispatchQueue.main.async {
+                    WorkspaceManager.shared.yaziSurfaceStore?.cdToDirectory(workspaceId, path: path)
+                    cont.resume()
+                }
+            }
+        }
+        return #"{"ok":true}"#
+    }
+    // MARK: - set_agent_label
+
+    private func callSetAgentLabel(arguments: [String: Any]) async throws -> String {
+        guard let sessionId = arguments["sessionId"] as? String, !sessionId.isEmpty else {
+            throw RPCError(code: -32602, message: "set_agent_label: missing required parameter 'sessionId'")
+        }
+        guard let label = arguments["label"] as? String else {
+            throw RPCError(code: -32602, message: "set_agent_label: missing required parameter 'label'")
+        }
+
+        // 可选 state 参数校验
+        let newState: AgentState?
+        if let stateStr = arguments["state"] as? String {
+            switch stateStr {
+            case "working": newState = .working
+            case "idle":    newState = .idle
+            case "done":    newState = .done(exitCode: 0)
+            default:
+                throw RPCError(code: -32602, message: "set_agent_label: invalid state '\(stateStr)', allowed: working | idle | done")
+            }
+        } else {
+            newState = nil
+        }
+
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            Task { @MainActor in
+                let agentManager = AgentService.shared.sessionManager
+                guard agentManager.session(forClaudeSessionId: sessionId) != nil else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "set_agent_label: session not found for sessionId '\(sessionId)'"))
+                    return
+                }
+                agentManager.updateFromClaudeSession(sessionId) { session in
+                    session.customLabel = label
+                    if let state = newState { session.state = state }
+                }
+                // 取出更新后的 surfaceId，emit SSE
+                if let surfaceId = agentManager.sessions.first(where: { $0.value.claudeSessionId == sessionId })?.key {
+                    agentManager.emitAgentStatus(surfaceId: surfaceId)
+                }
+                cont.resume()
+            }
+        }
+        return #"{"ok":true}"#
+    }
+    // MARK: - get_workspace_state
+
+    private func callGetWorkspaceState(arguments: [String: Any]) async throws -> String {
+        // 1. 解析 workspaceId
+        let workspaceId: UUID = try await MainActor.run {
+            if let wsIdStr = arguments["workspaceId"] as? String,
+               let wsId = UUID(uuidString: wsIdStr) {
+                return wsId
+            } else if let active = WorkspaceManager.shared.activeWorkspaceId() {
+                return active
+            } else {
+                throw RPCError(code: -32602, message: "get_workspace_state: no workspaceId provided and no active workspace")
+            }
+        }
+
+        // 2. 采集所有数据（@MainActor）
+        typealias Snapshot = (
+            name: String?,
+            rootDir: String?,
+            color: String?,
+            panes: [[String: Any]],
+            agents: [[String: Any]],
+            ports: [Int],
+            prStatus: PRStatus?
+        )
+        let snapshot: Snapshot = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let ws = WorkspaceManager.shared.workspace(for: workspaceId) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "get_workspace_state: workspace not found"))
+                    return
+                }
+
+                // panes
+                let panes: [[String: Any]]
+                if let tc = Self.tcForWorkspace(workspaceId) {
+                    panes = tc.listPanes().map { p in
+                        var d: [String: Any] = [
+                            "id": p.id.uuidString,
+                            "tabId": p.tabId.uuidString,
+                            "isActive": p.isActive,
+                            "tabIndex": p.tabIndex,
+                            "paneIndex": p.paneIndex
+                        ]
+                        if let title = p.title { d["title"] = title }
+                        if let annotation = p.annotation { d["annotation"] = annotation }
+                        return d
+                    }
+                } else {
+                    panes = []
+                }
+
+                // agents
+                let agentSessions = AgentService.shared.sessionManager.sessions.values
+                    .filter { $0.workspaceId == workspaceId }
+                    .sorted { $0.startedAt < $1.startedAt }
+
+                let formatter = ISO8601DateFormatter()
+                let agentsArr: [[String: Any]] = agentSessions.map { s in
+                    let stateStr: String
+                    switch s.state {
+                    case .launching: stateStr = "launching"
+                    case .working:   stateStr = "working"
+                    case .idle:      stateStr = "idle"
+                    case .done:      stateStr = "done"
+                    case .error:     stateStr = "error"
+                    }
+                    var d: [String: Any] = [
+                        "surfaceId": s.surfaceId.uuidString,
+                        "state": stateStr,
+                        "startedAt": formatter.string(from: s.startedAt)
+                    ]
+                    if let sid = s.claudeSessionId { d["sessionId"] = sid }
+                    if let model = s.model { d["model"] = model }
+                    if let label = s.customLabel { d["customLabel"] = label }
+                    return d
+                }
+
+                // metadata
+                let meta = WorkspaceMetadataStore.shared.metadata[workspaceId]
+
+                cont.resume(returning: (
+                    name: ws.name,
+                    rootDir: ws.rootDirExpanded,
+                    color: ws.colorHex,
+                    panes: panes,
+                    agents: agentsArr,
+                    ports: meta?.listeningPorts ?? [],
+                    prStatus: meta?.prStatus
+                ))
+            }
+        }
+
+        // 3. 组装结果（非 @MainActor，可直接 shell）
+        var result: [String: Any] = [
+            "workspaceId": workspaceId.uuidString,
+            "name": snapshot.name ?? "",
+            "rootDir": snapshot.rootDir ?? "",
+            "panes": snapshot.panes,
+            "agents": snapshot.agents
+        ]
+        if let color = snapshot.color { result["color"] = color }
+
+        if let rootDir = snapshot.rootDir {
+            let branchResult = CtrlShellRunner.git(["-C", rootDir, "branch", "--show-current"])
+            let branch = branchResult.trimmedStdout
+            if !branch.isEmpty { result["branch"] = branch }
+        }
+
+        if !snapshot.ports.isEmpty {
+            result["ports"] = snapshot.ports.map { ":\($0)" }
+        }
+
+        if let pr = snapshot.prStatus {
+            var prDict: [String: Any]
+            switch pr {
+            case .open(let n):   prDict = ["number": n, "state": "open"]
+            case .draft(let n):  prDict = ["number": n, "state": "draft"]
+            case .merged(let n): prDict = ["number": n, "state": "merged"]
+            }
+            if let branch = result["branch"] as? String { prDict["branch"] = branch }
+            result["prStatus"] = prDict
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: result),
+              let str = String(data: data, encoding: .utf8) else {
+            throw RPCError(code: -32603, message: "get_workspace_state: serialization failed")
+        }
+        return str
     }
 }
