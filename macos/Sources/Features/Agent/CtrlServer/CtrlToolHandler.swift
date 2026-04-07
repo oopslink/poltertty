@@ -57,6 +57,11 @@ final class CtrlToolHandler: Sendable {
         case "browser_snapshot":       return try await callBrowserSnapshot(arguments: arguments)
         case "browser_click":          return try await callBrowserClick(arguments: arguments)
         case "browser_fill":           return try await callBrowserFill(arguments: arguments)
+        case "browser_eval":           return try await callBrowserEval(arguments: arguments)
+        case "browser_wait":           return try await callBrowserWait(arguments: arguments)
+        case "browser_screenshot":     return try await callBrowserScreenshot(arguments: arguments)
+        case "browser_get_text":       return try await callBrowserGetText(arguments: arguments)
+        case "browser_open_split":     return try await callBrowserOpenSplit(arguments: arguments)
         case "notify":               return try await callNotify(arguments: arguments)
         case "open_in_file_browser": return try await callOpenInFileBrowser(arguments: arguments)
         case "set_agent_label":      return try await callSetAgentLabel(arguments: arguments)
@@ -1120,6 +1125,248 @@ final class CtrlToolHandler: Sendable {
                     }
                     cont.resume(returning: json)
                 }
+            }
+        }
+        return result
+    }
+
+    /// browser_eval — 在当前页面执行任意 JavaScript，返回 JSON 字符串结果。
+    /// 参数: script (required), tabId (optional), workspaceId (optional)
+    private func callBrowserEval(arguments: [String: Any]) async throws -> String {
+        guard let script = arguments["script"] as? String, !script.isEmpty else {
+            throw RPCError(code: -32602, message: "browser_eval: missing required parameter 'script'")
+        }
+        // 包装脚本，确保返回值可序列化为 JSON 字符串。
+        // JSON.stringify(undefined) 在 JS 中返回 undefined 而非字符串，需要特判。
+        let wrappedJS = """
+        (function() {
+          var __result = (function() { \(script) })();
+          if (__result === undefined) return "null";
+          try { return JSON.stringify(__result); } catch(e) { return String(__result); }
+        })();
+        """
+        let result: String = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let store = WorkspaceManager.shared.browserSurfaceStore else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_eval: browserStore not available"))
+                    return
+                }
+                let wsId = Self.resolveBrowserWorkspaceId(arguments)
+                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_eval: no active tab"))
+                    return
+                }
+                webView.evaluateJavaScript(wrappedJS) { value, error in
+                    if let error {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_eval: js error: \(error.localizedDescription)"))
+                        return
+                    }
+                    let str = (value as? String) ?? "null"
+                    cont.resume(returning: str)
+                }
+            }
+        }
+        return result
+    }
+
+    /// browser_wait — 轮询等待条件满足，超时返回错误。
+    /// 支持四种条件：
+    ///   url: 当前 URL 包含指定字符串
+    ///   selector: 指定 CSS 选择器存在且可见
+    ///   text: 页面 body 文本包含指定字符串
+    ///   load: 页面加载完成（readyState === "complete"）
+    /// 参数: condition ("url"|"selector"|"text"|"load"), value (condition="load" 时可省略),
+    ///        timeout (秒, 默认 10), tabId (optional), workspaceId (optional)
+    private func callBrowserWait(arguments: [String: Any]) async throws -> String {
+        guard let condition = arguments["condition"] as? String else {
+            throw RPCError(code: -32602, message: "browser_wait: missing required parameter 'condition'")
+        }
+        let value = arguments["value"] as? String ?? ""
+        let timeoutSec = (arguments["timeout"] as? Double) ?? 10.0
+        let pollIntervalNs: UInt64 = 300_000_000  // 300 ms
+
+        let deadline = Date().addingTimeInterval(timeoutSec)
+
+        let checkJS: String
+        switch condition {
+        case "url":
+            let safe = value.replacingOccurrences(of: "\"", with: "\\\"")
+            checkJS = "window.location.href.includes(\"\(safe)\")"
+        case "selector":
+            let safe = value.replacingOccurrences(of: "\"", with: "\\\"")
+            checkJS = """
+            (function(){
+              var el = document.querySelector("\(safe)");
+              if (!el) return false;
+              var r = el.getBoundingClientRect();
+              return r.width > 0 || r.height > 0;
+            })()
+            """
+        case "text":
+            let safe = value
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            checkJS = "document.body && document.body.innerText.includes(\"\(safe)\")"
+        case "load":
+            checkJS = "document.readyState === 'complete'"
+        default:
+            throw RPCError(code: -32602, message: "browser_wait: unknown condition '\(condition)'; use url/selector/text/load")
+        }
+
+        while Date() < deadline {
+            let matched: Bool = try await withCheckedThrowingContinuation { cont in
+                Task { @MainActor in
+                    guard let store = WorkspaceManager.shared.browserSurfaceStore else {
+                        cont.resume(returning: false); return
+                    }
+                    let wsId = Self.resolveBrowserWorkspaceId(arguments)
+                    guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                        cont.resume(returning: false); return
+                    }
+                    webView.evaluateJavaScript(checkJS) { value, _ in
+                        cont.resume(returning: (value as? Bool) == true)
+                    }
+                }
+            }
+            if matched { return #"{"ok":true}"# }
+            try await Task.sleep(nanoseconds: pollIntervalNs)
+        }
+        throw RPCError(code: -32603, message: "browser_wait: timeout after \(timeoutSec)s waiting for condition '\(condition)'")
+    }
+
+    /// browser_screenshot — 截取当前页面截图，返回 PNG 文件路径（默认）或 base64 字符串。
+    /// 参数: format ("path"|"base64", 默认 "path"), tabId (optional), workspaceId (optional)
+    private func callBrowserScreenshot(arguments: [String: Any]) async throws -> String {
+        let format = (arguments["format"] as? String) ?? "path"
+
+        let pngData: Data = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let store = WorkspaceManager.shared.browserSurfaceStore else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_screenshot: browserStore not available"))
+                    return
+                }
+                let wsId = Self.resolveBrowserWorkspaceId(arguments)
+                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_screenshot: no active tab"))
+                    return
+                }
+                // rect = .null → 截取整个可见区域（bounds 为零时也能工作）
+                let config = WKSnapshotConfiguration()
+                webView.takeSnapshot(with: config) { image, error in
+                    if let error {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_screenshot: snapshot failed: \(error.localizedDescription)"))
+                        return
+                    }
+                    guard let image,
+                          let tiffData = image.tiffRepresentation,
+                          let bitmap = NSBitmapImageRep(data: tiffData),
+                          let png = bitmap.representation(using: .png, properties: [:]) else {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_screenshot: image encoding failed"))
+                        return
+                    }
+                    cont.resume(returning: png)
+                }
+            }
+        }
+
+        if format == "base64" {
+            let b64 = pngData.base64EncodedString()
+            return "{\"base64\":\"\(b64)\",\"mimeType\":\"image/png\"}"
+        } else {
+            // 写入临时文件
+            let tmpDir = FileManager.default.temporaryDirectory
+            let fname = "poltertty-browser-\(UUID().uuidString).png"
+            let url = tmpDir.appendingPathComponent(fname)
+            do {
+                try pngData.write(to: url)
+            } catch {
+                throw RPCError(code: -32603, message: "browser_screenshot: write failed: \(error.localizedDescription)")
+            }
+            // 手动转义路径中的特殊字符（不使用 JSONSerialization，String 不是合法顶层对象）
+            let escapedPath = url.path
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            return "{\"path\":\"\(escapedPath)\"}"
+        }
+    }
+
+    /// browser_get_text — 获取元素或整个页面的文本内容。
+    /// 参数: ref 或 selector (均可选，均省略时返回 body.innerText), tabId (optional), workspaceId (optional)
+    private func callBrowserGetText(arguments: [String: Any]) async throws -> String {
+        let ref = arguments["ref"] as? String
+        let selector = arguments["selector"] as? String
+
+        let js: String
+        if ref != nil || selector != nil {
+            let prefix = Self.elementLookupJS(ref: ref, selector: selector)
+            js = prefix + "\n  return JSON.stringify({text: el.innerText || el.textContent || ''});\n})();"
+        } else {
+            js = "(function(){ return JSON.stringify({text: document.body ? document.body.innerText : ''}); })();"
+        }
+
+        let result: String = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                guard let store = WorkspaceManager.shared.browserSurfaceStore else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_get_text: browserStore not available"))
+                    return
+                }
+                let wsId = Self.resolveBrowserWorkspaceId(arguments)
+                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_get_text: no active tab"))
+                    return
+                }
+                webView.evaluateJavaScript(js) { value, error in
+                    if let error {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_get_text: js error: \(error.localizedDescription)"))
+                        return
+                    }
+                    guard let json = value as? String else {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_get_text: unexpected js return type"))
+                        return
+                    }
+                    if json.contains("\"error\"") {
+                        cont.resume(throwing: RPCError(code: -32603, message: "browser_get_text: \(json)"))
+                        return
+                    }
+                    cont.resume(returning: json)
+                }
+            }
+        }
+        return result
+    }
+
+    /// browser_open_split — 打开当前 workspace 的 Browser Panel（若已打开则忽略），并可选导航到 URL。
+    /// 参数: url (optional), workspaceId (optional)
+    private func callBrowserOpenSplit(arguments: [String: Any]) async throws -> String {
+        let urlStr = arguments["url"] as? String
+        let url = urlStr.flatMap { URL(string: $0) }
+
+        let result: String = try await withCheckedThrowingContinuation { cont in
+            Task { @MainActor in
+                let wsId = Self.resolveBrowserWorkspaceId(arguments)
+
+                // 1. 发通知打开 Browser Panel（PolterttyRootView 订阅 toggleBrowserPanel 处理显示）
+                NotificationCenter.default.post(
+                    name: .openBrowserPanel,
+                    object: wsId
+                )
+
+                // 2. 若有 URL，在 store 中导航（store 此时已准备好或通过 manager() 懒建）
+                if let url, let store = WorkspaceManager.shared.browserSurfaceStore {
+                    let mgr = store.manager(for: wsId)
+                    if let activeTab = mgr.activeTab {
+                        activeTab.webView.load(URLRequest(url: url))
+                    } else {
+                        mgr.newTab(url: url)
+                    }
+                }
+
+                guard let data = try? JSONSerialization.data(withJSONObject: ["ok": true, "workspaceId": wsId.uuidString]),
+                      let str = String(data: data, encoding: .utf8) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_open_split: serialization failed"))
+                    return
+                }
+                cont.resume(returning: str)
             }
         }
         return result

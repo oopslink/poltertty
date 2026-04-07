@@ -9,6 +9,7 @@ extension Notification.Name {
     static let workspaceSidebarNavigateDown = Notification.Name("poltertty.workspaceSidebarNavigateDown")
     static let toggleFileBrowser = Notification.Name("poltertty.toggleFileBrowser")
     static let toggleBrowserPanel = Notification.Name("poltertty.toggleBrowserPanel")
+    static let openBrowserPanel = Notification.Name("poltertty.openBrowserPanel")
     static let openURLInBrowserPanel = Notification.Name("poltertty.openURLInBrowserPanel")
     static let fileBrowserOpenInTerminal = Notification.Name("poltertty.fileBrowserOpenInTerminal")
     static let toggleAgentMonitor = Notification.Name("poltertty.toggleAgentMonitor")
@@ -390,6 +391,12 @@ struct PolterttyRootView<TerminalContent: View>: View {
             guard (notification.object as? UUID) == workspaceId else { return }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                 browserPanelVisible.toggle()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openBrowserPanel)) { notification in
+            guard (notification.object as? UUID) == workspaceId else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                browserPanelVisible = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openURLInBrowserPanel)) { notification in

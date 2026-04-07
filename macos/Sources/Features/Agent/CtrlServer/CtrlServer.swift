@@ -626,6 +626,51 @@ final class CtrlServer {
                 "inputSchema": ["type": "object", "properties": [String: Any]()]
             ],
             [
+                "name": "browser_new_tab",
+                "description": "Open a new tab in the browser panel of the specified or active workspace. Optionally navigates to a URL.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "url": ["type": "string", "description": "URL to navigate to (optional; opens blank tab if omitted)"],
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                    ]
+                ]
+            ],
+            [
+                "name": "browser_close_tab",
+                "description": "Close a browser tab by ID.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "tabId": ["type": "string", "description": "Browser tab UUID to close"],
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                    ],
+                    "required": ["tabId"]
+                ]
+            ],
+            [
+                "name": "browser_focus_tab",
+                "description": "Make a browser tab active (bring it to the front).",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "tabId": ["type": "string", "description": "Browser tab UUID to focus"],
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                    ],
+                    "required": ["tabId"]
+                ]
+            ],
+            [
+                "name": "browser_list_tabs",
+                "description": "List all open browser tabs in the specified or active workspace. Returns tabId, title, url, and active flag for each.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                    ]
+                ]
+            ],
+            [
                 "name": "browser_navigate",
                 "description": "Navigate a browser tab to a URL. Navigates the active tab by default.",
                 "inputSchema": [
@@ -675,6 +720,70 @@ final class CtrlServer {
                         "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
                     ],
                     "required": ["value"]
+                ]
+            ],
+            [
+                "name": "browser_eval",
+                "description": "Execute arbitrary JavaScript in the browser and return the result as a JSON string.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "script": ["type": "string", "description": "JavaScript code to execute (return value is JSON-serialized)"],
+                        "tabId": ["type": "string", "description": "Browser tab UUID (optional; defaults to active tab)"],
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                    ],
+                    "required": ["script"]
+                ]
+            ],
+            [
+                "name": "browser_wait",
+                "description": "Wait until a condition is met in the browser page, polling up to a timeout. Conditions: 'url' (href contains value), 'selector' (element visible), 'text' (body text contains value), 'load' (readyState complete).",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "condition": ["type": "string", "enum": ["url", "selector", "text", "load"], "description": "Condition type to wait for"],
+                        "value": ["type": "string", "description": "Expected value (not required for 'load')"],
+                        "timeout": ["type": "number", "description": "Timeout in seconds (default 10)"],
+                        "tabId": ["type": "string", "description": "Browser tab UUID (optional; defaults to active tab)"],
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                    ],
+                    "required": ["condition"]
+                ]
+            ],
+            [
+                "name": "browser_screenshot",
+                "description": "Take a screenshot of the current browser page. Returns a file path (default) or base64-encoded PNG.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "format": ["type": "string", "enum": ["path", "base64"], "description": "Return format: 'path' writes to a temp file and returns the path; 'base64' returns the PNG as a base64 string (default: 'path')"],
+                        "tabId": ["type": "string", "description": "Browser tab UUID (optional; defaults to active tab)"],
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                    ]
+                ]
+            ],
+            [
+                "name": "browser_get_text",
+                "description": "Get the text content of an element or the full page body. Use a ref from browser_snapshot or a CSS selector; omit both to get the full page body text.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "ref": ["type": "string", "description": "Element ref from browser_snapshot (e.g. 'e3'; optional)"],
+                        "selector": ["type": "string", "description": "CSS selector (alternative to ref; optional)"],
+                        "tabId": ["type": "string", "description": "Browser tab UUID (optional; defaults to active tab)"],
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                    ]
+                ]
+            ],
+            [
+                "name": "browser_open_split",
+                "description": "Open the browser panel for the specified or active workspace (if not already open) and optionally navigate to a URL.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "url": ["type": "string", "description": "URL to navigate to after opening the panel (optional)"],
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                    ]
                 ]
             ],
             [

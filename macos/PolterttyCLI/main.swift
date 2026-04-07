@@ -21,6 +21,8 @@ case "hook":
     HookCommand.run(restArgs)
 case "extract-flag":
     ExtractFlagCommand.run(restArgs)
+case "browser":
+    BrowserCommand.run(restArgs)
 default:
     fputs("Unknown subcommand: \(subcommand)\n", stderr)
     exit(1)
