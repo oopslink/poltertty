@@ -8,7 +8,7 @@
 
 ```
 Phase 1 ──── Session 持久化 ✅ · Yazi 集成 ✅ · 侧边栏元数据增强 ✅
-Phase 2 ──── Agent 调度台（大部分 ✅）· Ctrl API 扩展（大部分 ✅）· 可观测性 ✅ · OSC 通知序列
+Phase 2 ──── Agent 调度台（✅ 侧边栏已内嵌，快捷指令待实现）· Ctrl API 扩展（大部分 ✅）· 可观测性 ✅ · OSC 通知序列
 Phase 3 ──── Layout-as-Code · Quick Terminal 融合 · Popup Overlay 窗口
 ```
 
@@ -39,7 +39,8 @@ Phase 3 ──── Layout-as-Code · Quick Terminal 融合 · Popup Overlay �
 ### ✅（大部分）2.1 Agent Monitor → 多 Agent 调度台
 
 **已实现**：
-- `AgentDashboardView`（独立浮窗，非侧边栏）：列出所有 Agent session，按 Workspace 分组，显示状态、运行时长，键盘导航
+- `AgentMonitorPanel`（侧边栏内嵌面板，条件显示）：列出所有 Agent session，显示状态、运行时长，键盘导航，历史记录区块
+- `AgentDrawer`（右侧详情抽屉）：session 详情、subagent 追踪、工具调用 timeline
 - `AgentSession` 状态机：`launching` / `working` / `idle` / `done` / `error`
 - `AgentNotificationStore`：通知去重、持久化、macOS 系统通知（waiting/error 事件触发）
 - 点击 Agent 条目 → `PaneLocator` 聚焦到对应 tab/pane（`#143` pane annotation 显示）
@@ -47,7 +48,6 @@ Phase 3 ──── Layout-as-Code · Quick Terminal 融合 · Popup Overlay �
 - `ExternalSessionDiscovery`：自动发现 Claude Code / Gemini / OpenCode session（无需集成 Ctrl API）
 
 **尚未实现**：
-- 侧边栏内嵌 Agents 区块（当前为独立浮窗，非侧边栏常驻）
 - 调度台中向 pane 发送快捷指令（"继续"/"中止"）
 
 **Ctrl API 配合**（见 2.2）：Agent 通过 `set_agent_label` 自报状态，Poltertty 订阅后更新 UI。
