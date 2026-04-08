@@ -4,6 +4,7 @@ import Foundation
 /// Manages one lazygit terminal surface per workspace.
 /// Surfaces are lazily created on first panel open and kept alive
 /// until the workspace is deleted or the process exits.
+@MainActor
 class LazyGitSurfaceStore: ObservableObject {
     @Published private(set) var surfaces: [UUID: Ghostty.SurfaceView] = [:]
     private var exitObservers: [UUID: any NSObjectProtocol] = [:]
@@ -11,7 +12,6 @@ class LazyGitSurfaceStore: ObservableObject {
     // MARK: - Surface management
 
     /// Get or create the lazygit surface for a workspace.
-    @MainActor
     func surface(for workspaceId: UUID, ghostty: Ghostty.App, rootDir: String) -> Ghostty.SurfaceView? {
         if let existing = surfaces[workspaceId] {
             return existing
@@ -40,6 +40,12 @@ class LazyGitSurfaceStore: ObservableObject {
 
     func hasSurface(for workspaceId: UUID) -> Bool {
         surfaces[workspaceId] != nil
+    }
+
+    deinit {
+        for token in exitObservers.values {
+            NotificationCenter.default.removeObserver(token)
+        }
     }
 
     // MARK: - Exit observation
