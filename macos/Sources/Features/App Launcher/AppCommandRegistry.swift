@@ -1,5 +1,7 @@
 import AppKit
 import Combine
+import GhosttyKit
+import SwiftUI
 
 /// 收集所有可用命令，供 AppLauncherView 使用。
 /// 每次调用 refresh() 时重新扫描菜单（须在 @MainActor 执行）。
@@ -12,10 +14,21 @@ final class AppCommandRegistry: ObservableObject {
     private init() {}
 
     /// 重新扫描所有命令来源。在 AppLauncherView.onAppear 中调用。
-    func refresh() {
+    /// - Parameters:
+    ///   - surface: 当前聚焦的终端 surface，用于注入 terminal 命令
+    ///   - performAction: 执行 Ghostty 动作的回调，接受 action 字符串和目标 surface
+    ///   - ghosttyConfig: Ghostty 配置，用于读取 command-palette-entry
+    func refresh(
+        surface: Ghostty.SurfaceView? = nil,
+        performAction: ((String, Ghostty.SurfaceView) -> Void)? = nil,
+        ghosttyConfig: Ghostty.Config? = nil
+    ) {
         var result: [CommandOption] = []
         result += scanMenuItems()
         result += polterttyActions()
+        if let surface, let performAction, let config = ghosttyConfig {
+            result += terminalCommands(surface: surface, performAction: performAction, config: config)
+        }
         commands = result
     }
 
@@ -108,5 +121,69 @@ final class AppCommandRegistry: ObservableObject {
                 }
             ),
         ]
+    }
+
+    // MARK: - Terminal 命令（跳转 + Ghostty config 动作）
+
+    /// 生成终端相关命令：jump to surface + command-palette-entry 动作。
+    private func terminalCommands(
+        surface: Ghostty.SurfaceView,
+        performAction: @escaping (String, Ghostty.SurfaceView) -> Void,
+        config: Ghostty.Config
+    ) -> [CommandOption] {
+        var result: [CommandOption] = []
+
+        // 跳转到其他终端 surface
+        let jumpOptions: [CommandOption] = TerminalController.all.flatMap { controller -> [CommandOption] in
+            guard let window = controller.window else { return [] }
+            let color = (window as? TerminalWindow)?.tabColor
+            let displayColor = color != TerminalTabColor.none ? color : nil
+
+            return controller.surfaceTree.map { s in
+                let terminalTitle = s.title.isEmpty ? window.title : s.title
+                let displayTitle: String
+                if let override = controller.titleOverride, !override.isEmpty {
+                    displayTitle = override
+                } else if !terminalTitle.isEmpty {
+                    displayTitle = terminalTitle
+                } else {
+                    displayTitle = "Untitled"
+                }
+                let pwd = s.pwd?.abbreviatedPath
+                let subtitle: String? = if let pwd, !displayTitle.contains(pwd) { pwd } else { nil }
+
+                return CommandOption(
+                    title: "Focus: \(displayTitle)",
+                    subtitle: subtitle,
+                    leadingIcon: "rectangle.on.rectangle",
+                    leadingColor: displayColor?.displayColor.map { Color($0) },
+                    sortKey: AnySortKey(ObjectIdentifier(s))
+                ) {
+                    NotificationCenter.default.post(
+                        name: Ghostty.Notification.ghosttyPresentTerminal,
+                        object: s
+                    )
+                }
+            }
+        }
+        result += jumpOptions
+
+        // Ghostty config command-palette-entry 命令
+        let terminalOptions: [CommandOption] = config.commandPaletteEntries
+            .filter(\.isSupported)
+            .map { entry in
+                let symbols = config.keyboardShortcut(for: entry.action)?.keyList
+                return CommandOption(
+                    title: entry.title,
+                    description: entry.description.isEmpty ? nil : entry.description,
+                    symbols: symbols,
+                    leadingIcon: "terminal"
+                ) {
+                    performAction(entry.action, surface)
+                }
+            }
+        result += terminalOptions
+
+        return result
     }
 }

@@ -1,6 +1,7 @@
 // macos/Sources/Features/App Launcher/AppLauncherView.swift
 import SwiftUI
 import AppKit
+import GhosttyKit
 
 /// 从 ScrollView 内部向上遍历 NSView 层级，找到 NSScrollView 并清零 content insets。
 /// macOS NSScrollView 默认 automaticallyAdjustsContentInsets = true，
@@ -27,11 +28,19 @@ private struct ScrollInsetRemover: NSViewRepresentable {
 extension Notification.Name {
     /// App Launcher 触发通知。由 ShiftDoubleTapDetector post（object: NSApp.keyWindow）。
     static let toggleAppLauncher = Notification.Name("poltertty.toggleAppLauncher")
+    /// 统一 Command Palette 触发通知（⌘⇧P）
+    /// userInfo key "surface": Ghostty.SurfaceView（可选，当从 terminal 触发时携带）
+    static let toggleUnifiedCommandPalette = Notification.Name("poltertty.toggleUnifiedCommandPalette")
+    /// 双击 Shift 触发 Keyboard Shortcuts 速查面板
+    static let toggleKeyboardShortcutsPanel = Notification.Name("poltertty.toggleKeyboardShortcutsPanel")
 }
 
 struct AppLauncherView: View {
     @Binding var isPresented: Bool
     var backgroundColor: Color = Color(nsColor: .windowBackgroundColor)
+    var surfaceView: Ghostty.SurfaceView? = nil
+    var performAction: ((String, Ghostty.SurfaceView) -> Void)? = nil
+    var ghosttyConfig: Ghostty.Config? = nil
 
     @StateObject private var registry = AppCommandRegistry.shared
     @State private var query = ""
@@ -75,7 +84,11 @@ struct AppLauncherView: View {
         .environment(\.colorScheme, scheme)
         .task { @MainActor in
             // 在 TextField 获焦前完成菜单扫描，避免焦点切换导致菜单项 isEnabled 状态改变
-            registry.refresh()
+            registry.refresh(
+                surface: surfaceView,
+                performAction: performAction,
+                ghosttyConfig: ghosttyConfig
+            )
             isTextFieldFocused = true
         }
         .onChange(of: isPresented) { newValue in

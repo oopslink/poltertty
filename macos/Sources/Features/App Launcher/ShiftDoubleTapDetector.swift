@@ -3,7 +3,7 @@ import AppKit
 import Carbon
 import OSLog
 
-/// 检测双击 Shift 键（间隔 ≤ 350ms），触发时发送 toggleAppLauncher 通知。
+/// 检测双击 Shift 键（间隔 ≤ 350ms），触发时发送 toggleKeyboardShortcutsPanel 通知。
 /// 监听 .flagsChanged 事件（Shift 产生此事件，不产生 keyDown）。
 /// 两次 Shift 之间有任何其他键按下或修饰符变化则重置计时器。
 final class ShiftDoubleTapDetector {
@@ -64,10 +64,10 @@ final class ShiftDoubleTapDetector {
         if let last = lastShiftTime, now.timeIntervalSince(last) <= threshold {
             // 双击成立
             lastShiftTime = nil
-            Self.logger.debug("double-shift detected, posting toggleAppLauncher")
+            Self.logger.debug("double-shift detected, posting toggleKeyboardShortcutsPanel")
             DispatchQueue.main.async {
                 // 携带 keyWindow 作为 object，供 PolterttyRootView 做 per-window 过滤
-                NotificationCenter.default.post(name: .toggleAppLauncher, object: NSApp.keyWindow)
+                NotificationCenter.default.post(name: .toggleKeyboardShortcutsPanel, object: NSApp.keyWindow)
             }
         } else {
             lastShiftTime = now

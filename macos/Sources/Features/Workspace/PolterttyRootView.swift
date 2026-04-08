@@ -52,7 +52,9 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var showConvertAlert = false
     @State private var showTmuxPicker = false
     @State private var tmuxPickerAttachInCurrentPane = false
-    @State private var launcherVisible = false
+    @State private var unifiedPaletteVisible = false
+    @State private var paletteSurface: Ghostty.SurfaceView? = nil
+    @State private var keyboardShortcutsPanelVisible = false
     @State private var convertTargetId: UUID?
     @State private var convertName = ""
 
@@ -347,13 +349,29 @@ struct PolterttyRootView<TerminalContent: View>: View {
                 )
             }
 
-            // App Launcher overlay
-            if launcherVisible {
+            // 统一 Command Palette（⌘⇧P 触发）
+            if unifiedPaletteVisible {
                 AppLauncherView(
-                    isPresented: $launcherVisible,
-                    backgroundColor: Color(nsColor: .windowBackgroundColor)
+                    isPresented: $unifiedPaletteVisible,
+                    backgroundColor: Color(nsColor: .windowBackgroundColor),
+                    surfaceView: paletteSurface,
+                    performAction: paletteSurface.map { s in
+                        { action, surface in
+                            guard let tc = TerminalController.all.first(where: {
+                                $0.surfaceTree.contains(where: { $0 === surface })
+                            }) else { return }
+                            tc.performAction(action, on: surface)
+                        }
+                    },
+                    ghosttyConfig: (NSApp.delegate as? AppDelegate)?.ghostty.config
                 )
                 .ignoresSafeArea()
+            }
+
+            // Keyboard Shortcuts 速查面板（双击 Shift 触发）
+            if keyboardShortcutsPanelVisible {
+                KeyboardShortcutsPanelView(isPresented: $keyboardShortcutsPanelVisible)
+                    .ignoresSafeArea()
             }
         }
         .onAppear {
@@ -427,9 +445,20 @@ struct PolterttyRootView<TerminalContent: View>: View {
             tmuxPickerAttachInCurrentPane = notification.userInfo?["attachInCurrentPane"] as? Bool ?? false
             showTmuxPicker = true
         }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleAppLauncher)) { notification in
+        .onReceive(NotificationCenter.default.publisher(for: .toggleKeyboardShortcutsPanel)) { notification in
             guard notification.object as? NSWindow == windowProvider() else { return }
-            launcherVisible.toggle()
+            keyboardShortcutsPanelVisible.toggle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleUnifiedCommandPalette)) { notification in
+            guard notification.object as? NSWindow == windowProvider() else { return }
+            let surface = notification.userInfo?["surface"] as? Ghostty.SurfaceView
+            if unifiedPaletteVisible {
+                unifiedPaletteVisible = false
+                paletteSurface = nil
+            } else {
+                paletteSurface = surface
+                unifiedPaletteVisible = true
+            }
         }
         .sheet(isPresented: $showTmuxPicker) {
             TmuxSessionPicker(

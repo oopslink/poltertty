@@ -88,6 +88,13 @@
 | `⌥⌘J` | 切换 Shell Popup |
 | `⌥⌘G` | 切换 Lazygit Popup |
 
+### Command Palette / 快捷键面板
+
+| 快捷键 | 功能 |
+|--------|------|
+| `⌘⇧P` | 统一 Command Palette（菜单命令 + terminal 跳转 + Ghostty 动作） |
+| `Shift × 2` | Keyboard Shortcuts 速查面板 |
+
 ### Agent 菜单（⌥⌘ 系列）
 
 | 快捷键 | 功能 |
@@ -115,3 +122,4 @@
 | 日期 | 变更 |
 |------|------|
 | 2026-04-08 | 初始版本，整理全部已用快捷键；Shell Popup：⌥⌘I → ⌥⌘H（Zig 层 Inspector 占用）→ ⌥⌘J（⌥⌘H 被 macOS 系统 Hide Others 占用）|
+| 2026-04-08 | ⌘⇧P 统一 Command Palette（合并 App Launcher + TerminalCommandPalette）；Shift×2 改为 Keyboard Shortcuts 速查面板 |

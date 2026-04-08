@@ -1452,7 +1452,15 @@ class BaseTerminalController: NSWindowController,
     }
 
     @IBAction func toggleCommandPalette(_ sender: Any?) {
-        commandPaletteIsShowing.toggle()
+        var userInfo: [String: Any] = [:]
+        if let surface = focusedSurface {
+            userInfo["surface"] = surface
+        }
+        NotificationCenter.default.post(
+            name: .toggleUnifiedCommandPalette,
+            object: NSApp.keyWindow,
+            userInfo: userInfo.isEmpty ? nil : userInfo
+        )
     }
 
     @IBAction func find(_ sender: Any) {
