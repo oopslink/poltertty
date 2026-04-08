@@ -16,3 +16,4 @@ make init-git-hooks
 - **Titlebar 定制**: 必须先阅读 [docs/rules/macos-titlebar-rules.md](docs/rules/macos-titlebar-rules.md)
 - **UI/UX 设计**: 必须遵循 [docs/rules/ui-ux-rules.md](docs/rules/ui-ux-rules.md) 原则
 - **Ctrl API 开发**: 必须遵循 [docs/rules/ctrl-api-rules.md](docs/rules/ctrl-api-rules.md) 规范
+- **快捷键分配**: 新增快捷键前必须先查阅 [docs/rules/keybindings-map.md](docs/rules/keybindings-map.md)，避免与 Zig 层或 App 层冲突

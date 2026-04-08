@@ -1217,7 +1217,7 @@ class AppDelegate: NSObject,
         let shellPopupItem = NSMenuItem(
             title: "Toggle Shell Popup",
             action: #selector(toggleShellPopup(_:)),
-            keyEquivalent: "i"
+            keyEquivalent: "h"
         )
         shellPopupItem.keyEquivalentModifierMask = [.command, .option]
         workspaceMenu.addItem(shellPopupItem)

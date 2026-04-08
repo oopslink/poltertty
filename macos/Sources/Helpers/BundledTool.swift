@@ -21,6 +21,7 @@ enum BundledTool {
     static let yaziPath: String = binDir.appendingPathComponent("yazi").path
     static let yaPath: String = binDir.appendingPathComponent("ya").path
     static let deltaPath: String = binDir.appendingPathComponent("delta").path
+    static let lazygitPath: String = binDir.appendingPathComponent("lazygit").path
     static let polterttyOpenPath: String = binDir.appendingPathComponent("poltertty-open").path
 
     /// PATH environment variable with bundled bin dir prepended

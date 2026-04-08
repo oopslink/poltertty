@@ -8,6 +8,7 @@ set -euo pipefail
 
 YAZI_VERSION="${YAZI_VERSION:-0.4.2}"
 DELTA_VERSION="${DELTA_VERSION:-0.18.2}"
+LAZYGIT_VERSION="${LAZYGIT_VERSION:-0.61.0}"
 CACHE_DIR="${PROJECT_DIR:-.}/.bundled-tools-cache"
 OUTPUT_DIR="${1:-macos/Resources/bin}"
 
@@ -38,8 +39,21 @@ if [ ! -f "$CACHE_DIR/delta-${DELTA_VERSION}" ] || [ ! -f "$OUTPUT_DIR/delta" ];
     touch "$CACHE_DIR/delta-${DELTA_VERSION}"
 fi
 
+# --- lazygit ---
+LAZYGIT_ARCHIVE="lazygit_${LAZYGIT_VERSION}_Darwin_arm64.tar.gz"
+LAZYGIT_URL="https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/${LAZYGIT_ARCHIVE}"
+if [ ! -f "$CACHE_DIR/lazygit-${LAZYGIT_VERSION}" ] || [ ! -f "$OUTPUT_DIR/lazygit" ]; then
+    echo "Downloading lazygit v${LAZYGIT_VERSION}..."
+    curl -fSL "$LAZYGIT_URL" -o "$CACHE_DIR/${LAZYGIT_ARCHIVE}"
+    mkdir -p "$CACHE_DIR/lazygit-extract-${LAZYGIT_VERSION}"
+    tar xzf "$CACHE_DIR/${LAZYGIT_ARCHIVE}" -C "$CACHE_DIR/lazygit-extract-${LAZYGIT_VERSION}"
+    cp "$CACHE_DIR/lazygit-extract-${LAZYGIT_VERSION}/lazygit" "$OUTPUT_DIR/lazygit"
+    chmod +x "$OUTPUT_DIR/lazygit"
+    touch "$CACHE_DIR/lazygit-${LAZYGIT_VERSION}"
+fi
+
 # --- ad-hoc code signing ---
-for bin in "$OUTPUT_DIR/yazi" "$OUTPUT_DIR/ya" "$OUTPUT_DIR/delta"; do
+for bin in "$OUTPUT_DIR/yazi" "$OUTPUT_DIR/ya" "$OUTPUT_DIR/delta" "$OUTPUT_DIR/lazygit"; do
     if [ -f "$bin" ]; then
         codesign --force --sign - "$bin" 2>/dev/null || true
     fi
