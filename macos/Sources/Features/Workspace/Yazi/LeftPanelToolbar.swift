@@ -87,7 +87,7 @@ struct LeftPanelToolbar: View {
     // at the AppDelegate/menu level — informational only.
     private func toolTabButton(tool: LeftPanelTool, icon: String, help: String) -> some View {
         let isActive = currentTool == tool
-        Button {
+        return Button {
             onSwitchTool(tool)
         } label: {
             Image(systemName: icon)
