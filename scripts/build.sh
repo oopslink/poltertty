@@ -51,6 +51,14 @@ if [[ "$MODE" == "dev" ]]; then
         rm -rf "$BUNDLE_YAZI_CFG"
         cp -r "$REPO_ROOT/macos/Resources/yazi-config" "$BUNDLE_YAZI_CFG"
 
+        # 同步 bin/（bundled tools：yazi, ya, delta, lazygit 等）
+        if [[ -d "$REPO_ROOT/macos/Resources/bin" ]]; then
+            echo "==> sync bin/"
+            BUNDLE_BIN="$ACTUAL_OUTPUT/Contents/Resources/bin"
+            mkdir -p "$BUNDLE_BIN"
+            cp -f "$REPO_ROOT/macos/Resources/bin/"* "$BUNDLE_BIN/"
+        fi
+
         # 编译 poltertty-cli 并放入 app bundle
         echo "==> swiftc poltertty-cli"
         CLI_SRC="$REPO_ROOT/macos/PolterttyCLI"
@@ -62,6 +70,7 @@ if [[ "$MODE" == "dev" ]]; then
             "$CLI_SRC/Commands/PrepareSessionCommand.swift" \
             "$CLI_SRC/Commands/HookCommand.swift" \
             "$CLI_SRC/Commands/ExtractFlagCommand.swift" \
+            "$CLI_SRC/Commands/BrowserCommand.swift" \
             -O -o "$CLI_DST"
         chmod 755 "$CLI_DST"
 
@@ -90,8 +99,15 @@ elif [[ "$MODE" == "release" ]]; then
     echo "==> xattr -cr (清除扩展属性，防止签名无效)"
     xattr -cr "$OUTPUT_DIR/Poltertty.app"
 
-    echo "==> codesign"
-    codesign --force --deep --sign - "$OUTPUT_DIR/Poltertty.app"
+    echo "==> codesign bin/ (仅签名新增的 bundled tools，保留 zig 构建的主签名)"
+    for bin in "$BUNDLE_BIN"/*; do
+        [ -f "$bin" ] && codesign --force --sign - "$bin" 2>/dev/null || true
+    done
+
+    echo "==> codesign app bundle (不用 --deep，避免覆盖 zig 构建嵌入的 Launch Constraints)"
+    codesign --force --sign - \
+        --entitlements "$REPO_ROOT/macos/GhosttyReleaseLocal.entitlements" \
+        "$OUTPUT_DIR/Poltertty.app"
 
     echo "==> done: $OUTPUT_DIR/Poltertty.app"
     "$OUTPUT_DIR/Poltertty.app/Contents/MacOS/ghostty" --version 2>&1 | grep "build mode\|version:"

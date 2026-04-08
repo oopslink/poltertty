@@ -190,7 +190,8 @@ class PopupOverlayManager {
             if let existing = lazygitSurface { return existing }
             var config = Ghostty.SurfaceConfiguration()
             config.workspaceId = workspaceId
-            config.command = "lazygit"
+            config.command = BundledTool.lazygitPath
+            config.environmentVariables = ["PATH": BundledTool.pathWithBundledBin]
             let surface = Ghostty.SurfaceView(ghostty.app!, baseConfig: config)
             lazygitSurface = surface
             observeExit(surface: surface, type: .lazygit)
