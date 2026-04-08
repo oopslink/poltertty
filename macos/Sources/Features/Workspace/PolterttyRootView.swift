@@ -8,6 +8,7 @@ extension Notification.Name {
     static let workspaceSidebarNavigateUp = Notification.Name("poltertty.workspaceSidebarNavigateUp")
     static let workspaceSidebarNavigateDown = Notification.Name("poltertty.workspaceSidebarNavigateDown")
     static let toggleFileBrowser = Notification.Name("poltertty.toggleFileBrowser")
+    static let toggleGitPanel = Notification.Name("poltertty.toggleGitPanel")
     static let toggleBrowserPanel = Notification.Name("poltertty.toggleBrowserPanel")
     static let openBrowserPanel = Notification.Name("poltertty.openBrowserPanel")
     static let openURLInBrowserPanel = Notification.Name("poltertty.openURLInBrowserPanel")
@@ -59,8 +60,10 @@ struct PolterttyRootView<TerminalContent: View>: View {
     @State private var convertName = ""
 
     @StateObject private var yaziStore = YaziSurfaceStore()
+    @StateObject private var lazygitStore = LazyGitSurfaceStore()
     @State private var panelVisible: Bool = false
     @State private var panelExpanded: Bool = false
+    @State private var leftPanelTool: LeftPanelTool = .yazi
     @State private var yaziPanelWidth: CGFloat = 260
     @GestureState private var panelWidthDelta: CGFloat = 0
 
@@ -213,15 +216,18 @@ struct PolterttyRootView<TerminalContent: View>: View {
                         Divider()
                     }
 
-                    // Yazi 文件管理面板
+                    // Left Panel（File Browser / Git）
                     if panelVisible {
-                        YaziPanelView(
+                        LeftPanelView(
                             workspaceId: workspaceId ?? standaloneId,
                             ghostty: ghostty,
                             yaziStore: yaziStore,
+                            lazygitStore: lazygitStore,
                             rootDir: currentWorkspaceRootDir,
                             worktreeMonitor: worktreeMonitor,
                             isExpanded: panelExpanded,
+                            currentTool: leftPanelTool,
+                            onSwitchTool: { tool in leftPanelTool = tool },
                             onToggleExpand: { panelExpanded.toggle() },
                             onClose: { panelVisible = false; panelExpanded = false }
                         )
@@ -379,10 +385,12 @@ struct PolterttyRootView<TerminalContent: View>: View {
             if let wsId = workspaceId, let ws = WorkspaceManager.shared.workspace(for: wsId) {
                 panelVisible = ws.panelVisible
                 yaziPanelWidth = ws.panelWidth
+                leftPanelTool = ws.leftPanelTool
                 browserPanelVisible = ws.browserPanelVisible
                 browserPanelWidth = ws.browserPanelWidth
             }
             WorkspaceManager.shared.yaziSurfaceStore = yaziStore
+            WorkspaceManager.shared.lazygitSurfaceStore = lazygitStore
             WorkspaceManager.shared.browserSurfaceStore = browserStore
             WorkspaceMetadataStore.shared.start()
         }
@@ -403,7 +411,26 @@ struct PolterttyRootView<TerminalContent: View>: View {
             agentMonitorVM.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleFileBrowser)) { _ in
-            panelVisible.toggle()
+            if !panelVisible {
+                panelVisible = true
+                leftPanelTool = .yazi
+            } else if leftPanelTool == .yazi {
+                panelVisible = false
+                panelExpanded = false
+            } else {
+                leftPanelTool = .yazi
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleGitPanel)) { _ in
+            if !panelVisible {
+                panelVisible = true
+                leftPanelTool = .lazygit
+            } else if leftPanelTool == .lazygit {
+                panelVisible = false
+                panelExpanded = false
+            } else {
+                leftPanelTool = .lazygit
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleBrowserPanel)) { notification in
             guard (notification.object as? UUID) == workspaceId else { return }
@@ -495,6 +522,12 @@ struct PolterttyRootView<TerminalContent: View>: View {
             guard let wsId = workspaceId else { return }
             guard var ws = WorkspaceManager.shared.workspace(for: wsId) else { return }
             ws.panelVisible = newValue
+            WorkspaceManager.shared.update(ws)
+        }
+        .onChange(of: leftPanelTool) { newValue in
+            guard let wsId = workspaceId else { return }
+            guard var ws = WorkspaceManager.shared.workspace(for: wsId) else { return }
+            ws.leftPanelTool = newValue
             WorkspaceManager.shared.update(ws)
         }
         .onChange(of: yaziPanelWidth) { newValue in
