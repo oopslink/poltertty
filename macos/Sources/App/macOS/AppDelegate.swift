@@ -1222,13 +1222,13 @@ class AppDelegate: NSObject,
         shellPopupItem.keyEquivalentModifierMask = [.command, .option]
         workspaceMenu.addItem(shellPopupItem)
 
-        let lazygitPopupItem = NSMenuItem(
-            title: "Toggle Lazygit Popup",
-            action: #selector(toggleLazygitPopup(_:)),
+        let gitPanelItem = NSMenuItem(
+            title: "Toggle Git Panel",
+            action: #selector(toggleGitPanel(_:)),
             keyEquivalent: "g"
         )
-        lazygitPopupItem.keyEquivalentModifierMask = [.command, .option]
-        workspaceMenu.addItem(lazygitPopupItem)
+        gitPanelItem.keyEquivalentModifierMask = [.command, .option]
+        workspaceMenu.addItem(gitPanelItem)
 
         let workspaceMenuItem = NSMenuItem(title: "Workspace", action: nil, keyEquivalent: "")
         workspaceMenuItem.submenu = workspaceMenu
@@ -1329,10 +1329,9 @@ class AppDelegate: NSObject,
         tc.toggleShellPopup(sender)
     }
 
-    @objc func toggleLazygitPopup(_ sender: Any?) {
+    @objc func toggleGitPanel(_ sender: Any?) {
         let targetWindow = NSApp.keyWindow?.parent ?? NSApp.keyWindow
-        guard let tc = targetWindow?.windowController as? TerminalController else { return }
-        tc.toggleLazygitPopup(sender)
+        NotificationCenter.default.post(name: .toggleGitPanel, object: targetWindow)
     }
 
     @objc func toggleAgentMonitor(_ sender: Any?) {
