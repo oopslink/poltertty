@@ -144,10 +144,11 @@ class WorkspaceManager: ObservableObject {
 
         // Clean up window tracking and workspace list
         let tempIds = tempWorkspaces.map { $0.id }
+        let lazygitStore = lazygitSurfaceStore
         for id in tempIds {
             activeWindows.removeValue(forKey: id)
             yaziSurfaceStore?.removeSurface(for: id)
-            lazygitSurfaceStore?.removeSurface(for: id)
+            Task { @MainActor in lazygitStore?.removeSurface(for: id) }
         }
         let browserStore = browserSurfaceStore
         Task { @MainActor in
@@ -188,7 +189,8 @@ class WorkspaceManager: ObservableObject {
         workspaces.removeAll { $0.id == id }
         activeWindows.removeValue(forKey: id)
         yaziSurfaceStore?.removeSurface(for: id)
-        lazygitSurfaceStore?.removeSurface(for: id)
+        let lazygitStore = lazygitSurfaceStore
+        Task { @MainActor in lazygitStore?.removeSurface(for: id) }
         let browserStore = browserSurfaceStore
         Task { @MainActor in browserStore?.removeManager(for: id) }
         let dirPath = workspaceDir(for: id)

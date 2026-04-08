@@ -17,7 +17,7 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
     var isTemporary: Bool
     var panelVisible: Bool = false
     var panelWidth: CGFloat = 260
-    var leftPanelTool: String = "yazi"
+    var leftPanelTool: LeftPanelTool = .yazi
     var browserPanelVisible: Bool = false
     var browserPanelWidth: CGFloat = 400
     var browserTabSnapshots: [BrowserTabSnapshot]?
@@ -80,7 +80,7 @@ struct WorkspaceModel: Codable, Identifiable, Equatable {
         isTemporary = try container.decodeIfPresent(Bool.self, forKey: .isTemporary) ?? false
         panelVisible = try container.decodeIfPresent(Bool.self, forKey: .panelVisible) ?? false
         panelWidth = try container.decodeIfPresent(CGFloat.self, forKey: .panelWidth) ?? 260
-        leftPanelTool = try container.decodeIfPresent(String.self, forKey: .leftPanelTool) ?? "yazi"
+        leftPanelTool = try container.decodeIfPresent(LeftPanelTool.self, forKey: .leftPanelTool) ?? .yazi
         browserPanelVisible = try container.decodeIfPresent(Bool.self, forKey: .browserPanelVisible) ?? false
         browserPanelWidth = try container.decodeIfPresent(CGFloat.self, forKey: .browserPanelWidth) ?? 400
         browserTabSnapshots = try container.decodeIfPresent([BrowserTabSnapshot].self, forKey: .browserTabSnapshots)

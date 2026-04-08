@@ -1,4 +1,4 @@
-// macos/Sources/Features/Workspace/Yazi/YaziPanelView.swift
+// macos/Sources/Features/Workspace/Yazi/LeftPanelView.swift
 import SwiftUI
 
 struct LeftPanelView: View {

@@ -1,7 +1,7 @@
 // macos/Sources/Features/Workspace/Yazi/LeftPanelToolbar.swift
 import SwiftUI
 
-enum LeftPanelTool: String, Equatable {
+enum LeftPanelTool: String, Equatable, Codable {
     case yazi
     case lazygit
 }
