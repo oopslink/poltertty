@@ -411,26 +411,11 @@ struct PolterttyRootView<TerminalContent: View>: View {
             agentMonitorVM.toggle()
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleFileBrowser)) { _ in
-            if !panelVisible {
-                panelVisible = true
-                leftPanelTool = .yazi
-            } else if leftPanelTool == .yazi {
-                panelVisible = false
-                panelExpanded = false
-            } else {
-                leftPanelTool = .yazi
-            }
+            handleToggleLeftPanel(for: .yazi)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleGitPanel)) { _ in
-            if !panelVisible {
-                panelVisible = true
-                leftPanelTool = .lazygit
-            } else if leftPanelTool == .lazygit {
-                panelVisible = false
-                panelExpanded = false
-            } else {
-                leftPanelTool = .lazygit
-            }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleGitPanel)) { notification in
+            guard notification.object as? NSWindow == windowProvider() else { return }
+            handleToggleLeftPanel(for: .lazygit)
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleBrowserPanel)) { notification in
             guard (notification.object as? UUID) == workspaceId else { return }
@@ -555,6 +540,18 @@ struct PolterttyRootView<TerminalContent: View>: View {
             WorkspaceManager.shared.update(ws)
         }
         // 删除所有 workspace 后保持 terminal 模式（不跳 onboarding），用户可通过侧边栏重新创建
+    }
+
+    private func handleToggleLeftPanel(for tool: LeftPanelTool) {
+        if !panelVisible {
+            panelVisible = true
+            leftPanelTool = tool
+        } else if leftPanelTool == tool {
+            panelVisible = false
+            panelExpanded = false
+        } else {
+            leftPanelTool = tool
+        }
     }
 
     private func navigateWorkspace(direction: Int) {
