@@ -49,6 +49,8 @@ class YaziSurfaceStore: ObservableObject {
             "YAZI_DELTA_PATH": BundledTool.deltaPath,
             "PATH": BundledTool.pathWithBundledBin,
             "YAZI_ROOT_DIR": rootDir,
+            // init.lua 用此值将 YAZI_ID 写入临时文件，供 cdToDirectory 读取
+            "POLTERTTY_WS_ID": workspaceId.uuidString,
         ]
 
         let surface = Ghostty.SurfaceView(app, baseConfig: config)
@@ -61,13 +63,20 @@ class YaziSurfaceStore: ObservableObject {
         surfaces.removeValue(forKey: workspaceId)
     }
 
-    /// Notify yazi to change directory via ya pub-sub IPC.
+    /// 通知 yazi 切换到指定目录。
+    /// 通过 `ya emit-to <YAZI_ID> cd <path>` 精准定位目标实例。
+    /// YAZI_ID 由 init.lua 在 yazi 启动时写入 /tmp/poltertty-yazi-<wsId>.id。
     func cdToDirectory(_ workspaceId: UUID, path: String) {
         guard surfaces[workspaceId] != nil else { return }
 
+        let idFile = "/tmp/poltertty-yazi-\(workspaceId.uuidString).id"
+        guard let yaziId = try? String(contentsOfFile: idFile, encoding: .utf8)
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              !yaziId.isEmpty else { return }
+
         let task = Process()
         task.executableURL = URL(fileURLWithPath: BundledTool.yaPath)
-        task.arguments = ["pub", "dds-cd", "--str", path]
+        task.arguments = ["emit-to", yaziId, "cd", path]
         task.standardOutput = FileHandle.nullDevice
         task.standardError = FileHandle.nullDevice
         try? task.run()
