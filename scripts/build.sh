@@ -99,15 +99,9 @@ elif [[ "$MODE" == "release" ]]; then
     echo "==> xattr -cr (清除扩展属性，防止签名无效)"
     xattr -cr "$OUTPUT_DIR/Poltertty.app"
 
-    echo "==> codesign bin/ (仅签名新增的 bundled tools，保留 zig 构建的主签名)"
-    for bin in "$BUNDLE_BIN"/*; do
-        [ -f "$bin" ] && codesign --force --sign - "$bin" 2>/dev/null || true
-    done
-
-    echo "==> codesign app bundle (不用 --deep，避免覆盖 zig 构建嵌入的 Launch Constraints)"
-    codesign --force --sign - \
-        --entitlements "$REPO_ROOT/macos/GhosttyReleaseLocal.entitlements" \
-        "$OUTPUT_DIR/Poltertty.app"
+    # zig build 已经以 ad-hoc 方式签名了整个 app bundle。
+    # 向 Resources/bin/ 追加文件后，不重签名——dev 模式同样不重签且能运行，
+    # 重签（即使不加 --deep）会破坏 zig 嵌入的 Launch Constraints。
 
     echo "==> done: $OUTPUT_DIR/Poltertty.app"
     "$OUTPUT_DIR/Poltertty.app/Contents/MacOS/ghostty" --version 2>&1 | grep "build mode\|version:"

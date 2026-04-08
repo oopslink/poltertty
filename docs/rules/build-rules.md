@@ -321,7 +321,7 @@ LIBRARY_SEARCH_PATHS = ("$(PROJECT_DIR)/vendor/<lib>/lib");
 | 2026-03-25 | Release 链接 `_libssh2_exit` 未找到 | libgit2 编译时启用了 SSH，未 vendor libssh2 | 重新编译 libgit2，`-DUSE_SSH=OFF` |
 | 2026-03-25 | Release 链接 `_iconv_open` 相关 | libgit2 依赖 iconv，但 Xcode 未加 `-liconv` | project.pbxproj 全配置加 `-liconv` |
 | 2026-03-25 | Release 架构报错 | libgit2.a 仅 arm64，但未限制 ARCHS | project.pbxproj ReleaseLocal 加 `ARCHS=arm64` |
-| 2026-04-08 | Release 构建后 Launch Constraint Violation | `codesign --deep` 覆盖了 zig 嵌入的 Launch Constraints | 去掉 `--deep`，只签名 bin/ 下新增文件，再更新 bundle 顶层签名 |
+| 2026-04-08 | Release 构建后 Launch Constraint Violation | zig 签名后对 bundle 做任何 codesign 都会破坏 Launch Constraints | 完全去掉 codesign 步骤，只做 xattr -cr |
 
 ---
 
@@ -530,29 +530,26 @@ log show --predicate 'process == "Poltertty"' --last 5m
 
 `build.sh` 在 zig/xcodebuild 完成后，将 bundled tools（yazi/delta/lazygit 等）复制进 app bundle，然后对整个 bundle 重签名。
 
-**关键约束：重签名时绝对不能使用 `--deep`。**
+**关键约束：复制完 bin/ 后，绝对不能对 app bundle 做任何 codesign 操作。**
 
-`codesign --deep` 会递归重签名所有嵌套组件，包括 zig/xcodebuild 已签名的主可执行文件和 Frameworks。这会覆盖 zig 构建时嵌入的 Launch Constraints（macOS 13+ 的安全特性），导致 OS 拒绝启动。
+zig/xcodebuild 已以 ad-hoc 方式签名了整个 bundle，包括嵌入的 Launch Constraints。任何形式的重签名（无论是否加 `--deep`）都会破坏这些 Launch Constraints，导致 launchd 拒绝启动 app。
 
-**正确的重签名方式：**
+macOS 对 ad-hoc 签名的 app 允许在 `Resources/` 下追加文件而不重签名（dev 模式同样如此且能正常运行）。
+
+**正确做法：**
 
 ```bash
-# 1. 只签名新增的 bin/ 文件（不影响主 binary）
-for bin in "$BUNDLE_BIN"/*; do
-    [ -f "$bin" ] && codesign --force --sign - "$bin" 2>/dev/null || true
-done
-
-# 2. 更新 bundle 顶层签名（不加 --deep）
-codesign --force --sign - \
-    --entitlements macos/GhosttyReleaseLocal.entitlements \
-    Poltertty.app
+# 只清除扩展属性，不做任何 codesign
+xattr -cr Poltertty.app
+# 不需要任何 codesign 步骤
 ```
 
 **错误写法（禁止）：**
 
 ```bash
-# ❌ --deep 会覆盖 zig 嵌入的 Launch Constraints，导致 Launch Constraint Violation
+# ❌ 任何形式的重签名都会破坏 Launch Constraints
 codesign --force --deep --sign - Poltertty.app
+codesign --force --sign - Poltertty.app
 ```
 
 **诊断步骤：**
@@ -564,15 +561,7 @@ ls -t ~/Library/Logs/DiagnosticReports/ | grep ghostty | head -3
 # 2. 确认是 Launch Constraint Violation
 grep '"exception"\|"indicator"' ~/Library/Logs/DiagnosticReports/<latest>.ips
 
-# 3. 手动重签名验证（不需要重新完整构建）
-APP=macos/build/ReleaseLocal/Poltertty.app
-xattr -cr "$APP"
-for bin in "$APP/Contents/Resources/bin/"*; do
-    [ -f "$bin" ] && codesign --force --sign - "$bin" 2>/dev/null || true
-done
-codesign --force --sign - \
-    --entitlements macos/GhosttyReleaseLocal.entitlements \
-    "$APP"
+# 3. 修复：去掉 codesign 步骤，重新 make release
 ```
 
 ---
