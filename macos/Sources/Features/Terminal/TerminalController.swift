@@ -2592,10 +2592,6 @@ extension TerminalController {
         popupOverlayManager?.toggle(.shell)
     }
 
-    @objc func toggleLazygitPopup(_ sender: Any?) {
-        popupOverlayManager?.toggle(.lazygit)
-    }
-
     /// 启动 Agent 菜单（Cmd+Shift+A 触发）
     @objc func launchAgentAction() {
         guard let workspaceId = self.workspaceId,
