@@ -99,6 +99,8 @@ struct LeftPanelToolbar: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .accessibilityLabel(help)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
     private var layoutIcon: String {
