@@ -1330,7 +1330,7 @@ class AppDelegate: NSObject,
     }
 
     @objc func toggleGitPanel(_ sender: Any?) {
-        let targetWindow = NSApp.keyWindow?.parent ?? NSApp.keyWindow
+        guard let targetWindow = NSApp.keyWindow?.parent ?? NSApp.keyWindow else { return }
         NotificationCenter.default.post(name: .toggleGitPanel, object: targetWindow)
     }
 
