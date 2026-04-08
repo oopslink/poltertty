@@ -1,4 +1,4 @@
-// macos/Sources/Features/Workspace/Yazi/YaziPanelToolbar.swift
+// macos/Sources/Features/Workspace/Yazi/LeftPanelToolbar.swift
 import SwiftUI
 
 enum LeftPanelTool: String, Equatable {
@@ -83,7 +83,8 @@ struct LeftPanelToolbar: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
-    @ViewBuilder
+    // Note: The keyboard shortcuts shown in help text (⌥⌘F / ⌥⌘G) are handled
+    // at the AppDelegate/menu level — informational only.
     private func toolTabButton(tool: LeftPanelTool, icon: String, help: String) -> some View {
         let isActive = currentTool == tool
         Button {
@@ -94,7 +95,7 @@ struct LeftPanelToolbar: View {
                 .foregroundStyle(isActive ? Color(nsColor: .controlAccentColor) : .secondary)
                 .frame(width: 28, height: 28)
                 .background(isActive ? Color(nsColor: .controlAccentColor).opacity(0.15) : Color.clear)
-                .cornerRadius(5)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
         }
         .buttonStyle(.plain)
         .help(help)
@@ -141,6 +142,9 @@ struct LeftPanelToolbar: View {
                             ? (worktrees.first(where: { $0.isMain })?.path ?? currentRootDir)
                             : wt.path
                         if let wsId = workspaceId {
+                            // Always cd Yazi even when lazygit is active — Yazi tracks
+                            // the active directory in background. LazyGit opens in rootDir
+                            // at creation time and does not need dynamic cd.
                             yaziStore.cdToDirectory(wsId, path: targetPath)
                         }
                     } label: {
