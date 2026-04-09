@@ -6,7 +6,7 @@ set -euo pipefail
 # Note: Downloads aarch64 (Apple Silicon) binaries only.
 # yazi does not publish universal macOS binaries. x86_64 Macs are not supported.
 
-YAZI_VERSION="${YAZI_VERSION:-0.4.2}"
+YAZI_VERSION="${YAZI_VERSION:-26.1.22}"
 DELTA_VERSION="${DELTA_VERSION:-0.18.2}"
 LAZYGIT_VERSION="${LAZYGIT_VERSION:-0.61.0}"
 CACHE_DIR="${PROJECT_DIR:-.}/.bundled-tools-cache"

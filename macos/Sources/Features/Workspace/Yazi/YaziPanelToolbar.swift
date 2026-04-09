@@ -51,7 +51,7 @@ struct YaziPanelToolbar: View {
                     yaziStore.cycleRatio(for: wsId)
                 }
             } label: {
-                Image(systemName: "rectangle.3.group")
+                Image(systemName: layoutIcon)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
@@ -75,6 +75,12 @@ struct YaziPanelToolbar: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var layoutIcon: String {
+        guard let wsId = workspaceId else { return "rectangle.split.2x1" }
+        let label = yaziStore.ratioLabel(for: wsId)
+        return label == "Preview" ? "rectangle.split.2x1" : "rectangle"
     }
 
     private var layoutHelp: String {
