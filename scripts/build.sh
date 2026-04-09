@@ -96,6 +96,21 @@ elif [[ "$MODE" == "release" ]]; then
     mkdir -p "$BUNDLE_BIN"
     cp -f "$REPO_ROOT/macos/Resources/bin/"* "$BUNDLE_BIN/"
 
+    # 编译 poltertty-cli 并放入 app bundle
+    echo "==> swiftc poltertty-cli"
+    CLI_SRC="$REPO_ROOT/macos/PolterttyCLI"
+    CLI_DST="$OUTPUT_DIR/Poltertty.app/Contents/Resources/poltertty-cli"
+    swiftc \
+        "$CLI_SRC/main.swift" \
+        "$CLI_SRC/Utils.swift" \
+        "$CLI_SRC/Commands/PingCommand.swift" \
+        "$CLI_SRC/Commands/PrepareSessionCommand.swift" \
+        "$CLI_SRC/Commands/HookCommand.swift" \
+        "$CLI_SRC/Commands/ExtractFlagCommand.swift" \
+        "$CLI_SRC/Commands/BrowserCommand.swift" \
+        -O -o "$CLI_DST"
+    chmod 755 "$CLI_DST"
+
     echo "==> xattr -cr (清除扩展属性，防止签名无效)"
     xattr -cr "$OUTPUT_DIR/Poltertty.app"
 
