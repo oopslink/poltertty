@@ -38,7 +38,7 @@ struct KeyboardShortcutsPanelView: View {
                             ShortcutItem("切换 Sidebar", "⌥⌘P"),
                             ShortcutItem("切换 File Browser", "⌥⌘F"),
                             ShortcutItem("Shell Popup", "⌥⌘J"),
-                            ShortcutItem("Lazygit Popup", "⌥⌘G"),
+                            ShortcutItem("Git Panel", "⌥⌘G"),
                         ])
                         ShortcutGroup(title: "Command Palette", items: [
                             ShortcutItem("Command Palette", "⌘⇧P"),

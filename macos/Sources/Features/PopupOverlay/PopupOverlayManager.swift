@@ -1,16 +1,14 @@
 import Cocoa
 import SwiftUI
 
-/// 管理 shell / lazygit 两种 popup 的生命周期。
+/// 管理 shell popup 的生命周期。
 /// - 关闭只是 orderOut，进程继续保留（会话保留语义）
 /// - 进程自然退出时销毁窗口和 surface，下次 toggle 重建
-/// - 同一时刻只显示一个 popup（互斥）
 @MainActor
 class PopupOverlayManager {
 
     enum PopupType {
         case shell
-        case lazygit
     }
 
     private let ghostty: Ghostty.App
@@ -18,16 +16,12 @@ class PopupOverlayManager {
     private let workspaceId: UUID?
 
     private var shellSurface: Ghostty.SurfaceView?
-    private var lazygitSurface: Ghostty.SurfaceView?
-
     private var shellPopupWindow: PopupOverlayWindow?
-    private var lazygitPopupWindow: PopupOverlayWindow?
 
     /// 打开 popup 前记录的 firstResponder，关闭时归还
     private weak var previousFirstResponder: NSResponder?
 
     private var shellExitObserver: (any NSObjectProtocol)?
-    private var lazygitExitObserver: (any NSObjectProtocol)?
 
     /// Local event monitor，用于捕获 ESC 键以关闭 shell popup
     private var escapeEventMonitor: Any?
@@ -49,9 +43,6 @@ class PopupOverlayManager {
         if let token = shellExitObserver {
             NotificationCenter.default.removeObserver(token)
         }
-        if let token = lazygitExitObserver {
-            NotificationCenter.default.removeObserver(token)
-        }
         if let monitor = escapeEventMonitor {
             NSEvent.removeMonitor(monitor)
         }
@@ -62,15 +53,12 @@ class PopupOverlayManager {
     private func setupEscapeMonitor() {
         escapeEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
-            // keyCode 53 = Escape
             guard event.keyCode == 53 else { return event }
-            // 仅当 shell popup 可见时拦截（lazygit 的 ESC 透传给进程）
             if self.isVisible(self.shellPopupWindow), let popupWin = self.shellPopupWindow {
-                // popup 窗口或父窗口是 key window 时均拦截
                 let keyWin = NSApp.keyWindow
                 if keyWin === popupWin || keyWin === self.parentWindow {
                     self.dismiss(popupWin)
-                    return nil  // 吞掉事件，不传给 SurfaceView
+                    return nil
                 }
             }
             return event
@@ -88,7 +76,7 @@ class PopupOverlayManager {
         let originY = parent.frame.origin.y + contentRect.origin.y + (contentRect.height - popupHeight) / 2
         let newFrame = NSRect(x: originX, y: originY, width: popupWidth, height: popupHeight)
 
-        [shellPopupWindow, lazygitPopupWindow].compactMap { $0 }.filter { $0.isVisible }.forEach { popup in
+        if let popup = shellPopupWindow, popup.isVisible {
             popup.setFrame(newFrame, display: true)
         }
     }
@@ -101,35 +89,19 @@ class PopupOverlayManager {
             if isVisible(shellPopupWindow) {
                 dismiss(shellPopupWindow)
             } else {
-                dismissOther(than: .shell)
                 show(type: .shell)
-            }
-        case .lazygit:
-            if isVisible(lazygitPopupWindow) {
-                dismiss(lazygitPopupWindow)
-            } else {
-                dismissOther(than: .lazygit)
-                show(type: .lazygit)
             }
         }
     }
 
     func dismissAll() {
         dismiss(shellPopupWindow)
-        dismiss(lazygitPopupWindow)
     }
 
     // MARK: - Private helpers
 
     private func isVisible(_ window: PopupOverlayWindow?) -> Bool {
         window?.isVisible ?? false
-    }
-
-    private func dismissOther(than type: PopupType) {
-        switch type {
-        case .shell:    dismiss(lazygitPopupWindow)
-        case .lazygit:  dismiss(shellPopupWindow)
-        }
     }
 
     private func show(type: PopupType) {
@@ -180,21 +152,9 @@ class PopupOverlayManager {
             if let existing = shellSurface { return existing }
             var config = Ghostty.SurfaceConfiguration()
             config.workspaceId = workspaceId
-            // command = nil → 使用默认 shell
             let surface = Ghostty.SurfaceView(ghostty.app!, baseConfig: config)
             shellSurface = surface
             observeExit(surface: surface, type: .shell)
-            return surface
-
-        case .lazygit:
-            if let existing = lazygitSurface { return existing }
-            var config = Ghostty.SurfaceConfiguration()
-            config.workspaceId = workspaceId
-            config.command = BundledTool.lazygitPath
-            config.environmentVariables = ["PATH": BundledTool.pathWithBundledBin]
-            let surface = Ghostty.SurfaceView(ghostty.app!, baseConfig: config)
-            lazygitSurface = surface
-            observeExit(surface: surface, type: .lazygit)
             return surface
         }
     }
@@ -206,17 +166,11 @@ class PopupOverlayManager {
             let win = makeWindow(surface: surface, type: type)
             shellPopupWindow = win
             return win
-        case .lazygit:
-            if let existing = lazygitPopupWindow { return existing }
-            let win = makeWindow(surface: surface, type: type)
-            lazygitPopupWindow = win
-            return win
         }
     }
 
     private func makeWindow(surface: Ghostty.SurfaceView, type: PopupType) -> PopupOverlayWindow {
         let win = PopupOverlayWindow()
-        // SurfaceWrapper 签名：SurfaceWrapper(surfaceView:)，需要注入 ghostty 环境对象
         let hostingView = NSHostingView(
             rootView: Ghostty.SurfaceWrapper(surfaceView: surface)
                 .environmentObject(ghostty)
@@ -233,14 +187,12 @@ class PopupOverlayManager {
     }
 
     private func observeExit(surface: Ghostty.SurfaceView, type: PopupType) {
-        // ghosttyCloseSurface 在 libghostty 进程退出时（processAlive=false）发出
         let token = NotificationCenter.default.addObserver(
             forName: Ghostty.Notification.ghosttyCloseSurface,
             object: surface,
             queue: .main
         ) { [weak self] notification in
             guard let self else { return }
-            // 仅在进程已退出时销毁（processAlive=false），保持会话保留语义
             let processAlive = notification.userInfo?["process_alive"] as? Bool ?? false
             guard !processAlive else { return }
 
@@ -253,19 +205,10 @@ class PopupOverlayManager {
                 self.shellPopupWindow?.close()
                 self.shellPopupWindow = nil
                 self.shellSurface = nil
-            case .lazygit:
-                if let token = self.lazygitExitObserver {
-                    NotificationCenter.default.removeObserver(token)
-                    self.lazygitExitObserver = nil
-                }
-                self.lazygitPopupWindow?.close()
-                self.lazygitPopupWindow = nil
-                self.lazygitSurface = nil
             }
         }
         switch type {
-        case .shell:    shellExitObserver = token
-        case .lazygit:  lazygitExitObserver = token
+        case .shell: shellExitObserver = token
         }
     }
 }

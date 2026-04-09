@@ -14,6 +14,9 @@ class WorkspaceManager: ObservableObject {
     /// PolterttyRootView 创建 yazi store 后注入此引用（用于 delete 时清理 surface）
     weak var yaziSurfaceStore: YaziSurfaceStore?
 
+    /// PolterttyRootView 创建 lazygit store 后注入此引用（用于 delete 时清理 surface）
+    weak var lazygitSurfaceStore: LazyGitSurfaceStore?
+
     /// PolterttyRootView 创建 browserStore 后注入此引用（供 CtrlToolHandler Agent API 使用）
     weak var browserSurfaceStore: BrowserSurfaceStore?
 
@@ -141,9 +144,11 @@ class WorkspaceManager: ObservableObject {
 
         // Clean up window tracking and workspace list
         let tempIds = tempWorkspaces.map { $0.id }
+        let lazygitStore = lazygitSurfaceStore
         for id in tempIds {
             activeWindows.removeValue(forKey: id)
             yaziSurfaceStore?.removeSurface(for: id)
+            Task { @MainActor in lazygitStore?.removeSurface(for: id) }
         }
         let browserStore = browserSurfaceStore
         Task { @MainActor in
@@ -184,6 +189,8 @@ class WorkspaceManager: ObservableObject {
         workspaces.removeAll { $0.id == id }
         activeWindows.removeValue(forKey: id)
         yaziSurfaceStore?.removeSurface(for: id)
+        let lazygitStore = lazygitSurfaceStore
+        Task { @MainActor in lazygitStore?.removeSurface(for: id) }
         let browserStore = browserSurfaceStore
         Task { @MainActor in browserStore?.removeManager(for: id) }
         let dirPath = workspaceDir(for: id)

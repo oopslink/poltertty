@@ -1,25 +1,29 @@
-// macos/Sources/Features/Workspace/Yazi/YaziPanelToolbar.swift
+// macos/Sources/Features/Workspace/Yazi/LeftPanelToolbar.swift
 import SwiftUI
 
-struct YaziPanelToolbar: View {
+enum LeftPanelTool: String, Equatable, Codable {
+    case yazi
+    case lazygit
+}
+
+struct LeftPanelToolbar: View {
     @ObservedObject var yaziStore: YaziSurfaceStore
     var workspaceId: UUID?
     var worktreeMonitor: GitWorktreeMonitor?
     var currentRootDir: String
     var isExpanded: Bool = false
+    var currentTool: LeftPanelTool
+    var onSwitchTool: (LeftPanelTool) -> Void
     var onToggleExpand: () -> Void = {}
     var onClose: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
-            Image(systemName: "folder")
-                .font(.system(size: 14))
-                .foregroundStyle(Color(nsColor: .controlAccentColor))
-                .frame(width: 28, height: 28)
-                .background(Color(nsColor: .controlAccentColor).opacity(0.15))
-                .cornerRadius(5)
+            // Tool tabs: File Browser | Git
+            toolTabButton(tool: .yazi, icon: "folder", help: "File Browser (⌥⌘F)")
+            toolTabButton(tool: .lazygit, icon: "arrow.triangle.branch", help: "Git (⌥⌘G)")
 
-            // Worktree selector
+            // Worktree selector (shared for both tools)
             if let monitor = worktreeMonitor, !monitor.worktrees.isEmpty {
                 Rectangle()
                     .fill(Color.primary.opacity(0.12))
@@ -30,13 +34,13 @@ struct YaziPanelToolbar: View {
 
             Spacer()
 
-            // Expand / collapse button
+            // Expand / collapse button (both tools)
             Button {
                 onToggleExpand()
             } label: {
                 Image(systemName: isExpanded
-                      ? "arrow.down.right.and.arrow.up.left"       // 已展开 → 点击收起
-                      : "arrow.up.left.and.arrow.down.right")      // 未展开 → 点击铺满
+                      ? "arrow.down.right.and.arrow.up.left"
+                      : "arrow.up.left.and.arrow.down.right")
                     .font(.system(size: 11))
                     .foregroundStyle(isExpanded ? Color(nsColor: .controlAccentColor) : .secondary)
                     .frame(width: 28, height: 28)
@@ -45,20 +49,22 @@ struct YaziPanelToolbar: View {
             .help(isExpanded ? "Collapse Panel (⌥⌘O)" : "Expand to Full Width (⌥⌘O)")
             .keyboardShortcut("o", modifiers: [.option, .command])
 
-            // Layout ratio cycle button
-            Button {
-                if let wsId = workspaceId {
-                    yaziStore.cycleRatio(for: wsId)
+            // Layout ratio cycle button (Yazi only)
+            if currentTool == .yazi {
+                Button {
+                    if let wsId = workspaceId {
+                        yaziStore.cycleRatio(for: wsId)
+                    }
+                } label: {
+                    Image(systemName: layoutIcon)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
                 }
-            } label: {
-                Image(systemName: layoutIcon)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
+                .buttonStyle(.plain)
+                .help(layoutHelp + " (⌥⌘L)")
+                .keyboardShortcut("l", modifiers: [.option, .command])
             }
-            .buttonStyle(.plain)
-            .help(layoutHelp + " (⌥⌘L)")
-            .keyboardShortcut("l", modifiers: [.option, .command])
 
             // Close panel button
             Button {
@@ -75,6 +81,26 @@ struct YaziPanelToolbar: View {
         .padding(.horizontal, 6)
         .padding(.vertical, 3)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    // Note: The keyboard shortcuts shown in help text (⌥⌘F / ⌥⌘G) are handled
+    // at the AppDelegate/menu level — informational only.
+    private func toolTabButton(tool: LeftPanelTool, icon: String, help: String) -> some View {
+        let isActive = currentTool == tool
+        return Button {
+            onSwitchTool(tool)
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 13))
+                .foregroundStyle(isActive ? Color(nsColor: .controlAccentColor) : .secondary)
+                .frame(width: 28, height: 28)
+                .background(isActive ? Color(nsColor: .controlAccentColor).opacity(0.15) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
     private var layoutIcon: String {
@@ -118,6 +144,9 @@ struct YaziPanelToolbar: View {
                             ? (worktrees.first(where: { $0.isMain })?.path ?? currentRootDir)
                             : wt.path
                         if let wsId = workspaceId {
+                            // Always cd Yazi even when lazygit is active — Yazi tracks
+                            // the active directory in background. LazyGit opens in rootDir
+                            // at creation time and does not need dynamic cd.
                             yaziStore.cdToDirectory(wsId, path: targetPath)
                         }
                     } label: {
