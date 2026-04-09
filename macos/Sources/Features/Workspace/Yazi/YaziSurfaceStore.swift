@@ -11,8 +11,8 @@ class YaziSurfaceStore: ObservableObject {
     // MARK: - Ratio presets [parent, current, preview]
 
     static let ratioPresets: [(label: String, ratio: [Int])] = [
-        (label: "Wide",     ratio: [0, 1, 3]),
-        (label: "Focus",    ratio: [0, 1, 0]),
+        (label: "Preview", ratio: [0, 2, 3]),
+        (label: "Focus",   ratio: [0, 1, 0]),
     ]
 
     func ratioLabel(for workspaceId: UUID) -> String {
