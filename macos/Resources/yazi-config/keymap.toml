@@ -1,12 +1,12 @@
 # macos/Resources/yazi-config/keymap.toml
 
-[[manager.keymap]]
+[[mgr.prepend_keymap]]
 on   = [ "<Enter>" ]
 run  = "open"
 desc = "Open file in Poltertty tab"
 
 # 拦截向上导航，防止离开 workspace 根目录
-[[manager.prepend_keymap]]
+[[mgr.prepend_keymap]]
 on   = [ "h" ]
 run  = "plugin restrict-nav"
 desc = "Go to parent (restricted to workspace root)"

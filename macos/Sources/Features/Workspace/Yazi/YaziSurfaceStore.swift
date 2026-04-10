@@ -11,7 +11,7 @@ class YaziSurfaceStore: ObservableObject {
     // MARK: - Ratio presets [parent, current, preview]
 
     static let ratioPresets: [(label: String, ratio: [Int])] = [
-        (label: "Preview", ratio: [0, 2, 3]),
+        (label: "Preview", ratio: [0, 1, 3]),
         (label: "Focus",   ratio: [0, 1, 0]),
     ]
 
@@ -110,7 +110,7 @@ class YaziSurfaceStore: ObservableObject {
                 of: #"ratio = \[.*?\]"#, with: ratioLine, options: .regularExpression)
         } else {
             patched = bundledToml.replacingOccurrences(
-                of: "[manager]", with: "[manager]\n\(ratioLine)")
+                of: "[mgr]", with: "[mgr]\n\(ratioLine)")
         }
 
         do {

@@ -1,12 +1,7 @@
 # macos/Resources/yazi-config/yazi.toml
 
-[manager]
-ratio = [0, 2, 3]
-show_hidden = false
-sort_by = "natural"
-sort_sensitive = false
-sort_reverse = false
-sort_dir_first = true
+[mgr]
+ratio = [0, 1, 3]
 
 [preview]
 wrap = "yes"
