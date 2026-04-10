@@ -17,3 +17,4 @@ make init-git-hooks
 - **UI/UX 设计**: 必须遵循 [docs/rules/ui-ux-rules.md](docs/rules/ui-ux-rules.md) 原则
 - **Ctrl API 开发**: 必须遵循 [docs/rules/ctrl-api-rules.md](docs/rules/ctrl-api-rules.md) 规范
 - **快捷键分配**: 新增快捷键前必须先查阅 [docs/rules/keybindings-map.md](docs/rules/keybindings-map.md)，避免与 Zig 层或 App 层冲突
+- **Yazi 配置**: 修改 yazi 配置或插件前必须先阅读 [docs/rules/yazi-config-rules.md](docs/rules/yazi-config-rules.md)（v26.x 有大量 breaking changes）
