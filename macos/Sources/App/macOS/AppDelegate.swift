@@ -1240,6 +1240,9 @@ class AppDelegate: NSObject,
         launchAgent.keyEquivalentModifierMask = [.command, .option]
         agentMenu.addItem(launchAgent)
 
+        let manageSkills = NSMenuItem(title: "Manage Skills…", action: #selector(showManageSkills(_:)), keyEquivalent: "")
+        agentMenu.addItem(manageSkills)
+
         agentMenu.addItem(.separator())
 
         // Observability 子菜单
@@ -1346,6 +1349,20 @@ class AppDelegate: NSObject,
 
     @objc func showAgentDashboard(_ sender: Any?) {
         AgentDashboardWindowController.shared.showWindow(nil)
+    }
+
+    @objc func showManageSkills(_ sender: Any?) {
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 300),
+            styleMask: [.titled, .closable, .hudWindow, .utilityWindow],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = "Manage Skills"
+        panel.isFloatingPanel = true
+        panel.center()
+        panel.contentViewController = NSHostingController(rootView: SkillsPopoverView())
+        panel.makeKeyAndOrderFront(nil)
     }
 
     @objc func handleToggleAgentDashboard(_ notification: Notification) {
