@@ -51,6 +51,12 @@ if [[ "$MODE" == "dev" ]]; then
         rm -rf "$BUNDLE_YAZI_CFG"
         cp -r "$REPO_ROOT/macos/Resources/yazi-config" "$BUNDLE_YAZI_CFG"
 
+        # 同步 Skills（Claude Code agent skills）
+        echo "==> sync Skills"
+        BUNDLE_SKILLS="$ACTUAL_OUTPUT/Contents/Resources/Skills"
+        rm -rf "$BUNDLE_SKILLS"
+        cp -r "$REPO_ROOT/macos/Resources/Skills" "$BUNDLE_SKILLS"
+
         # 同步 bin/（bundled tools：yazi, ya, delta, lazygit 等）
         if [[ -d "$REPO_ROOT/macos/Resources/bin" ]]; then
             echo "==> sync bin/"
