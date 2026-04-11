@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poltertty — The Terminal for AI Agents</title>
+<meta name="description" content="Ghostty fork with workspace management, agent monitoring, MCP terminal control, file browser and Git panel. Built for AI-native development. macOS only.">
+<meta property="og:title" content="Poltertty — The Terminal for AI Agents">
+<meta property="og:description" content="An agent-friendly terminal for the AI-native development era. macOS only.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#000000">
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --black: #050505;
+  --surface: #0a0a0a;
+  --surface-raised: #111;
+  --border: rgba(255,255,255,0.07);
+  --text: #f0f0f0;
+  --text-dim: #777;
+  --text-muted: #444;
+  --cyan: #38f5d4;
+  --blue: #4da6ff;
+  --purple: #b07aff;
+  --orange: #ff9f43;
+  --green: #36d399;
+  --radius: 14px;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Space Grotesk', -apple-system, system-ui, sans-serif;
+  background: var(--black);
+  color: var(--text);
+  line-height: 1.55;
+  overflow-x: hidden;
+}
+
+/* ─── NAV ─── */
+.nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  background: rgba(5,5,5,0.75);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.nav a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.nav a:hover { color: var(--text); }
+
+.nav-logo {
+  color: var(--text) !important;
+  font-weight: 700;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: -0.01em;
+}
+
+.nav-logo img {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+}
+
+/* ─── HERO ─── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 100px 24px 60px;
+  position: relative;
+}
+
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 900px;
+  height: 600px;
+  background: radial-gradient(ellipse, rgba(56,245,212,0.06) 0%, transparent 65%);
+  pointer-events: none;
+}
+
+.hero h1 {
+  font-size: clamp(52px, 8vw, 92px);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.hero .line2 {
+  display: block;
+  background: linear-gradient(90deg, var(--cyan), var(--blue) 50%, var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-sub {
+  font-size: clamp(16px, 2vw, 20px);
+  color: var(--text-dim);
+  max-width: 500px;
+  margin: 0 auto 36px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.hero-ctas {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 72px;
+  position: relative;
+  z-index: 2;
+}
+
+.cta-fill {
+  background: var(--text);
+  color: var(--black);
+  padding: 12px 28px;
+  border-radius: 980px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  transition: opacity 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cta-fill:hover { opacity: 0.85; }
+
+.cta-outline {
+  color: var(--text-dim);
+  padding: 12px 28px;
+  border-radius: 980px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  transition: border-color 0.2s, color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cta-outline:hover {
+  border-color: rgba(255,255,255,0.2);
+  color: var(--text);
+}
+
+.hero-image {
+  width: 100%;
+  max-width: 980px;
+  position: relative;
+}
+
+.hero-image img {
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: 0 40px 120px rgba(0,0,0,0.6);
+  display: block;
+}
+
+.hero-image .placeholder {
+  width: 100%;
+  aspect-ratio: 16/10;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: 0 40px 120px rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-image .placeholder::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 20%, rgba(56,245,212,0.05), transparent 60%);
+}
+
+/* Simulated terminal inside hero */
+.hero-terminal {
+  width: 100%;
+  aspect-ratio: 16/10;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: 0 40px 120px rgba(0,0,0,0.6);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ht-titlebar {
+  display: flex;
+  align-items: center;
+  padding: 14px 18px;
+  gap: 8px;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.ht-dot { width: 12px; height: 12px; border-radius: 50%; }
+.ht-dot.r { background: #ff5f57; }
+.ht-dot.y { background: #febc2e; }
+.ht-dot.g { background: #28c840; }
+
+.ht-title {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.ht-tabs {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.ht-tab {
+  padding: 4px 14px;
+  font-size: 11px;
+  color: var(--text-dim);
+  border-radius: 5px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.ht-tab.active {
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+}
+
+.ht-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.ht-sidebar {
+  width: 200px;
+  background: rgba(255,255,255,0.02);
+  border-right: 1px solid var(--border);
+  padding: 14px 0;
+  flex-shrink: 0;
+}
+
+.ht-slabel {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  padding: 4px 16px;
+  margin-bottom: 4px;
+}
+
+.ht-sitem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.ht-sitem.active {
+  background: rgba(56,245,212,0.06);
+  color: var(--cyan);
+}
+
+.ht-sdot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ht-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.ht-content {
+  flex: 1;
+  padding: 18px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--text-dim);
+}
+
+.ht-content .p { color: var(--cyan); }
+.ht-content .c { color: var(--text); }
+.ht-content .o { opacity: 0.5; }
+.ht-content .ok { color: var(--green); }
+
+.ht-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 16px;
+  background: rgba(255,255,255,0.02);
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.ht-status .git { color: var(--cyan); }
+.ht-status .agent { color: var(--green); }
+
+.ht-filepanel {
+  width: 260px;
+  background: rgba(255,255,255,0.015);
+  border-left: 1px solid var(--border);
+  padding: 12px;
+  flex-shrink: 0;
+}
+
+.ht-filepanel-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.ht-fileitem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-dim);
+}
+
+.ht-fileitem .badge {
+  font-size: 9px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.badge-m { background: rgba(255,159,67,0.15); color: var(--orange); }
+.badge-a { background: rgba(54,211,153,0.15); color: var(--green); }
+.badge-q { background: rgba(119,119,119,0.15); color: var(--text-dim); }
+
+/* ─── SECTIONS ─── */
+.section {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100px 24px;
+  text-align: center;
+  position: relative;
+}
+
+.section:nth-child(even) {
+  background: var(--surface);
+}
+
+.eyebrow {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-bottom: 14px;
+}
+
+.eyebrow.cyan { color: var(--cyan); }
+.eyebrow.green { color: var(--green); }
+.eyebrow.purple { color: var(--purple); }
+.eyebrow.orange { color: var(--orange); }
+.eyebrow.blue { color: var(--blue); }
+
+.section h2 {
+  font-size: clamp(34px, 5vw, 56px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+  margin-bottom: 16px;
+  max-width: 650px;
+}
+
+.section-desc {
+  font-size: 17px;
+  color: var(--text-dim);
+  max-width: 480px;
+  margin: 0 auto 52px;
+  font-weight: 400;
+  line-height: 1.65;
+}
+
+.section-image {
+  width: 100%;
+  max-width: 900px;
+  margin-bottom: 52px;
+  position: relative;
+}
+
+.section-image img {
+  width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow:
+    0 20px 60px rgba(0,0,0,0.5),
+    0 0 0 1px rgba(255,255,255,0.03) inset;
+  display: block;
+}
+
+.section-image .placeholder {
+  width: 100%;
+  aspect-ratio: 16/10;
+  background: var(--surface-raised);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+  position: relative;
+  overflow: hidden;
+}
+
+.placeholder::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 30% 40%, rgba(56,245,212,0.04), transparent 50%),
+    radial-gradient(ellipse at 70% 60%, rgba(176,122,255,0.03), transparent 50%);
+}
+
+.placeholder::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.placeholder-icon {
+  font-size: 40px;
+  opacity: 0.25;
+  position: relative;
+  z-index: 1;
+}
+
+.placeholder > div:last-child {
+  position: relative;
+  z-index: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  opacity: 0.4;
+  letter-spacing: 0.02em;
+}
+
+/* Highlights row */
+.highlights {
+  display: flex;
+  gap: 40px;
+  max-width: 820px;
+  width: 100%;
+}
+
+.hl-item {
+  flex: 1;
+  text-align: left;
+}
+
+.hl-item h4 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+
+.hl-item p {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+/* ─── FEATURE GRID (more features section) ─── */
+.more-section {
+  padding: 100px 24px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.more-section .eyebrow {
+  text-align: center;
+}
+
+.more-section h2 {
+  text-align: center;
+  font-size: clamp(34px, 5vw, 56px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  margin-bottom: 56px;
+}
+
+.feat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.feat-cell {
+  background: var(--surface);
+  padding: 36px 28px;
+  transition: background 0.25s;
+}
+
+.feat-cell:hover {
+  background: var(--surface-raised);
+}
+
+.feat-cell h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+}
+
+.feat-cell p {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.feat-cell .feat-icon {
+  font-size: 24px;
+  margin-bottom: 16px;
+  display: block;
+  filter: grayscale(0.3);
+}
+
+/* ─── GHOSTTY COMPARISON ─── */
+.compare-section {
+  padding: 100px 24px;
+  background: var(--surface);
+}
+
+.compare-inner {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.compare-inner h2 {
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.compare-inner .section-desc {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 14px;
+}
+
+.compare-table th {
+  text-align: left;
+  padding: 14px 20px;
+  font-weight: 600;
+  font-size: 13px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.compare-table th:not(:first-child) {
+  text-align: center;
+  width: 120px;
+}
+
+.compare-table td {
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--text-dim);
+}
+
+.compare-table td:first-child {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.compare-table td:not(:first-child) {
+  text-align: center;
+}
+
+.compare-table tr:last-child td { border-bottom: none; }
+
+.ck {
+  color: var(--cyan);
+  font-size: 18px;
+}
+
+.no {
+  color: var(--text-muted);
+}
+
+/* ─── BOTTOM CTA ─── */
+.bottom-cta {
+  padding: 120px 24px;
+  text-align: center;
+}
+
+.bottom-cta h2 {
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  margin-bottom: 12px;
+}
+
+.bottom-cta p {
+  font-size: 17px;
+  color: var(--text-dim);
+  margin-bottom: 32px;
+}
+
+.bottom-cta .cta-fill {
+  font-size: 16px;
+  padding: 14px 36px;
+}
+
+.bottom-meta {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ─── FOOTER ─── */
+.footer {
+  border-top: 1px solid var(--border);
+  padding: 28px 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 28px;
+  font-size: 13px;
+}
+
+.footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer a:hover { color: var(--text-dim); }
+
+.footer-sep { color: var(--text-muted); opacity: 0.3; }
+
+/* ─── SCROLL ANIMATIONS ─── */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Stagger children */
+.stagger > .reveal:nth-child(1) { transition-delay: 0s; }
+.stagger > .reveal:nth-child(2) { transition-delay: 0.08s; }
+.stagger > .reveal:nth-child(3) { transition-delay: 0.16s; }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 768px) {
+  .nav { gap: 16px; padding: 0 16px; }
+  .nav a:not(.nav-logo) { display: none; }
+
+  .hero-ctas { flex-direction: column; }
+
+  .ht-sidebar,
+  .ht-filepanel { display: none; }
+
+  .highlights {
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .hl-item { text-align: center; }
+
+  .feat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-table { font-size: 13px; }
+  .compare-table th, .compare-table td { padding: 10px 12px; }
+
+  .bottom-meta { flex-direction: column; gap: 8px; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <a href="#" class="nav-logo">
+    <img src="assets/icon.png" alt="Poltertty">
+    Poltertty
+  </a>
+  <a href="#features">Features</a>
+  <a href="#compare">Compare</a>
+  <a href="https://github.com/oopslink/poltertty" target="_blank">GitHub</a>
+  <a href="https://github.com/oopslink/poltertty/releases" target="_blank">Download</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <h1 class="reveal">
+    Terminal.<br>
+    <span class="line2">Built for agents.</span>
+  </h1>
+  <p class="hero-sub reveal">Ghostty fork，为 AI 原生开发而生。<br>Workspace 管理 / Agent 监控 / MCP 控制 / 文件浏览 / Git 面板。</p>
+  <div class="hero-ctas reveal">
+    <a href="https://github.com/oopslink/poltertty/releases" class="cta-fill">
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Download for macOS
+    </a>
+    <a href="https://github.com/oopslink/poltertty" class="cta-outline" target="_blank">
+      <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      View on GitHub
+    </a>
+  </div>
+
+  <!-- Simulated terminal screenshot -->
+  <div class="hero-image reveal">
+    <div class="hero-terminal">
+      <div class="ht-titlebar">
+        <div class="ht-dot r"></div>
+        <div class="ht-dot y"></div>
+        <div class="ht-dot g"></div>
+        <div class="ht-tabs">
+          <div class="ht-tab active">my-project</div>
+          <div class="ht-tab">api-server</div>
+        </div>
+      </div>
+      <div class="ht-body">
+        <div class="ht-sidebar">
+          <div class="ht-slabel">Workspaces</div>
+          <div class="ht-sitem active">
+            <div class="ht-sdot" style="background:var(--cyan)"></div>
+            my-project
+          </div>
+          <div class="ht-sitem">
+            <div class="ht-sdot" style="background:var(--orange)"></div>
+            api-server
+          </div>
+          <div class="ht-sitem">
+            <div class="ht-sdot" style="background:var(--purple)"></div>
+            design-system
+          </div>
+          <div class="ht-slabel" style="margin-top:16px">Worktrees</div>
+          <div class="ht-sitem">
+            <div class="ht-sdot" style="background:var(--text-muted)"></div>
+            feat/auth
+          </div>
+          <div class="ht-sitem">
+            <div class="ht-sdot" style="background:var(--text-muted)"></div>
+            fix/login-bug
+          </div>
+          <div class="ht-slabel" style="margin-top:16px">Agent</div>
+          <div class="ht-sitem">
+            <div class="ht-sdot" style="background:var(--green)"></div>
+            claude-sonnet
+          </div>
+        </div>
+        <div class="ht-main">
+          <div class="ht-content">
+            <div><span class="p">~/my-project $</span> <span class="c">claude</span></div>
+            <div class="o">╭ Claude Code v1.2.0</div>
+            <div class="o">│ Session: a3f8c2</div>
+            <div class="o">│ Model: claude-sonnet-4-20250514</div>
+            <div class="o">╰ Ready.</div>
+            <br>
+            <div><span class="p">claude &gt;</span> <span class="c">fix the auth middleware token validation</span></div>
+            <div class="o">Analyzing src/middleware/auth.ts...</div>
+            <div class="o">Found: token expiry check missing at line 42</div>
+            <div class="o">Reading src/utils/jwt.ts for context...</div>
+            <div class="o">Applying fix to 2 files...</div>
+            <br>
+            <div class="ok">&#10003; Fixed — src/middleware/auth.ts, src/utils/jwt.ts</div>
+            <div class="ok">&#10003; Tests passing (12/12)</div>
+          </div>
+          <div class="ht-status">
+            <div><span class="git">&#9679; main</span> &nbsp;+3 ~1 -0</div>
+            <div><span class="agent">&#9679; agent: active</span> &nbsp;tokens: 2.4k</div>
+          </div>
+        </div>
+        <div class="ht-filepanel">
+          <div class="ht-filepanel-title">Files</div>
+          <div class="ht-fileitem">&#9660; src/</div>
+          <div class="ht-fileitem" style="padding-left:12px">&#9660; middleware/</div>
+          <div class="ht-fileitem" style="padding-left:24px;color:var(--text)">auth.ts <span class="badge badge-m">M</span></div>
+          <div class="ht-fileitem" style="padding-left:12px">&#9660; utils/</div>
+          <div class="ht-fileitem" style="padding-left:24px;color:var(--text)">jwt.ts <span class="badge badge-m">M</span></div>
+          <div class="ht-fileitem" style="padding-left:12px">&#9654; routes/</div>
+          <div class="ht-fileitem" style="padding-left:12px">&#9654; models/</div>
+          <div class="ht-fileitem">&#9654; tests/</div>
+          <div class="ht-fileitem">package.json</div>
+          <div class="ht-fileitem">tsconfig.json</div>
+          <div class="ht-fileitem" style="color:var(--text)">README.md <span class="badge badge-a">A</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WORKSPACE -->
+<section class="section" id="features">
+  <div class="eyebrow cyan reveal">Workspace</div>
+  <h2 class="reveal">每个项目，<br>独立的世界</h2>
+  <p class="section-desc reveal">名称、颜色、图标、根目录 — 每个 Workspace 就是一个完整的工作上下文。窗口布局自动持久化，重启后一切如初。</p>
+  <div class="section-image reveal">
+    <img src="assets/screenshots/workspace-sidebar.png" alt="Workspace sidebar with multiple workspaces and worktrees" onerror="this.parentElement.innerHTML='<div class=placeholder><div class=placeholder-icon>&#128193;</div>screenshot: workspace sidebar</div>'">
+  </div>
+  <div class="highlights stagger">
+    <div class="hl-item reveal">
+      <h4>Quick Switcher</h4>
+      <p>&#8984;K 模糊搜索，瞬间跳转到任何项目。不打断心流。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>Git Worktree</h4>
+      <p>侧边栏直接管理 worktree，一键切换分支环境，文件浏览器跟随。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>自动持久化</h4>
+      <p>布局、分割、标签页 — 关闭重启后自动恢复原样。</p>
+    </div>
+  </div>
+</section>
+
+<!-- AGENT MONITOR -->
+<section class="section">
+  <div class="eyebrow green reveal">Agent Monitor</div>
+  <h2 class="reveal">看见你的 Agent<br>在做什么</h2>
+  <p class="section-desc reveal">原生追踪 Claude Code、Gemini CLI、OpenCode 会话。子 agent 调用树、工具调用时间线、token 用量实时可见。</p>
+  <div class="section-image reveal">
+    <img src="assets/screenshots/agent-monitor.png" alt="Agent Monitor showing Claude Code sessions with status cards and subagent tracking">
+  </div>
+  <div class="highlights stagger">
+    <div class="hl-item reveal">
+      <h4>调用树可视化</h4>
+      <p>水平展开 subagent 调用链，工具调用、耗时一目了然。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>三级通知</h4>
+      <p>waiting / error / done。焦点在 pane 上时自动静默，不打扰。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>Dashboard</h4>
+      <p>&#8984;&#8997;D 全局仪表盘，跨 Workspace 汇总所有 agent 会话。</p>
+    </div>
+  </div>
+</section>
+
+<!-- CTRL API -->
+<section class="section">
+  <div class="eyebrow purple reveal">Ctrl API</div>
+  <h2 class="reveal">Agent 掌控终端</h2>
+  <p class="section-desc reveal">内嵌 MCP 服务器，AI agent 可以列出面板、发送命令、分割窗格、截图 — 全部通过 API。启动时自动注入配置，零设置。</p>
+  <div class="section-image reveal">
+    <img src="assets/screenshots/ctrl-api.png" alt="Ctrl API Monitor showing API call logs with JSON syntax highlighting">
+  </div>
+  <div class="highlights stagger">
+    <div class="hl-item reveal">
+      <h4>MCP 工具</h4>
+      <p>send_text, split_pane, screenshot, focus_pane — 8+ 内置工具覆盖完整终端操作。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>SSE 事件流</h4>
+      <p>实时推送 agent_status_changed、workspace_switched 等事件。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>零配置</h4>
+      <p>SettingsMerger 启动时自动注入 MCP URL 到 Claude Code settings。</p>
+    </div>
+  </div>
+</section>
+
+<!-- BUILT-IN TOOLS -->
+<section class="section">
+  <div class="eyebrow orange reveal">Built-in Tools</div>
+  <h2 class="reveal">不离开终端，<br>完成一切</h2>
+  <p class="section-desc reveal">文件浏览器、Git 面板、LazyGit、Agent Browser、Command Palette — 你需要的工具都在一个窗口里。</p>
+  <div class="section-image reveal">
+    <img src="assets/screenshots/file-browser.png" alt="File browser panel with directory tree, syntax highlighting preview and Git status badges">
+  </div>
+  <div class="highlights stagger">
+    <div class="hl-item reveal">
+      <h4>文件浏览器</h4>
+      <p>树视图、语法高亮预览、Git badge、拖放、多选批量操作。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>Git 面板 &amp; LazyGit</h4>
+      <p>变更列表、提交历史、Diff 查看器。左侧面板 tab 一键切换。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>Agent Browser</h4>
+      <p>内嵌 WebKit 浏览器，多 tab、Ctrl API 控制。Agent 可操作网页。</p>
+    </div>
+  </div>
+</section>
+
+<!-- AGENT BROWSER -->
+<section class="section">
+  <div class="eyebrow blue reveal">Agent Browser</div>
+  <h2 class="reveal">Agent 也能<br>浏览网页</h2>
+  <p class="section-desc reveal">内嵌 WebKit 浏览器面板，多 tab 支持。Agent 通过 Ctrl API 导航、截图、点击、填表 — 让 AI 真正操作 Web。</p>
+  <div class="section-image reveal">
+    <img src="assets/screenshots/browser-panel.png" alt="Agent Browser panel with multi-tab WebKit browser embedded in terminal" onerror="this.style.display='none'">
+  </div>
+  <div class="highlights stagger">
+    <div class="hl-item reveal">
+      <h4>多 Tab 浏览</h4>
+      <p>新建 tab、target="_blank" 自动开新 tab，悬停显示完整标题。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>Ctrl API 控制</h4>
+      <p>browser_navigate / snapshot / click / fill — Agent 全程自动化操作。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>展开/折叠</h4>
+      <p>&#8997;&#8679;&#8984;B 一键展开浏览器面板，不用时折叠回侧边。</p>
+    </div>
+  </div>
+</section>
+
+<!-- GIT WORKTREE -->
+<section class="section">
+  <div class="eyebrow cyan reveal">Git Worktree</div>
+  <h2 class="reveal">分支隔离，<br>一键切换</h2>
+  <p class="section-desc reveal">git worktree 原生集成到侧边栏。每个 worktree 独立目录、独立分支，文件浏览器和 Git 面板自动跟随。</p>
+  <div class="section-image reveal">
+    <img src="assets/screenshots/worktree-sidebar.png" alt="Sidebar showing workspace list with git worktrees and branch indicators">
+  </div>
+  <div class="highlights stagger">
+    <div class="hl-item reveal">
+      <h4>侧边栏管理</h4>
+      <p>所有 worktree 展示在 Workspace 条目下，实时文件系统监控。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>创建 &amp; 删除</h4>
+      <p>弹窗选择分支创建 worktree，删除带确认。缺失 worktree 自动标记。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>Split Pane 打开</h4>
+      <p>worktree 可直接在新 split pane 中打开，同时处理多个分支。</p>
+    </div>
+  </div>
+</section>
+
+<!-- FAST SPLIT FOCUS & PANE -->
+<section class="section">
+  <div class="eyebrow green reveal">Pane Navigation</div>
+  <h2 class="reveal">双击 &#8984;，<br>瞬间定位</h2>
+  <p class="section-desc reveal">分割面板多了以后找不到目标？双击 &#8984; 触发面板选择器 — 每个 pane 显示编号 badge，按数字键瞬间跳转。Pane Annotation 让 agent 也能定位。</p>
+  <div class="section-image reveal">
+    <img src="assets/screenshots/pane-selector.png.jpeg" alt="Pane selector overlay showing numbered badges on each split pane">
+  </div>
+  <div class="highlights stagger">
+    <div class="hl-item reveal">
+      <h4>编号 Badge</h4>
+      <p>选择器激活时，每个 pane 闪烁显示序号，按键即达。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>Pane Annotation</h4>
+      <p>给面板添加文字标签，状态栏可编辑。Agent 通过 MCP 读写标签。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>焦点感知</h4>
+      <p>非焦点 pane 状态栏自动变暗，当前 pane 一目了然。</p>
+    </div>
+  </div>
+</section>
+
+<!-- TMUX INTEGRATION -->
+<section class="section">
+  <div class="eyebrow purple reveal">tmux Integration</div>
+  <h2 class="reveal">tmux 原生集成，<br>不再切窗口</h2>
+  <p class="section-desc reveal">tmux session 管理直接嵌入终端 UI。浏览 session/window/pane，一键 attach 到标签页，关闭时确认防误操作。</p>
+  <div class="section-image reveal">
+    <img src="assets/screenshots/tmux-panel.png" alt="tmux session panel with session list and attach controls">
+  </div>
+  <div class="highlights stagger">
+    <div class="hl-item reveal">
+      <h4>Session 面板</h4>
+      <p>&#8984;&#8679;X 打开面板，浏览所有 tmux session、window、pane。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>Tab Attach</h4>
+      <p>&#8984;&#8997;T 将 tmux session 挂载为终端 tab，内置 window bar 切换。</p>
+    </div>
+    <div class="hl-item reveal">
+      <h4>状态栏按钮</h4>
+      <p>split pane 状态栏一键连接 tmux。关闭 attached tab 弹出确认。</p>
+    </div>
+  </div>
+</section>
+
+<!-- MORE FEATURES GRID -->
+<section class="more-section">
+  <div class="eyebrow blue reveal" style="text-align:center">And more</div>
+  <h2 class="reveal">还有这些</h2>
+  <div class="feat-grid reveal">
+    <div class="feat-cell">
+      <span class="feat-icon">&#128269;</span>
+      <h3>Command Palette</h3>
+      <p>&#8984;&#8679;P 统一命令面板，集成菜单命令 + terminal 跳转。双击 Shift 打开快捷键速查面板。</p>
+    </div>
+    <div class="feat-cell">
+      <span class="feat-icon">&#128233;</span>
+      <h3>Popup Overlay</h3>
+      <p>Shell / LazyGit 浮层面板（&#8997;&#8984;J / &#8997;&#8984;G），ESC 关闭，不影响终端焦点。</p>
+    </div>
+    <div class="feat-cell">
+      <span class="feat-icon">&#128276;</span>
+      <h3>通知系统</h3>
+      <p>Agent 状态变更 macOS 原生通知。三级分层（waiting / error / done），聚焦时自动静默。</p>
+    </div>
+    <div class="feat-cell">
+      <span class="feat-icon">&#127912;</span>
+      <h3>Workspace 元数据</h3>
+      <p>侧边栏显示 PR 状态、端口号、agent badge。gh CLI 集成实时拉取。</p>
+    </div>
+    <div class="feat-cell">
+      <span class="feat-icon">&#128736;</span>
+      <h3>底部状态栏</h3>
+      <p>每个 split pane 独立状态栏 — Git 分支、变更数、agent 状态、worktree badge。跟随 CWD 实时更新。</p>
+    </div>
+    <div class="feat-cell">
+      <span class="feat-icon">&#127793;</span>
+      <h3>Skill Manager</h3>
+      <p>管理 Claude Code agent skills，侧边栏直接查看、切换、配置。</p>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARISON -->
+<section class="compare-section" id="compare">
+  <div class="compare-inner">
+    <h2 class="reveal">Poltertty vs Ghostty</h2>
+    <p class="section-desc reveal">终端核心完全来自 Ghostty — Metal 渲染、CoreText 字体、配置系统原封不动。所有新功能作为独立 Swift/SwiftUI 模块添加。</p>
+    <table class="compare-table reveal">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Ghostty</th>
+          <th>Poltertty</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>GPU 终端渲染</td>
+          <td><span class="ck">&#10003;</span></td>
+          <td><span class="ck">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td>配置兼容</td>
+          <td><span class="ck">&#10003;</span></td>
+          <td><span class="ck">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td>Workspace 管理</td>
+          <td><span class="no">&mdash;</span></td>
+          <td><span class="ck">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td>Agent Monitor</td>
+          <td><span class="no">&mdash;</span></td>
+          <td><span class="ck">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td>MCP 终端控制</td>
+          <td><span class="no">&mdash;</span></td>
+          <td><span class="ck">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td>文件浏览器</td>
+          <td><span class="no">&mdash;</span></td>
+          <td><span class="ck">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td>Git 面板</td>
+          <td><span class="no">&mdash;</span></td>
+          <td><span class="ck">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td>Agent Browser</td>
+          <td><span class="no">&mdash;</span></td>
+          <td><span class="ck">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td>Git Worktree 管理</td>
+          <td><span class="no">&mdash;</span></td>
+          <td><span class="ck">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td>Pane 快速定位</td>
+          <td><span class="no">&mdash;</span></td>
+          <td><span class="ck">&#10003;</span></td>
+        </tr>
+        <tr>
+          <td>tmux UI 集成</td>
+          <td><span class="no">&mdash;</span></td>
+          <td><span class="ck">&#10003;</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- BOTTOM CTA -->
+<section class="bottom-cta">
+  <h2 class="reveal">Ready to try?</h2>
+  <p class="reveal">macOS 14+，免费开源，MIT 协议。</p>
+  <a href="https://github.com/oopslink/poltertty/releases" class="cta-fill reveal">Download Poltertty</a>
+  <div class="bottom-meta reveal">
+    <span>macOS 14 Sonoma+</span>
+    <span>Swift / SwiftUI</span>
+    <span>Based on Ghostty</span>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <a href="https://github.com/oopslink/poltertty">GitHub</a>
+  <span class="footer-sep">|</span>
+  <a href="https://github.com/oopslink/poltertty/releases">Releases</a>
+  <span class="footer-sep">|</span>
+  <a href="https://ghostty.org">Ghostty</a>
+  <span class="footer-sep">|</span>
+  <span style="color:var(--text-muted)">Poltertty &copy; 2026</span>
+</footer>
+
+<!-- Scroll reveal -->
+<script>
+(function() {
+  const els = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+  els.forEach(function(el) { observer.observe(el); });
+})();
+</script>
+
+</body>
+</html>
