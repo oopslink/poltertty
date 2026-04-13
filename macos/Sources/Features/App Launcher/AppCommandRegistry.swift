@@ -93,7 +93,8 @@ final class AppCommandRegistry: ObservableObject {
                 subtitle: "File Browser",
                 leadingIcon: "folder",
                 action: {
-                    NotificationCenter.default.post(name: .toggleFileBrowser, object: nil)
+                    guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+                    NotificationCenter.default.post(name: .toggleFileBrowser, object: window)
                 }
             ),
             CommandOption(

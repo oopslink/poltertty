@@ -410,7 +410,8 @@ struct PolterttyRootView<TerminalContent: View>: View {
         .onReceive(NotificationCenter.default.publisher(for: .toggleAgentMonitor)) { _ in
             agentMonitorVM.toggle()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleFileBrowser)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .toggleFileBrowser)) { notification in
+            guard notification.object as? NSWindow == windowProvider() else { return }
             handleToggleLeftPanel(for: .yazi)
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleGitPanel)) { notification in

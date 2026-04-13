@@ -1323,7 +1323,8 @@ class AppDelegate: NSObject,
     }
 
     @objc func toggleFileBrowser(_ sender: Any?) {
-        NotificationCenter.default.post(name: .toggleFileBrowser, object: nil)
+        guard let targetWindow = NSApp.keyWindow?.parent ?? NSApp.keyWindow else { return }
+        NotificationCenter.default.post(name: .toggleFileBrowser, object: targetWindow)
     }
 
     @objc func toggleShellPopup(_ sender: Any?) {
