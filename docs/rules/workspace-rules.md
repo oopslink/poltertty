@@ -2,6 +2,48 @@
 
 开发 Workspace 相关功能时必须遵守以下规则。
 
+## NotificationCenter 窗口定向规则
+
+**多窗口场景下，面向特定窗口的通知必须通过 `object` 参数传递目标窗口，接收方必须过滤。**
+
+### 发送方（AppDelegate / CtrlToolHandler / AppCommandRegistry 等）
+
+```swift
+// ✅ 正确：传入目标窗口
+let targetWindow = NSApp.keyWindow?.parent ?? NSApp.keyWindow
+NotificationCenter.default.post(name: .toggleFileBrowser, object: targetWindow)
+
+// ❌ 错误：object: nil 会让所有窗口同时响应
+NotificationCenter.default.post(name: .toggleFileBrowser, object: nil)
+```
+
+- `AppDelegate` 菜单 action：使用 `NSApp.keyWindow?.parent ?? NSApp.keyWindow`
+- `AppCommandRegistry` 闭包：使用 `NSApp.keyWindow ?? NSApp.mainWindow`
+- `CtrlToolHandler`（已知 workspaceId）：使用 `WorkspaceManager.shared.windowForWorkspace(workspaceId)`
+- 全局广播（不针对窗口，如 Agent Monitor）：允许 `object: nil`，但接收方不能做窗口过滤
+
+### 接收方（PolterttyRootView 等每个窗口实例）
+
+```swift
+// ✅ 正确：过滤非本窗口的通知
+.onReceive(NotificationCenter.default.publisher(for: .toggleFileBrowser)) { notification in
+    guard notification.object as? NSWindow == windowProvider() else { return }
+    handleToggleLeftPanel(for: .yazi)
+}
+
+// ❌ 错误：忽略 notification 参数，所有窗口都响应
+.onReceive(NotificationCenter.default.publisher(for: .toggleFileBrowser)) { _ in
+    handleToggleLeftPanel(for: .yazi)
+}
+```
+
+### 检查清单
+
+新增或修改窗口定向通知时：
+1. 搜索所有 `NotificationCenter.default.post(name: .xxx` 调用点，确认每处都传了正确的 `object`
+2. 搜索对应的 `.onReceive` 监听，确认有 `guard notification.object as? NSWindow == windowProvider()` 过滤
+3. 参考已有正确实现：`toggleGitPanel`、`toggleWorkspaceSidebar`
+
 ## 侧边栏一致性
 
 侧边栏有**展开态**（`expandedContent`）和**折叠态**（`collapsedContent`）两种模式。任何功能变更必须同时覆盖两种模式：

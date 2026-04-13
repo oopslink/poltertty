@@ -753,7 +753,8 @@ final class CtrlToolHandler: Sendable {
     /// 打开 yazi 文件管理面板。
     private func callShowFileBrowser(arguments: [String: Any]) async throws -> String {
         await MainActor.run {
-            NotificationCenter.default.post(name: .toggleFileBrowser, object: nil)
+            let targetWindow = NSApp.keyWindow?.parent ?? NSApp.keyWindow
+            NotificationCenter.default.post(name: .toggleFileBrowser, object: targetWindow)
         }
         return #"{"ok":true}"#
     }
@@ -1457,7 +1458,8 @@ final class CtrlToolHandler: Sendable {
                 // 若文件浏览器未打开，先打开它
                 let yaziStore = WorkspaceManager.shared.yaziSurfaceStore
                 if yaziStore?.hasSurface(for: workspaceId) == false {
-                    NotificationCenter.default.post(name: .toggleFileBrowser, object: nil)
+                    let targetWindow = WorkspaceManager.shared.windowForWorkspace(workspaceId)
+                    NotificationCenter.default.post(name: .toggleFileBrowser, object: targetWindow)
                 }
 
                 // 等一个 RunLoop tick，给 yazi surface 初始化时间
