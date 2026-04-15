@@ -119,6 +119,57 @@ struct BrowserSurfaceStoreTests {
         store.removeManager(for: UUID())
     }
 
+    // MARK: - existingManager(for:) 不触发懒创建
+
+    @Test func existingManagerReturnsNilWhenAbsent() {
+        let store = BrowserSurfaceStore()
+        #expect(store.existingManager(for: UUID()) == nil)
+        // 关键：调用后不应创建新 manager
+        #expect(store.managers.isEmpty)
+    }
+
+    @Test func existingManagerReturnsCreatedManager() {
+        let store = BrowserSurfaceStore()
+        let wsId = UUID()
+        let mgr = store.manager(for: wsId)
+        #expect(store.existingManager(for: wsId) === mgr)
+    }
+
+    // MARK: - findTab(id:) 跨 workspace 反查
+
+    @Test func findTabReturnsNilWhenNoManagersExist() {
+        let store = BrowserSurfaceStore()
+        #expect(store.findTab(id: UUID()) == nil)
+    }
+
+    @Test func findTabLocatesTabAcrossWorkspaces() {
+        let store = BrowserSurfaceStore()
+        let wsA = UUID()
+        let wsB = UUID()
+        let mgrA = store.manager(for: wsA)
+        let mgrB = store.manager(for: wsB)
+        // mgrA 初始有一个空白 tab，mgrB 也有一个
+        _ = mgrA
+        let tabInB = mgrB.tabs[0].id
+
+        guard let hit = store.findTab(id: tabInB) else {
+            Issue.record("expected to find tab in wsB")
+            return
+        }
+        #expect(hit.workspaceId == wsB)
+        #expect(hit.manager === mgrB)
+        // 不应命中 wsA
+        #expect(hit.workspaceId != wsA)
+    }
+
+    @Test func findTabReturnsNilForUnknownId() {
+        let store = BrowserSurfaceStore()
+        _ = store.manager(for: UUID())
+        _ = store.manager(for: UUID())
+        // 随机 UUID 不应命中
+        #expect(store.findTab(id: UUID()) == nil)
+    }
+
     // MARK: - 多 workspace 隔离
 
     @Test func multipleWorkspacesOperateIndependently() {

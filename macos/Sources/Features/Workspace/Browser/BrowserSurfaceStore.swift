@@ -36,4 +36,21 @@ class BrowserSurfaceStore: ObservableObject {
         }
         managers.removeValue(forKey: workspaceId)
     }
+
+    /// 非创建式查询：只返回已存在的 manager，不触发懒创建。
+    /// Ctrl API 查询路径使用此方法，避免用未知 wsId 污染 store。
+    func existingManager(for workspaceId: UUID) -> BrowserTabManager? {
+        managers[workspaceId]
+    }
+
+    /// 跨 workspace 按 tabId 反查 tab 归属。
+    /// 用于 Ctrl API 在调用方未指定 workspaceId 时定位 tab。
+    func findTab(id tabId: UUID) -> (workspaceId: UUID, manager: BrowserTabManager)? {
+        for (wsId, mgr) in managers {
+            if mgr.tabs.contains(where: { $0.id == tabId }) {
+                return (wsId, mgr)
+            }
+        }
+        return nil
+    }
 }

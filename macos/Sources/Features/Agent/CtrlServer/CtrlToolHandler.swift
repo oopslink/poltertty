@@ -817,59 +817,82 @@ final class CtrlToolHandler: Sendable {
 
     // MARK: - Browser Tab API
 
-    /// browser_new_tab — 在指定（或 active）workspace 的 Browser Panel 新建 tab。
+    /// browser_new_tab — 在指定（或兜底）workspace 的 Browser Panel 新建 tab。
     /// 参数: workspaceId (optional), url (optional)
-    /// 返回: { "tabId": "uuid" }
+    /// 返回: { "tabId": "uuid", "workspaceId": "uuid" }
     private func callBrowserNewTab(arguments: [String: Any]) async throws -> String {
-        let tabId: UUID = try await withCheckedThrowingContinuation { cont in
+        let result: (wsId: UUID, tabId: UUID) = try await withCheckedThrowingContinuation { cont in
             Task { @MainActor in
                 guard let store = WorkspaceManager.shared.browserSurfaceStore else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_new_tab: browserStore not available"))
                     return
                 }
-                let wsId = Self.resolveBrowserWorkspaceId(arguments)
+                guard let wsId = Self.resolveNewTabWorkspaceId(arguments) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_new_tab: no workspace available"))
+                    return
+                }
                 let mgr = store.manager(for: wsId)
                 let url = (arguments["url"] as? String).flatMap { URL(string: $0) }
                 let id = mgr.newTab(url: url)
-                cont.resume(returning: id)
+                cont.resume(returning: (wsId, id))
             }
         }
-        return #"{"tabId":"\#(tabId.uuidString)"}"#
+        return #"{"tabId":"\#(result.tabId.uuidString)","workspaceId":"\#(result.wsId.uuidString)"}"#
     }
 
     /// browser_close_tab — 关闭指定 tab。
-    /// 参数: tabId (required), workspaceId (optional)
+    /// 参数: tabId (required), workspaceId (optional — 若不传则按 tabId 反查)
     private func callBrowserCloseTab(arguments: [String: Any]) async throws -> String {
         guard let tabIdStr = arguments["tabId"] as? String,
               let tabId = UUID(uuidString: tabIdStr) else {
             throw RPCError(code: -32602, message: "browser_close_tab: missing or invalid tabId")
         }
-        await MainActor.run {
-            guard let store = WorkspaceManager.shared.browserSurfaceStore else { return }
-            let wsId = Self.resolveBrowserWorkspaceId(arguments)
-            store.manager(for: wsId).closeTab(id: tabId)
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            Task { @MainActor in
+                guard let store = WorkspaceManager.shared.browserSurfaceStore else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_close_tab: browserStore not available"))
+                    return
+                }
+                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                      ctx.manager.tabs.contains(where: { $0.id == tabId }) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_close_tab: tab \(tabIdStr) not found"))
+                    return
+                }
+                ctx.manager.closeTab(id: tabId)
+                cont.resume(returning: ())
+            }
         }
         return #"{"ok":true}"#
     }
 
     /// browser_focus_tab — 将指定 tab 设为 active。
-    /// 参数: tabId (required), workspaceId (optional)
+    /// 参数: tabId (required), workspaceId (optional — 若不传则按 tabId 反查)
     private func callBrowserFocusTab(arguments: [String: Any]) async throws -> String {
         guard let tabIdStr = arguments["tabId"] as? String,
               let tabId = UUID(uuidString: tabIdStr) else {
             throw RPCError(code: -32602, message: "browser_focus_tab: missing or invalid tabId")
         }
-        await MainActor.run {
-            guard let store = WorkspaceManager.shared.browserSurfaceStore else { return }
-            let wsId = Self.resolveBrowserWorkspaceId(arguments)
-            store.manager(for: wsId).focusTab(id: tabId)
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            Task { @MainActor in
+                guard let store = WorkspaceManager.shared.browserSurfaceStore else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_focus_tab: browserStore not available"))
+                    return
+                }
+                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                      ctx.manager.tabs.contains(where: { $0.id == tabId }) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_focus_tab: tab \(tabIdStr) not found"))
+                    return
+                }
+                ctx.manager.focusTab(id: tabId)
+                cont.resume(returning: ())
+            }
         }
         return #"{"ok":true}"#
     }
 
-    /// browser_list_tabs — 列出指定 workspace 的所有 browser tab。
-    /// 参数: workspaceId (optional)
-    /// 返回: [{ tabId, title, url, active }]
+    /// browser_list_tabs — 列出 browser tab。
+    /// 参数: workspaceId (optional) — 传入则只列该 workspace，否则跨所有已打开 browser panel 的 workspace 枚举。
+    /// 返回: [{ tabId, workspaceId, title, url?, active }]
     private func callBrowserListTabs(arguments: [String: Any]) async throws -> String {
         let result: String = try await withCheckedThrowingContinuation { cont in
             Task { @MainActor in
@@ -877,17 +900,35 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_list_tabs: browserStore not available"))
                     return
                 }
-                let wsId = Self.resolveBrowserWorkspaceId(arguments)
-                let mgr = store.manager(for: wsId)
-                let arr: [[String: Any]] = mgr.tabs.map { tab in
-                    var d: [String: Any] = [
-                        "tabId":  tab.id.uuidString,
-                        "title":  tab.title,
-                        "active": tab.id == mgr.activeTabId
-                    ]
-                    if let url = tab.url { d["url"] = url.absoluteString }
-                    return d
+
+                // 确定要枚举的 (wsId, manager) 列表
+                let targets: [(wsId: UUID, mgr: BrowserTabManager)] = {
+                    if let str = arguments["workspaceId"] as? String,
+                       let wsId = UUID(uuidString: str) {
+                        // 显式 workspaceId：只返回该 workspace。若 manager 未实例化则空列表。
+                        if let mgr = store.existingManager(for: wsId) {
+                            return [(wsId, mgr)]
+                        }
+                        return []
+                    }
+                    // 默认：所有已实例化的 manager（= 所有打开过 browser panel 的 workspace）
+                    return store.managers.map { ($0.key, $0.value) }
+                }()
+
+                var arr: [[String: Any]] = []
+                for (wsId, mgr) in targets {
+                    for tab in mgr.tabs {
+                        var d: [String: Any] = [
+                            "tabId":       tab.id.uuidString,
+                            "workspaceId": wsId.uuidString,
+                            "title":       tab.title,
+                            "active":      tab.id == mgr.activeTabId
+                        ]
+                        if let url = tab.url { d["url"] = url.absoluteString }
+                        arr.append(d)
+                    }
                 }
+
                 guard let data = try? JSONSerialization.data(withJSONObject: arr),
                       let str = String(data: data, encoding: .utf8) else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_list_tabs: serialization failed"))
@@ -985,8 +1026,8 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_navigate: browserStore not available"))
                     return
                 }
-                let wsId = Self.resolveBrowserWorkspaceId(arguments)
-                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                      let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_navigate: no active tab"))
                     return
                 }
@@ -1006,8 +1047,8 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_snapshot: browserStore not available"))
                     return
                 }
-                let wsId = Self.resolveBrowserWorkspaceId(arguments)
-                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                      let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_snapshot: no active tab"))
                     return
                 }
@@ -1043,8 +1084,8 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_click: browserStore not available"))
                     return
                 }
-                let wsId = Self.resolveBrowserWorkspaceId(arguments)
-                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                      let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_click: no active tab"))
                     return
                 }
@@ -1106,8 +1147,8 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_fill: browserStore not available"))
                     return
                 }
-                let wsId = Self.resolveBrowserWorkspaceId(arguments)
-                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                      let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_fill: no active tab"))
                     return
                 }
@@ -1152,8 +1193,8 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_eval: browserStore not available"))
                     return
                 }
-                let wsId = Self.resolveBrowserWorkspaceId(arguments)
-                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                      let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_eval: no active tab"))
                     return
                 }
@@ -1220,8 +1261,8 @@ final class CtrlToolHandler: Sendable {
                     guard let store = WorkspaceManager.shared.browserSurfaceStore else {
                         cont.resume(returning: false); return
                     }
-                    let wsId = Self.resolveBrowserWorkspaceId(arguments)
-                    guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                    guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                          let webView = ctx.webView else {
                         cont.resume(returning: false); return
                     }
                     webView.evaluateJavaScript(checkJS) { value, _ in
@@ -1246,8 +1287,8 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_screenshot: browserStore not available"))
                     return
                 }
-                let wsId = Self.resolveBrowserWorkspaceId(arguments)
-                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                      let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_screenshot: no active tab"))
                     return
                 }
@@ -1311,8 +1352,8 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_get_text: browserStore not available"))
                     return
                 }
-                let wsId = Self.resolveBrowserWorkspaceId(arguments)
-                guard let webView = Self.resolveBrowserTab(arguments, store: store, wsId: wsId) else {
+                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                      let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_get_text: no active tab"))
                     return
                 }
@@ -1344,7 +1385,10 @@ final class CtrlToolHandler: Sendable {
 
         let result: String = try await withCheckedThrowingContinuation { cont in
             Task { @MainActor in
-                let wsId = Self.resolveBrowserWorkspaceId(arguments)
+                guard let wsId = Self.resolveNewTabWorkspaceId(arguments) else {
+                    cont.resume(throwing: RPCError(code: -32603, message: "browser_open_split: no workspace available"))
+                    return
+                }
 
                 // 1. 发通知打开 Browser Panel（PolterttyRootView 订阅 toggleBrowserPanel 处理显示）
                 NotificationCenter.default.post(
@@ -1373,30 +1417,74 @@ final class CtrlToolHandler: Sendable {
         return result
     }
 
-    /// 解析 tabId 参数，找到对应 WKWebView。
-    /// - 传入有效 tabId：使用指定 tab
-    /// - 未传入或无效：使用 active tab
+    // MARK: - Browser Context 解析
+
+    /// 统一解析 browser API 的 workspace/tab 上下文。
+    ///
+    /// 解析顺序：
+    /// 1. 显式 `workspaceId` 参数：使用该 workspace。
+    ///    - 若同时提供有效 `tabId`，使用该 tab；否则使用 active tab。
+    /// 2. 仅 `tabId` 参数：按 tabId 跨所有已实例化 manager 反查归属。
+    /// 3. 都没提供：
+    ///    - key window 所属 workspace（若它有 manager）；
+    ///    - 否则任一已有 manager 的 workspace；
+    ///    - 都没有则返回 nil。
+    ///
+    /// 返回 `nil` 表示无法解析——调用方应抛 `-32603` 错误，不要 fallback 成新 UUID。
     @MainActor
-    private static func resolveBrowserTab(
+    static func resolveBrowserContext(
         _ arguments: [String: Any],
-        store: BrowserSurfaceStore,
-        wsId: UUID
-    ) -> WKWebView? {
-        let mgr = store.manager(for: wsId)
-        if let tabIdStr = arguments["tabId"] as? String,
-           let tabId = UUID(uuidString: tabIdStr) {
-            return mgr.tabs.first(where: { $0.id == tabId })?.webView
+        store: BrowserSurfaceStore
+    ) -> (wsId: UUID, manager: BrowserTabManager, webView: WKWebView?)? {
+        let explicitWsId: UUID? = {
+            if let str = arguments["workspaceId"] as? String { return UUID(uuidString: str) }
+            return nil
+        }()
+        let explicitTabId: UUID? = {
+            if let str = arguments["tabId"] as? String { return UUID(uuidString: str) }
+            return nil
+        }()
+
+        // 1. 显式 workspaceId
+        if let wsId = explicitWsId, let mgr = store.existingManager(for: wsId) {
+            let webView: WKWebView?
+            if let tabId = explicitTabId {
+                webView = mgr.tabs.first(where: { $0.id == tabId })?.webView
+            } else {
+                webView = mgr.activeTab?.webView
+            }
+            return (wsId, mgr, webView)
         }
-        return mgr.activeTab?.webView
+
+        // 2. 只给了 tabId：跨 workspace 反查
+        if let tabId = explicitTabId, let hit = store.findTab(id: tabId) {
+            let webView = hit.manager.tabs.first(where: { $0.id == tabId })?.webView
+            return (hit.workspaceId, hit.manager, webView)
+        }
+
+        // 3. 两者都没（或都无效）：key window → 任一 manager → nil
+        if let keyWsId = WorkspaceManager.shared.activeWorkspaceId(),
+           let mgr = store.existingManager(for: keyWsId) {
+            return (keyWsId, mgr, mgr.activeTab?.webView)
+        }
+        if let first = store.managers.first {
+            return (first.key, first.value, first.value.activeTab?.webView)
+        }
+        return nil
     }
 
-    /// workspaceId 参数存在时直接使用，否则返回 active workspace ID。
+    /// 仅为 `browser_new_tab` 使用：确定目标 workspace（允许 manager 尚未实例化）。
+    ///
+    /// 顺序：显式 workspaceId → key window → 任一已注册 workspace → nil。
     @MainActor
-    private static func resolveBrowserWorkspaceId(_ arguments: [String: Any]) -> UUID {
+    static func resolveNewTabWorkspaceId(_ arguments: [String: Any]) -> UUID? {
         if let str = arguments["workspaceId"] as? String, let id = UUID(uuidString: str) {
             return id
         }
-        return WorkspaceManager.shared.activeWorkspaceId() ?? UUID()
+        if let keyWsId = WorkspaceManager.shared.activeWorkspaceId() {
+            return keyWsId
+        }
+        return WorkspaceManager.shared.allWorkspaceIds().first
     }
 
     // MARK: - notify
