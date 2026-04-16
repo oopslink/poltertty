@@ -627,46 +627,46 @@ final class CtrlServer {
             ],
             [
                 "name": "browser_new_tab",
-                "description": "Open a new tab in the browser panel of the specified or active workspace. Optionally navigates to a URL.",
+                "description": "Open a new tab in the browser panel. Defaults to the key-window workspace, falling back to the first open workspace when no key window is available. Returns { tabId, workspaceId }.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
                         "url": ["type": "string", "description": "URL to navigate to (optional; opens blank tab if omitted)"],
-                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; falls back to key-window workspace, then first open workspace)"]
                     ]
                 ]
             ],
             [
                 "name": "browser_close_tab",
-                "description": "Close a browser tab by ID.",
+                "description": "Close a browser tab by ID. If workspaceId is omitted, the tab's owning workspace is resolved automatically via the tabId, including tabs in background workspaces.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
                         "tabId": ["type": "string", "description": "Browser tab UUID to close"],
-                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; when omitted the owning workspace is resolved from tabId)"]
                     ],
                     "required": ["tabId"]
                 ]
             ],
             [
                 "name": "browser_focus_tab",
-                "description": "Make a browser tab active (bring it to the front).",
+                "description": "Make a browser tab active. If workspaceId is omitted, the tab's owning workspace is resolved automatically via the tabId — this works even when the tab lives in a background workspace whose window is not the key window.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
                         "tabId": ["type": "string", "description": "Browser tab UUID to focus"],
-                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; when omitted the owning workspace is resolved from tabId)"]
                     ],
                     "required": ["tabId"]
                 ]
             ],
             [
                 "name": "browser_list_tabs",
-                "description": "List all open browser tabs in the specified or active workspace. Returns tabId, title, url, and active flag for each.",
+                "description": "List open browser tabs. If workspaceId is omitted, enumerates tabs across every workspace that has an open browser panel. Each entry returns tabId, workspaceId, title, url (if present), and active flag.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
-                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; defaults to active workspace)"]
+                        "workspaceId": ["type": "string", "description": "Workspace UUID (optional; when omitted, enumerates every workspace with an open browser panel)"]
                     ]
                 ]
             ],
