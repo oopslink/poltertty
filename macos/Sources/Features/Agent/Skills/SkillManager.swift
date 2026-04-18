@@ -37,7 +37,7 @@ final class SkillManager: ObservableObject {
             id: "agent-browser",
             displayName: "Agent Browser",
             description: "Let AI agents control the built-in browser panel via Ctrl API",
-            bundledVersion: "1.0.0"
+            bundledVersion: "1.1.0"
         ),
     ]
 

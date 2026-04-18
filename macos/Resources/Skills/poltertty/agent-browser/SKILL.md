@@ -1,6 +1,6 @@
 ---
 name: poltertty/agent-browser
-version: "1.0.0"
+version: "1.1.0"
 description: >
   Poltertty 内置浏览器面板的 Agent 操作指南。仅在 Poltertty 终端内生效（通过
   环境变量 POLTERTTY_CTRL_PORT 是否存在判断）。当用户需要让
@@ -12,23 +12,43 @@ description: >
 
 ## 环境检查（必须首先执行）
 
-在使用任何 browser_* 工具前，先确认 `POLTERTTY_CTRL_PORT` 环境变量存在：
+在使用任何 browser_* 工具前，先确认下列环境变量存在：
 
 ```bash
-echo $POLTERTTY_CTRL_PORT
+echo $POLTERTTY_CTRL_PORT       # Ctrl Server 端口
+echo $POLTERTTY_WORKSPACE_ID    # 当前 terminal 所属 workspace 的 UUID
 ```
 
-- **有值**（如 `9876`）：说明当前在 Poltertty 终端内，可继续使用 browser_* 工具
+- **都有值**：说明当前在 Poltertty 终端内，可继续使用 browser_* 工具
 - **为空**：说明不在 Poltertty 环境，**停止使用此 skill**，告知用户需要在 Poltertty 终端中运行 Claude Code 才能使用内置浏览器
+
+## 多窗口定位规则（必须遵守）
+
+Poltertty 支持多个 workspace 窗口同时打开，**所有 browser_* 调用必须显式传
+`workspaceId: $POLTERTTY_WORKSPACE_ID`**，否则可能打到用户当前 key window（前台窗口），
+而不是你所在的终端窗口。即使服务端已经根据 session URL 锚定了默认 workspace，
+显式传参仍是最可靠的做法——尤其在用户切换窗口或你操作多个 workspace 时。
+
+例外：**当调用链里已经拿到 `tabId`**（比如 `browser_list_tabs` 后对某个 tab 操作），
+可以只传 `tabId`，服务端会按 tabId 反查所属 workspace。
 
 ## 调用方式
 
-所有 browser_* 工具通过 JSON-RPC 调用 Ctrl Server：
+所有 browser_* 工具通过 JSON-RPC 调用 Ctrl Server。**arguments 必须带 `workspaceId`**：
 
 ```bash
-curl -s -X POST http://localhost:$POLTERTTY_CTRL_PORT/v1/mcp \
+curl -s -X POST "http://localhost:$POLTERTTY_CTRL_PORT/v1/mcp" \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"<工具名>","arguments":{...}}}'
+  -d "{
+    \"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",
+    \"params\":{
+      \"name\":\"<工具名>\",
+      \"arguments\":{
+        \"workspaceId\":\"$POLTERTTY_WORKSPACE_ID\"
+        /* 其他参数... */
+      }
+    }
+  }"
 ```
 
 返回格式：
@@ -62,7 +82,8 @@ browser_open_split          ← 打开浏览器面板（首次使用）
 
 ## 完整 API 参考
 
-所有工具均支持可选参数 `workspaceId`（默认当前活跃 Workspace）和 `tabId`（默认当前活跃标签页）。
+所有工具均支持可选参数 `workspaceId` 和 `tabId`（默认当前活跃标签页）。
+**再次强调：`workspaceId` 必须传 `$POLTERTTY_WORKSPACE_ID`**，见上文"多窗口定位规则"。
 
 ### 面板与标签页管理
 

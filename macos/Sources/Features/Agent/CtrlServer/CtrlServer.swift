@@ -114,6 +114,20 @@ final class CtrlServer {
 
     private static let headerSeparator = Data([0x0D, 0x0A, 0x0D, 0x0A])
 
+    /// 解析简单的 URL query（k=v&k=v），只支持 UUID 类型的 workspaceId/surfaceId。
+    private static func parseQuery(_ s: String) -> [String: String] {
+        guard !s.isEmpty else { return [:] }
+        var out: [String: String] = [:]
+        for pair in s.split(separator: "&") {
+            let kv = pair.split(separator: "=", maxSplits: 1)
+            guard kv.count == 2 else { continue }
+            let k = String(kv[0]).removingPercentEncoding ?? String(kv[0])
+            let v = String(kv[1]).removingPercentEncoding ?? String(kv[1])
+            out[k] = v
+        }
+        return out
+    }
+
     private func accumulateRequest(connection: NWConnection, buffer: Data) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 131072) { [weak self] data, _, isComplete, error in
             guard let self else { return }
@@ -159,12 +173,26 @@ final class CtrlServer {
         let startTime = Date()
         let parts = firstLine.components(separatedBy: " ")
         let method = parts.count > 0 ? parts[0] : "UNKNOWN"
-        let rawPath = parts.count > 1 ? (parts[1].components(separatedBy: "?").first ?? parts[1]) : "/"
+        let rawFullPath = parts.count > 1 ? parts[1] : "/"
+        // 分离 path 与 query：SettingsMerger 写入的 MCP URL 会带 workspaceId / surfaceId，
+        // 用于在多窗口下把请求锚定到来源 Claude Code session 的 workspace。
+        let rawPath: String
+        let queryPart: String
+        if let qIdx = rawFullPath.firstIndex(of: "?") {
+            rawPath = String(rawFullPath[..<qIdx])
+            queryPart = String(rawFullPath[rawFullPath.index(after: qIdx)...])
+        } else {
+            rawPath = rawFullPath
+            queryPart = ""
+        }
+        let query = Self.parseQuery(queryPart)
+        let defaultWsId = query["workspaceId"].flatMap { UUID(uuidString: $0) }
+        let defaultSfId = query["surfaceId"].flatMap { UUID(uuidString: $0) }
 
         let baseCtx = RequestContext(
             method: method, path: rawPath, startTime: startTime,
             requestBody: bodyData, toolName: nil,
-            workspaceId: nil, surfaceId: nil
+            workspaceId: defaultWsId, surfaceId: defaultSfId
         )
 
         switch (method, rawPath) {
@@ -242,7 +270,9 @@ final class CtrlServer {
                 cwd: req.cwd,
                 cliPath: cliPath,
                 userSettingsPath: req.userSettings,
-                ctrlPort: serverPort
+                ctrlPort: serverPort,
+                workspaceId: req.workspaceId,
+                surfaceId: req.surfaceId
             )
 
             let responseBody = #"{"sessionDir":"\#(sessionDir)","token":"\#(session.token)"}"#
@@ -902,7 +932,11 @@ final class CtrlServer {
             requestBody: context.requestBody, toolName: name,
             workspaceId: context.workspaceId, surfaceId: context.surfaceId
         )
-        let handler = CtrlToolHandler(port: self.port)
+        let handler = CtrlToolHandler(
+            port: self.port,
+            defaultWorkspaceId: context.workspaceId,
+            defaultSurfaceId: context.surfaceId
+        )
         Task {
             do {
                 let resultText = try await handler.callTool(name: name, arguments: arguments)

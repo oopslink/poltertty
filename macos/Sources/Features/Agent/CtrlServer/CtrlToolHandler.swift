@@ -19,11 +19,43 @@ final class CtrlToolHandler: Sendable {
     private let port: UInt16
     private let version: String
     private let instanceId: String
+    /// 来自 MCP URL query（由 SettingsMerger 注入）的 session 归属 workspace。
+    /// 当 tool 参数未显式传 `workspaceId` 时，作为"用户操作的默认窗口"的优先回退。
+    private let defaultWorkspaceId: UUID?
+    private let defaultSurfaceId: UUID?
 
-    init(port: UInt16) {
+    init(port: UInt16, defaultWorkspaceId: UUID? = nil, defaultSurfaceId: UUID? = nil) {
         self.port = port
         self.version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
         self.instanceId = Bundle.main.bundleIdentifier ?? "unknown"
+        self.defaultWorkspaceId = defaultWorkspaceId
+        self.defaultSurfaceId = defaultSurfaceId
+    }
+
+    // MARK: - Default workspace / window resolution
+
+    /// 解析请求归属的 workspaceId：优先 arguments → session default → key window。
+    /// session default 仅在对应窗口仍存活时生效（兼容窗口关闭后的兜底）。
+    @MainActor
+    private func preferredWorkspaceId(_ arguments: [String: Any]) -> UUID? {
+        if let str = arguments["workspaceId"] as? String,
+           let id = UUID(uuidString: str) { return id }
+        if let id = defaultWorkspaceId,
+           WorkspaceManager.shared.windowForWorkspace(id) != nil {
+            return id
+        }
+        return WorkspaceManager.shared.activeWorkspaceId()
+    }
+
+    /// 解析请求归属的 TerminalWindow：优先 session default 的 workspace 窗口 → key window → 任一终端窗口。
+    @MainActor
+    private func preferredTerminalWindow() -> TerminalWindow? {
+        if let id = defaultWorkspaceId,
+           let win = WorkspaceManager.shared.windowForWorkspace(id) as? TerminalWindow {
+            return win
+        }
+        if let kw = NSApp.keyWindow as? TerminalWindow { return kw }
+        return NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
     }
 
     // MARK: - Public entry point
@@ -106,7 +138,7 @@ final class CtrlToolHandler: Sendable {
     private func callNewTab(arguments: [String: Any]) async throws -> String {
         let paneId: UUID = try await withCheckedThrowingContinuation { cont in
             Task { @MainActor in
-                guard let tc = Self.resolveTC(arguments) else {
+                guard let tc = self.resolveTC(arguments) else {
                     cont.resume(throwing: RPCError(code: -32603, message: "new_tab: no TerminalController found"))
                     return
                 }
@@ -204,9 +236,7 @@ final class CtrlToolHandler: Sendable {
                     }
                     tc.writeToSurface(text: text, surfaceId: paneId)
                 } else {
-                    let target = (NSApp.keyWindow as? TerminalWindow)
-                        ?? NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
-                    guard let tc = target?.terminalController,
+                    guard let tc = self.preferredTerminalWindow()?.terminalController,
                           let surface = tc.focusedSurface else {
                         cont.resume(throwing: RPCError(code: -32603, message: "send_text: no focused surface"))
                         return
@@ -320,8 +350,7 @@ final class CtrlToolHandler: Sendable {
     private func callListWorktrees(arguments: [String: Any]) async throws -> String {
         let directory: String = await MainActor.run {
             if let d = arguments["directory"] as? String, !d.isEmpty { return d }
-            let kw = NSApp.keyWindow as? TerminalWindow
-            if let wsId = kw.flatMap({ WorkspaceManager.shared.workspaceId(for: $0) }),
+            if let wsId = self.preferredWorkspaceId(arguments),
                let ws = WorkspaceManager.shared.workspace(for: wsId) {
                 return ws.rootDirExpanded
             }
@@ -426,9 +455,7 @@ final class CtrlToolHandler: Sendable {
                     foundTC.switchToTab(containing: paneId)
                     surface = foundTC.findSurface(id: paneId)
                 } else {
-                    let window = (NSApp.keyWindow as? TerminalWindow)
-                        ?? NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
-                    tc = window?.terminalController
+                    tc = self.preferredTerminalWindow()?.terminalController
                     surface = tc?.focusedSurface
                 }
 
@@ -455,8 +482,7 @@ final class CtrlToolHandler: Sendable {
     private func callGetGitStatus(arguments: [String: Any]) async throws -> String {
         let directory: String = await MainActor.run {
             if let d = arguments["directory"] as? String, !d.isEmpty { return d }
-            let kw = NSApp.keyWindow as? TerminalWindow
-            if let wsId = kw.flatMap({ WorkspaceManager.shared.workspaceId(for: $0) }),
+            if let wsId = self.preferredWorkspaceId(arguments),
                let ws = WorkspaceManager.shared.workspace(for: wsId) {
                 return ws.rootDirExpanded
             }
@@ -622,9 +648,7 @@ final class CtrlToolHandler: Sendable {
                     tc.switchToTab(containing: paneId)
                     targetView = tc.findSurface(id: paneId)
                 } else {
-                    let window = (NSApp.keyWindow as? TerminalWindow)
-                        ?? NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
-                    targetView = window?.terminalController?.focusedSurface
+                    targetView = self.preferredTerminalWindow()?.terminalController?.focusedSurface
                 }
                 guard let view = targetView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "send_key: target view not found"))
@@ -753,7 +777,14 @@ final class CtrlToolHandler: Sendable {
     /// 打开 yazi 文件管理面板。
     private func callShowFileBrowser(arguments: [String: Any]) async throws -> String {
         await MainActor.run {
-            let targetWindow = NSApp.keyWindow?.parent ?? NSApp.keyWindow
+            // 优先绑定到 session 归属窗口，避免多窗口时 toggle 到前台 key window。
+            let preferred: NSWindow? = {
+                if let id = self.preferredWorkspaceId(arguments) {
+                    return WorkspaceManager.shared.windowForWorkspace(id)
+                }
+                return nil
+            }()
+            let targetWindow = preferred ?? NSApp.keyWindow?.parent ?? NSApp.keyWindow
             NotificationCenter.default.post(name: .toggleFileBrowser, object: targetWindow)
         }
         return #"{"ok":true}"#
@@ -779,14 +810,17 @@ final class CtrlToolHandler: Sendable {
     // MARK: - Helpers
 
     @MainActor
-    private static func resolveTC(_ arguments: [String: Any]) -> TerminalController? {
+    private func resolveTC(_ arguments: [String: Any]) -> TerminalController? {
         if let wsIdStr = arguments["workspaceId"] as? String,
            let wsId = UUID(uuidString: wsIdStr) {
-            return tcForWorkspace(wsId)
+            return Self.tcForWorkspace(wsId)
         }
-        let target = (NSApp.keyWindow as? TerminalWindow)
-            ?? NSApp.windows.first(where: { $0 is TerminalWindow }) as? TerminalWindow
-        return target?.terminalController
+        // 优先 session default（来自 MCP URL query），避免多窗口时打到前台 key window。
+        if let id = defaultWorkspaceId,
+           let tc = Self.tcForWorkspace(id) {
+            return tc
+        }
+        return preferredTerminalWindow()?.terminalController
     }
 
     @MainActor
@@ -827,7 +861,7 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_new_tab: browserStore not available"))
                     return
                 }
-                guard let wsId = Self.resolveNewTabWorkspaceId(arguments) else {
+                guard let wsId = self.resolveNewTabWorkspaceId(arguments) else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_new_tab: no workspace available"))
                     return
                 }
@@ -853,7 +887,7 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_close_tab: browserStore not available"))
                     return
                 }
-                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                guard let ctx = self.resolveBrowserContext(arguments, store: store),
                       ctx.manager.tabs.contains(where: { $0.id == tabId }) else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_close_tab: tab \(tabIdStr) not found"))
                     return
@@ -878,7 +912,7 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_focus_tab: browserStore not available"))
                     return
                 }
-                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                guard let ctx = self.resolveBrowserContext(arguments, store: store),
                       ctx.manager.tabs.contains(where: { $0.id == tabId }) else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_focus_tab: tab \(tabIdStr) not found"))
                     return
@@ -1026,7 +1060,7 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_navigate: browserStore not available"))
                     return
                 }
-                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                guard let ctx = self.resolveBrowserContext(arguments, store: store),
                       let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_navigate: no active tab"))
                     return
@@ -1047,7 +1081,7 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_snapshot: browserStore not available"))
                     return
                 }
-                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                guard let ctx = self.resolveBrowserContext(arguments, store: store),
                       let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_snapshot: no active tab"))
                     return
@@ -1084,7 +1118,7 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_click: browserStore not available"))
                     return
                 }
-                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                guard let ctx = self.resolveBrowserContext(arguments, store: store),
                       let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_click: no active tab"))
                     return
@@ -1147,7 +1181,7 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_fill: browserStore not available"))
                     return
                 }
-                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                guard let ctx = self.resolveBrowserContext(arguments, store: store),
                       let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_fill: no active tab"))
                     return
@@ -1193,7 +1227,7 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_eval: browserStore not available"))
                     return
                 }
-                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                guard let ctx = self.resolveBrowserContext(arguments, store: store),
                       let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_eval: no active tab"))
                     return
@@ -1261,7 +1295,7 @@ final class CtrlToolHandler: Sendable {
                     guard let store = WorkspaceManager.shared.browserSurfaceStore else {
                         cont.resume(returning: false); return
                     }
-                    guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                    guard let ctx = self.resolveBrowserContext(arguments, store: store),
                           let webView = ctx.webView else {
                         cont.resume(returning: false); return
                     }
@@ -1287,7 +1321,7 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_screenshot: browserStore not available"))
                     return
                 }
-                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                guard let ctx = self.resolveBrowserContext(arguments, store: store),
                       let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_screenshot: no active tab"))
                     return
@@ -1352,7 +1386,7 @@ final class CtrlToolHandler: Sendable {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_get_text: browserStore not available"))
                     return
                 }
-                guard let ctx = Self.resolveBrowserContext(arguments, store: store),
+                guard let ctx = self.resolveBrowserContext(arguments, store: store),
                       let webView = ctx.webView else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_get_text: no active tab"))
                     return
@@ -1385,7 +1419,7 @@ final class CtrlToolHandler: Sendable {
 
         let result: String = try await withCheckedThrowingContinuation { cont in
             Task { @MainActor in
-                guard let wsId = Self.resolveNewTabWorkspaceId(arguments) else {
+                guard let wsId = self.resolveNewTabWorkspaceId(arguments) else {
                     cont.resume(throwing: RPCError(code: -32603, message: "browser_open_split: no workspace available"))
                     return
                 }
@@ -1432,7 +1466,7 @@ final class CtrlToolHandler: Sendable {
     ///
     /// 返回 `nil` 表示无法解析——调用方应抛 `-32603` 错误，不要 fallback 成新 UUID。
     @MainActor
-    static func resolveBrowserContext(
+    func resolveBrowserContext(
         _ arguments: [String: Any],
         store: BrowserSurfaceStore
     ) -> (wsId: UUID, manager: BrowserTabManager, webView: WKWebView?)? {
@@ -1462,7 +1496,13 @@ final class CtrlToolHandler: Sendable {
             return (hit.workspaceId, hit.manager, webView)
         }
 
-        // 3. 两者都没（或都无效）：key window → 任一 manager → nil
+        // 3. 两者都没（或都无效）：session default → key window → 任一 manager → nil。
+        //    优先 session default，避免多窗口时打到前台 key window。
+        if let id = defaultWorkspaceId,
+           WorkspaceManager.shared.windowForWorkspace(id) != nil,
+           let mgr = store.existingManager(for: id) {
+            return (id, mgr, mgr.activeTab?.webView)
+        }
         if let keyWsId = WorkspaceManager.shared.activeWorkspaceId(),
            let mgr = store.existingManager(for: keyWsId) {
             return (keyWsId, mgr, mgr.activeTab?.webView)
@@ -1473,12 +1513,17 @@ final class CtrlToolHandler: Sendable {
         return nil
     }
 
-    /// 仅为 `browser_new_tab` 使用：确定目标 workspace（允许 manager 尚未实例化）。
+    /// 仅为 `browser_new_tab` / `browser_open_split` 使用：
+    /// 确定目标 workspace（允许 manager 尚未实例化）。
     ///
-    /// 顺序：显式 workspaceId → key window → 任一已注册 workspace → nil。
+    /// 顺序：显式 workspaceId → session default → key window → 任一已注册 workspace → nil。
     @MainActor
-    static func resolveNewTabWorkspaceId(_ arguments: [String: Any]) -> UUID? {
+    func resolveNewTabWorkspaceId(_ arguments: [String: Any]) -> UUID? {
         if let str = arguments["workspaceId"] as? String, let id = UUID(uuidString: str) {
+            return id
+        }
+        if let id = defaultWorkspaceId,
+           WorkspaceManager.shared.windowForWorkspace(id) != nil {
             return id
         }
         if let keyWsId = WorkspaceManager.shared.activeWorkspaceId() {
@@ -1496,11 +1541,7 @@ final class CtrlToolHandler: Sendable {
         let body = arguments["body"] as? String
 
         let workspaceId: UUID? = await MainActor.run {
-            if let wsIdStr = arguments["workspaceId"] as? String,
-               let wsId = UUID(uuidString: wsIdStr) {
-                return wsId
-            }
-            return WorkspaceManager.shared.activeWorkspaceId()
+            self.preferredWorkspaceId(arguments)
         }
 
         await MainActor.run {
@@ -1532,13 +1573,7 @@ final class CtrlToolHandler: Sendable {
 
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             Task { @MainActor in
-                let workspaceId: UUID
-                if let wsIdStr = arguments["workspaceId"] as? String,
-                   let wsId = UUID(uuidString: wsIdStr) {
-                    workspaceId = wsId
-                } else if let active = WorkspaceManager.shared.activeWorkspaceId() {
-                    workspaceId = active
-                } else {
+                guard let workspaceId = self.preferredWorkspaceId(arguments) else {
                     cont.resume(throwing: RPCError(code: -32603, message: "open_in_file_browser: no active workspace"))
                     return
                 }
@@ -1608,14 +1643,10 @@ final class CtrlToolHandler: Sendable {
     private func callGetWorkspaceState(arguments: [String: Any]) async throws -> String {
         // 1. 解析 workspaceId
         let workspaceId: UUID = try await MainActor.run {
-            if let wsIdStr = arguments["workspaceId"] as? String,
-               let wsId = UUID(uuidString: wsIdStr) {
-                return wsId
-            } else if let active = WorkspaceManager.shared.activeWorkspaceId() {
-                return active
-            } else {
-                throw RPCError(code: -32602, message: "get_workspace_state: no workspaceId provided and no active workspace")
+            if let id = self.preferredWorkspaceId(arguments) {
+                return id
             }
+            throw RPCError(code: -32602, message: "get_workspace_state: no workspaceId provided and no active workspace")
         }
 
         // 2. 采集所有数据（@MainActor）

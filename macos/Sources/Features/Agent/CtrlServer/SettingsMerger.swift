@@ -30,7 +30,9 @@ final class SettingsMerger {
         cwd: String,
         cliPath: String,
         userSettingsPath: String?,
-        ctrlPort: UInt16 = 0
+        ctrlPort: UInt16 = 0,
+        workspaceId: String? = nil,
+        surfaceId: String? = nil
     ) {
         // 1. 四层 settings 文件路径
         let home = NSHomeDirectory()
@@ -70,12 +72,25 @@ final class SettingsMerger {
         }
 
         // 4. 组装 settings（hooks + 可选 mcpServers）
+        //    MCP URL 会带上 workspaceId / surfaceId query，让 CtrlServer 在多窗口
+        //    场景下识别每个 Claude Code session 的归属，避免默认解析到 key window。
         var settings: [String: Any] = ["hooks": mergedHooks]
         if ctrlPort > 0 {
+            var urlStr = "http://localhost:\(ctrlPort)/v1/mcp"
+            var queryParts: [String] = []
+            if let wsId = workspaceId, !wsId.isEmpty {
+                queryParts.append("workspaceId=\(wsId)")
+            }
+            if let sfId = surfaceId, !sfId.isEmpty {
+                queryParts.append("surfaceId=\(sfId)")
+            }
+            if !queryParts.isEmpty {
+                urlStr += "?" + queryParts.joined(separator: "&")
+            }
             settings["mcpServers"] = [
                 "poltertty": [
                     "type": "http",
-                    "url": "http://localhost:\(ctrlPort)/v1/mcp"
+                    "url": urlStr
                 ]
             ]
         }
